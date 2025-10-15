@@ -52,5 +52,14 @@
     "assetJsPath" : "schools/jyvtc.js",
     "maintainer": "星河欲转",
     "category": "BACHELOR_AND_ASSOCIATE"
+  },
+      {
+    "id": "school_hnsf",
+    "name": "河南师范大学",
+    "initial": "J",
+    "importUrl": "https://jwc.htu.edu.cn/",
+    "assetJsPath" : "schools/hnsf.js",
+    "maintainer": "yike",
+    "category": "BACHELOR_AND_ASSOCIATE"
   }
 ]
