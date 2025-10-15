@@ -35,7 +35,7 @@
     "maintainer": "AxelPLN",
     "category": "BACHELOR_AND_ASSOCIATE"
   },
-    {
+  {
     "id": "school_hnzy",
     "name": "河南职业技术学院",
     "initial": "H",
@@ -44,12 +44,21 @@
     "maintainer": "一颗",
     "category": "BACHELOR_AND_ASSOCIATE"
   },
-    {
+  {
     "id": "school_jyvtc",
     "name": "济源职业技术学院",
     "initial": "J",
     "importUrl": "https://jwgl.jyvtc.edu.cn/jyvtcjw/",
     "assetJsPath" : "schools/jyvtc.js",
+    "maintainer": "星河欲转",
+    "category": "BACHELOR_AND_ASSOCIATE"
+  },
+  {
+    "id": "school_hnsf",
+    "name": "河南师范大学",
+    "initial": "H",
+    "importUrl": "https://jwc.htu.edu.cn/",
+    "assetJsPath" : "schools/hnsf.js",
     "maintainer": "星河欲转",
     "category": "BACHELOR_AND_ASSOCIATE"
   }
