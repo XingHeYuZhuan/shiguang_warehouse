@@ -1,0 +1,65 @@
+[
+  {
+    "id": "school_Cs",
+    "name": "测试大学(这是一个空网站，用于组件测试)",
+    "initial": "C",
+    "importUrl": "",
+    "assetJsPath" : "schools/school.js",
+    "maintainer": "星河欲转",
+    "category": "GENERAL_TOOL"
+  },
+  {
+    "id": "school_cust",
+    "name": "长春理工大学",
+    "initial": "C",
+    "importUrl": "https://mysso.cust.edu.cn/cas/login?service=https://jwgl.cust.edu.cn/welcome",
+    "assetJsPath": "schools/cust.js",
+    "maintainer": "itdong",
+    "category": "BACHELOR_AND_ASSOCIATE"
+  },
+  {
+    "id": "school_shzq",
+    "name": "上海中侨职业技术大学",
+    "initial": "S",
+    "importUrl": "https://jw.shzq.edu.cn/jwglxt/",
+    "assetJsPath" : "schools/shzq.js",
+    "maintainer": "Kredenk",
+    "category": "BACHELOR_AND_ASSOCIATE"
+  },
+  {
+    "id": "school_ynufe",
+    "name": "云南财经大学",
+    "initial": "Y",
+    "importUrl": "https://xjwis.ynufe.edu.cn/jsxsd/",
+    "assetJsPath" : "schools/ynufe.js",
+    "maintainer": "AxelPLN",
+    "category": "BACHELOR_AND_ASSOCIATE"
+  },
+    {
+    "id": "school_hnzy",
+    "name": "河南职业技术学院",
+    "initial": "H",
+    "importUrl": "https://one.hnzj.edu.cn/common-service/kcb-pc/personage/personage",
+    "assetJsPath" : "schools/hnzy.js",
+    "maintainer": "一颗",
+    "category": "BACHELOR_AND_ASSOCIATE"
+  },
+    {
+    "id": "school_jyvtc",
+    "name": "济源职业技术学院",
+    "initial": "J",
+    "importUrl": "https://jwgl.jyvtc.edu.cn/jyvtcjw/",
+    "assetJsPath" : "schools/jyvtc.js",
+    "maintainer": "星河欲转",
+    "category": "BACHELOR_AND_ASSOCIATE"
+  },
+      {
+    "id": "school_hnsf",
+    "name": "河南师范大学",
+    "initial": "J",
+    "importUrl": "https://jwc.htu.edu.cn/",
+    "assetJsPath" : "schools/hnsf.js",
+    "maintainer": "yike",
+    "category": "BACHELOR_AND_ASSOCIATE"
+  }
+]

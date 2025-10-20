@@ -1,0 +1,9 @@
+# resources/CUST/adapters.yaml
+adapters:
+  - adapter_id: "hnsf"
+    adapter_name: "河南师范大学"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "hnsf.js"
+    import_url: "https://jwc.htu.edu.cn/"
+    maintainer: "yike"
+    description: "该脚本暂无说明"
