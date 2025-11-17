@@ -15,3 +15,11 @@ adapters:
     import_url: ""
     maintainer: "星河欲转"
     description: "空网站以及不存在适配代码,用于在不更新索引的情况下给开发者进行适配的软件测试"    
+
+  - adapter_id: "wake_up"
+    adapter_name: "wake_up课程表分享口令导入"
+    category: "GENERAL_TOOL"
+    asset_js_path: "wake_up.js"
+    import_url: "https://i.wakeup.fun/"
+    maintainer: "星河欲转"
+    description: "首先,先去wakeup获取分享口令，然后点击本适配，进入后不需要管网页，点击\"执行导入\"输入你刚刚获取的分享口令就好\n 特别鸣谢 钴-60 提供的思路"      
