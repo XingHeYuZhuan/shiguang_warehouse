@@ -16,8 +16,8 @@ adapters:
     maintainer: "星河欲转"
     description: "空网站以及不存在适配代码,用于在不更新索引的情况下给开发者进行适配的软件测试"    
 
-  - adapter_id: "wake_up"
-    adapter_name: "wake_up课程表分享口令导入"
+  - adapter_id: "WakeUp"
+    adapter_name: "WakeUp课程表分享口令导入"
     category: "GENERAL_TOOL"
     asset_js_path: "wake_up.js"
     import_url: "https://i.wakeup.fun/"
