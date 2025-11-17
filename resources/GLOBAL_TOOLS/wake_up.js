@@ -73,8 +73,15 @@ async function fetchAndParseData(shareKey) {
         let rawNodes = parsedData.uiConfig.nodes;
 
         if (!Array.isArray(rawNodes)) {
-             console.warn(`WARN: uiConfig.nodes 预期为数组，但获取到类型: ${typeof rawNodes}，已重置为空数组。`);
-             rawNodes = [];
+             if (typeof rawNodes === 'number' && rawNodes > 0) {
+                  console.warn(`WARN: uiConfig.nodes 预期为数组，但获取到总节数: ${rawNodes}。正在生成 1 到 ${rawNodes} 的节次列表。`);
+                  
+                  rawNodes = Array.from({ length: rawNodes }, (_, i) => i + 1);
+             } else {
+                  // 既不是数组也不是有效数字，退回空数组
+                  console.warn(`WARN: uiConfig.nodes 数据无效 (${rawNodes})，已重置为空数组。`);
+                  rawNodes = [];
+             }
         }
 
         const validNodes = new Set(rawNodes);
@@ -109,7 +116,6 @@ async function fetchAndParseData(shareKey) {
         return null; // 失败时返回 null
     }
 }
-
 
 /**
  * 将课程数据从原始结构转换为 CourseJsonModel 格式。
