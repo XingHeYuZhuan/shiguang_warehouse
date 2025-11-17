@@ -43,6 +43,48 @@ function parseRawScheduleData(rawData) {
     };
 }
 
+/**
+ * 格式化日期对象为 YYYY-MM-DD 字符串。
+ * @param {Date} dateObj 日期对象
+ * @returns {string} YYYY-MM-DD 格式的字符串
+ */
+function formatDateToYYYYMMDD(dateObj) {
+    const year = dateObj.getFullYear();
+    // 确保月份和日期带有前导零（例如 9 -> 09）
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0'); 
+    const day = String(dateObj.getDate()).padStart(2, '0');       
+    return `${year}-${month}-${day}`;
+}
+
+/**
+ * 尝试将原始日期值转换为 YYYY-MM-DD 格式的字符串。
+ * @param {*} rawDate 原始日期值 
+ * @returns {string|null} YYYY-MM-DD 格式的日期字符串，或 null。
+ */
+function convertToSemesterStartDate(rawDate) {
+    if (!rawDate) {
+        return null;
+    }
+    
+    let dateString = String(rawDate).trim();
+    if (dateString.length === 0) {
+        return null;
+    }
+
+    // 尝试替换斜杠为短横线
+    dateString = dateString.replace(/\//g, '-');
+    
+    // 尝试解析为 Date 对象
+    const dateObj = new Date(dateString);
+
+    if (isNaN(dateObj.getTime())) {
+        console.warn(`WARN: 无法将原始日期值 "${rawDate}" 转换为有效日期。`);
+        return null; 
+    }
+
+    return formatDateToYYYYMMDD(dateObj);
+}
+
 
 /**
  * 网络请求、数据解析和转换。
@@ -74,13 +116,13 @@ async function fetchAndParseData(shareKey) {
 
         if (!Array.isArray(rawNodes)) {
              if (typeof rawNodes === 'number' && rawNodes > 0) {
-                  console.warn(`WARN: uiConfig.nodes 预期为数组，但获取到总节数: ${rawNodes}。正在生成 1 到 ${rawNodes} 的节次列表。`);
-                  
-                  rawNodes = Array.from({ length: rawNodes }, (_, i) => i + 1);
+                 console.warn(`WARN: uiConfig.nodes 预期为数组，但获取到总节数: ${rawNodes}。正在生成 1 到 ${rawNodes} 的节次列表。`);
+                 
+                 rawNodes = Array.from({ length: rawNodes }, (_, i) => i + 1);
              } else {
-                  // 既不是数组也不是有效数字，退回空数组
-                  console.warn(`WARN: uiConfig.nodes 数据无效 (${rawNodes})，已重置为空数组。`);
-                  rawNodes = [];
+                 // 既不是数组也不是有效数字，退回空数组
+                 console.warn(`WARN: uiConfig.nodes 数据无效 (${rawNodes})，已重置为空数组。`);
+                 rawNodes = [];
              }
         }
 
@@ -96,9 +138,10 @@ async function fetchAndParseData(shareKey) {
                 "endTime": slot.endTime
             }));
             
+        const semesterStartDate = convertToSemesterStartDate(parsedData.uiConfig.startDate);
         
         const courseConfig = {
-            "semesterStartDate": parsedData.uiConfig.startDate, 
+            "semesterStartDate": semesterStartDate,
             "semesterTotalWeeks": parsedData.uiConfig.maxWeek, 
             "defaultClassDuration": parsedData.baseConfig.courseLen, 
             "defaultBreakDuration": parsedData.baseConfig.theBreakLen, 
