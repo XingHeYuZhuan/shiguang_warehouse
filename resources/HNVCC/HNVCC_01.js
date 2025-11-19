@@ -3,7 +3,10 @@
 // 非该大学开发者适配,开发者无法及时发现问题
 // 出现问题请提联系开发者或者提交pr更改,这更加快速
 
-function validateYearInput(input) {
+/**
+ * 定义一个全局的学年验证函数。
+ */
+window.validateYearInput = function(input) {
     // 检查输入是否为四位数字
     if (/^[0-9]{4}$/.test(input)) {
         return false;
