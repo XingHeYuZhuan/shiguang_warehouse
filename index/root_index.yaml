@@ -12,6 +12,11 @@ schools:
     name: "正方教务-通用教务"
     initial: "Z"
     resource_folder: "zhengfang_jiaowu"  
+  
+  - id: "CQU"
+    name: "重庆大学"
+    initial: "C"
+    resource_folder: "CQU"
 
   - id: "CUST"
     name: "长春理工大学"
