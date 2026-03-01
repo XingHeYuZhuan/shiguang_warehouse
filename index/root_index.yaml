@@ -130,7 +130,7 @@ schools:
 
   - id: "NEU"
     name: "东北大学"
-    initial: "D"
+    initial: "D"   initial: "D"
     resource_folder: "NEU"
   
   - id: "NJNU"
@@ -140,7 +140,7 @@ schools:
 
   - id: "XMCU"
     name: "厦门城市职业学院"
-    initial: "X"
+    initial: "X"   initial: "X"
     resource_folder: "XMCU"  
 
   - id: "HBLGXY"
@@ -182,3 +182,8 @@ schools:
     name: "苏州大学"
     initial: "S"
     resource_folder: "SUDA"
+
+  - id: "HUAT"
+    name: "湖北汽车工业学院"
+    initial: "H"
+    resource_folder: "HUAT"
