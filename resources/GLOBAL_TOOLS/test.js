@@ -1,7 +1,5 @@
 // 文件: school.js - 修复节次错误
-
 // ==================== 验证函数 ====================
-
 function validateDate(dateStr) {
     if (!dateStr || dateStr.trim().length === 0) {
         return "日期不能为空！";
@@ -20,7 +18,6 @@ function validateDate(dateStr) {
     }
     return false;
 }
-
 function validateName(name) {
     if (name === null || name.trim().length === 0) {
         return "输入不能为空！";
@@ -30,9 +27,7 @@ function validateName(name) {
     }
     return false;
 }
-
 // ==================== 课表数据提取函数 ====================
-
 /**
  * 从页面提取课表数据 - 修复节次错误
  */
@@ -57,8 +52,8 @@ function extractCourseData() {
         for (let dayIndex = 1; dayIndex < cells.length; dayIndex++) {
             const cell = cells[dayIndex];
             
-            // 星期映射：第1列=周一(1), 第2列=周二(2), ... 第7列=周日(7)
-            const day = dayIndex;
+            // 星期映射修正：第1列=周一(0), 第2列=周二(1), ... 第7列=周日(6)
+            const day = dayIndex - 1;
             
             // 查找单元格内的所有课程块 - 使用更通用的选择器
             const courseBlocks = cell.querySelectorAll('[class*="theory"], .theory, [class*="course"], div[style*="background"]');
@@ -94,7 +89,9 @@ function extractCourseData() {
                     const dayIndex = Array.from(td.parentNode.children).indexOf(td);
                     
                     if (dayIndex >= 1 && dayIndex <= 7) {
-                        const course = parseCourseBlock(element, dayIndex, rowIndex);
+                        // 星期映射修正：第1列=周一(0), 第2列=周二(1), ... 第7列=周日(6)
+                        const day = dayIndex - 1;
+                        const course = parseCourseBlock(element, day, rowIndex);
                         if (course) {
                             courses.push(course);
                         }
@@ -115,12 +112,11 @@ function extractCourseData() {
     
     console.log(`共提取到 ${uniqueCourses.length} 门课程`);
     uniqueCourses.forEach(c => {
-        console.log(`星期${c.day}: ${c.name} - ${c.teacher} - ${c.position} - 第${c.startSection}-${c.endSection}节`);
+        console.log(`星期${c.day+1}: ${c.name} - ${c.teacher} - ${c.position} - 第${c.startSection}-${c.endSection}节`);
     });
     
     return uniqueCourses;
 }
-
 /**
  * 解析课程块 - 修复节次映射
  */
@@ -206,54 +202,69 @@ function parseCourseBlock(block, day, rowIndex) {
         position = extractClassroom(block.innerText);
     }
     
-    // 根据行索引确定节次 - 修复：严格按照截图对应
+    // 节次映射彻底修正：按行索引重新定义startSection和endSection
     let startSection, endSection;
     switch(rowIndex) {
-        case 0: // 第1行：1-2节
+        case 0: // 第1行：第1节
             startSection = 1;
+            endSection = 1;
+            break;
+        case 1: // 第2行：第2节
+            startSection = 2;
             endSection = 2;
             break;
-        case 1: // 第2行：3-4节
+        case 2: // 第3行：第3节
             startSection = 3;
+            endSection = 3;
+            break;
+        case 3: // 第4行：第4节
+            startSection = 4;
             endSection = 4;
             break;
-        case 2: // 第3行：5-6节
+        case 4: // 第5行：第5节
             startSection = 5;
+            endSection = 5;
+            break;
+        case 5: // 第6行：第6节
+            startSection = 6;
             endSection = 6;
             break;
-        case 3: // 第4行：7-8节
+        case 6: // 第7行：第7节
             startSection = 7;
+            endSection = 7;
+            break;
+        case 7: // 第8行：第8节
+            startSection = 8;
             endSection = 8;
             break;
-        case 4: // 第5行：9-11节
+        case 8: // 第9行：第9节
             startSection = 9;
+            endSection = 9;
+            break;
+        case 9: // 第10行：第10节
+            startSection = 10;
+            endSection = 10;
+            break;
+        case 10: // 第11行：第11节
+            startSection = 11;
             endSection = 11;
             break;
-        default:
+        default: // 默认第1节
             startSection = 1;
-            endSection = 2;
+            endSection = 1;
     }
     
-    // 检查是否有rowspan（连堂课程）- 但不要错误地扩展结束节次
+    // 检查是否有rowspan（连堂课程）- 修正连堂节次计算逻辑
     const td = block.closest('td');
     if (td) {
         const rowspan = td.getAttribute('rowspan');
         if (rowspan) {
             const span = parseInt(rowspan);
             if (span > 1) {
-                // 如果是连堂，根据span调整结束节次
-                // 每行代表2节课（除了晚上是3节）
-                if (rowIndex === 4) { // 晚上9-11节
-                    endSection = 11; // 晚上固定到11节
-                } else {
-                    // 其他时间段，每多一行增加2节课
-                    endSection = startSection + (span * 2) - 1;
-                    // 确保不超过该时间段的合理范围
-                    if (rowIndex === 0 && endSection > 2) endSection = 2;
-                    if (rowIndex === 1 && endSection > 4) endSection = 4;
-                    if (rowIndex === 2 && endSection > 6) endSection = 6;
-                    if (rowIndex === 3 && endSection > 8) endSection = 8;
-                }
+                // 连堂时，结束节次 = 开始节次 + 跨行数 - 1
+                endSection = startSection + span - 1;
+                // 限制节次最大值不超过11
+                if (endSection > 11) endSection = 11;
             }
         }
     }
@@ -274,14 +285,13 @@ function parseCourseBlock(block, day, rowIndex) {
         position: position || '未知教室',
         day: day,
         startSection: startSection,
-        endSection: endSection,  // 严格按照时间段设置结束节次
+        endSection: endSection,
         weeks: weeks.length > 0 ? weeks : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
         isCustomTime: false
     };
     
     return course;
 }
-
 /**
  * 解析周次和教室
  */
@@ -331,7 +341,6 @@ function parseWeekAndPosition(text) {
     
     return { weeks, position };
 }
-
 /**
  * 从文本中提取教室
  */
@@ -352,7 +361,6 @@ function extractClassroom(text) {
     
     return '未知教室';
 }
-
 /**
  * 解析周次字符串
  */
@@ -387,7 +395,6 @@ function parseWeeks(weekStr) {
     
     return weeks.length > 0 ? weeks.sort((a,b) => a-b) : [];
 }
-
 /**
  * 去重
  */
@@ -403,7 +410,6 @@ function removeDuplicates(courses) {
         return true;
     });
 }
-
 /**
  * 提取学期信息
  */
@@ -413,9 +419,7 @@ function extractSemesterInfo() {
         semesterTotalWeeks: 20
     };
 }
-
 // ==================== 弹窗和导入函数 ====================
-
 async function demoAlert() {
     try {
         const confirmed = await window.AndroidBridgePromise.showAlert(
@@ -432,7 +436,6 @@ async function demoAlert() {
         return false;
     }
 }
-
 async function demoPrompt() {
     try {
         const semesterInfo = extractSemesterInfo();
@@ -448,7 +451,6 @@ async function demoPrompt() {
         return "2026-03-01";
     }
 }
-
 /**
  * 导入预设时间段 - 新增函数
  * 用于导入测试用的16个时间段（每个时间段1分钟）
@@ -456,19 +458,23 @@ async function demoPrompt() {
 async function importPresetTimeSlots() {
     console.log("正在准备预设时间段数据...");
     const presetTimeSlots = [
-        { "number": 1, "startTime": "08:10", "endTime": "08:55" },
-        { "number": 2, "startTime": "09:00", "endTime": "09:45" },
-        { "number": 3, "startTime": "10:05", "endTime": "10:50" },
-        { "number": 4, "startTime": "10:55", "endTime": "11:40" },
-        { "number": 5, "startTime": "14:30", "endTime": "15:15" },
-        { "number": 6, "startTime": "15:20", "endTime": "16:05" },
-        { "number": 7, "startTime": "16:25", "endTime": "17:05" },
-        { "number": 8, "startTime": "17:10", "endTime": "18:00" },
-        { "number": 9, "startTime": "18:45", "endTime": "19:30" },
-        { "number": 10,"startTime": "19:35", "endTime": "20:20" },
-        { "number": 11,"startTime": "20:25", "endTime": "21:10" },
+        { "number": 1, "startTime": "08:00", "endTime": "08:01" },
+        { "number": 2, "startTime": "09:00", "endTime": "09:01" },
+        { "number": 3, "startTime": "10:00", "endTime": "10:01" },
+        { "number": 4, "startTime": "11:00", "endTime": "11:01" },
+        { "number": 5, "startTime": "12:00", "endTime": "12:01" },
+        { "number": 6, "startTime": "13:00", "endTime": "13:01" },
+        { "number": 7, "startTime": "14:00", "endTime": "14:01" },
+        { "number": 8, "startTime": "15:00", "endTime": "15:01" },
+        { "number": 9, "startTime": "16:00", "endTime": "16:01" },
+        { "number": 10, "startTime": "17:00", "endTime": "17:01" },
+        { "number": 11, "startTime": "18:00", "endTime": "18:01" },
+        { "number": 12, "startTime": "19:00", "endTime": "19:01" },
+        { "number": 13, "startTime": "20:00", "endTime": "20:01" },
+        { "number": 14, "startTime": "21:00", "endTime": "21:01" },
+        { "number": 15, "startTime": "22:00", "endTime": "22:01" },
+        { "number": 16, "startTime": "23:00", "endTime": "23:01" }
     ];
-
     try {
         console.log("正在尝试导入预设时间段...");
         const result = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
@@ -487,7 +493,6 @@ async function importPresetTimeSlots() {
         return false;
     }
 }
-
 async function importSchedule() {
     try {
         AndroidBridge.showToast("正在提取课表数据...");
@@ -508,7 +513,7 @@ async function importSchedule() {
             "📊 数据预览",
             `共找到 ${courses.length} 门课程\n\n` +
             `示例:\n${courses.slice(0, 5).map(c => 
-                `• 周${c.day} ${c.name} - 第${c.startSection}-${c.endSection}节`
+                `• 周${c.day+1} ${c.name} - 第${c.startSection}-${c.endSection}节`
             ).join('\n')}`,
             "确认导入",
             "取消"
@@ -547,7 +552,6 @@ async function importSchedule() {
         return false;
     }
 }
-
 async function runAllDemosSequentially() {
     AndroidBridge.showToast("🚀 课表导入助手启动...");
     
@@ -574,7 +578,7 @@ async function runAllDemosSequentially() {
     // 可以选择是否导入时间段
     const importTimeSlots = await window.AndroidBridgePromise.showAlert(
         "⏰ 导入时间段",
-        "是否要导入预设的时间段数据？\n（16个时间段，每个1分钟）",
+        "是否要导入预设的时间段数据？\n",
         "导入",
         "跳过"
     );
@@ -587,12 +591,10 @@ async function runAllDemosSequentially() {
     
     AndroidBridge.notifyTaskCompletion();
 }
-
 // 导出函数
 window.validateDate = validateDate;
 window.validateName = validateName;
 window.extractCourseData = extractCourseData;
 window.importPresetTimeSlots = importPresetTimeSlots;
-
 // 启动
 runAllDemosSequentially();
