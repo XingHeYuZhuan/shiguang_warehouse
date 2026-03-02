@@ -453,27 +453,22 @@ async function demoPrompt() {
 }
 /**
  * 导入预设时间段 - 新增函数
- * 用于导入测试用的16个时间段（每个时间段1分钟）
+ * 用于导入测试用的11个时间段（每个时间段1分钟）
  */
 async function importPresetTimeSlots() {
     console.log("正在准备预设时间段数据...");
     const presetTimeSlots = [
-        { "number": 1, "startTime": "08:00", "endTime": "08:01" },
-        { "number": 2, "startTime": "09:00", "endTime": "09:01" },
-        { "number": 3, "startTime": "10:00", "endTime": "10:01" },
-        { "number": 4, "startTime": "11:00", "endTime": "11:01" },
-        { "number": 5, "startTime": "12:00", "endTime": "12:01" },
-        { "number": 6, "startTime": "13:00", "endTime": "13:01" },
-        { "number": 7, "startTime": "14:00", "endTime": "14:01" },
-        { "number": 8, "startTime": "15:00", "endTime": "15:01" },
-        { "number": 9, "startTime": "16:00", "endTime": "16:01" },
-        { "number": 10, "startTime": "17:00", "endTime": "17:01" },
-        { "number": 11, "startTime": "18:00", "endTime": "18:01" },
-        { "number": 12, "startTime": "19:00", "endTime": "19:01" },
-        { "number": 13, "startTime": "20:00", "endTime": "20:01" },
-        { "number": 14, "startTime": "21:00", "endTime": "21:01" },
-        { "number": 15, "startTime": "22:00", "endTime": "22:01" },
-        { "number": 16, "startTime": "23:00", "endTime": "23:01" }
+        { "number": 1, "startTime": "08:10", "endTime": "08:55" },
+        { "number": 2, "startTime": "09:00", "endTime": "09:45" },
+        { "number": 3, "startTime": "10:05", "endTime": "10:50" },
+        { "number": 4, "startTime": "10:55", "endTime": "11:40" },
+        { "number": 5, "startTime": "14:30", "endTime": "15:15" },
+        { "number": 6, "startTime": "15:20", "endTime": "16:05" },
+        { "number": 7, "startTime": "16:25", "endTime": "17:10" },
+        { "number": 8, "startTime": "17:15", "endTime": "18:00" },
+        { "number": 9, "startTime": "18:45", "endTime": "19:30" },
+        { "number": 10, "startTime": "19:35", "endTime": "20:20" },
+        { "number": 11, "startTime": "20:25", "endTime": "21:10" }
     ];
     try {
         console.log("正在尝试导入预设时间段...");
