@@ -1,7 +1,3 @@
-/**
- * 济南大学教务适配
- * Moyu
- */
 class CourseModel {
   name = ""; // 课程名称 (String)
   teacher = ""; // 教师姓名 (String)
@@ -61,26 +57,18 @@ function checkLoginEnvironment() {
   }
 }
 
+//解析周数据
 function parseWeekText(text) {
   if (!text) return [];
-
-  // 强制清理
   text = text.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, "").trim();
 
   const allWeeks = new Set();
-
-  // 先去掉节信息（如果有的话）
   const noJie = text.replace(/\(\d+-\d+节\)/g, " ");
 
-  // 匹配两种格式：
-  // 1. 范围格式：1-16周、1-16周(单)、1-16周(双)
-  // 2. 单周格式：15周、8周(单)、8周(双)
   const rangePattern = /(\d+)-(\d+)周(?:\((单|双)\))?/g;
   const singlePattern = /(\d+)周(?:\((单|双)\))?/g;
 
   let match;
-
-  // 处理范围格式 1-16周
   while ((match = rangePattern.exec(noJie)) !== null) {
     const [, start, end, type] = match;
     for (let w = parseInt(start, 10); w <= parseInt(end, 10); w++) {
@@ -94,8 +82,6 @@ function parseWeekText(text) {
     }
   }
 
-  // 处理单周格式 15周（避免重复匹配范围中已经匹配过的）
-  // 重置 lastIndex，并且需要排除已经匹配过的范围部分
   const processedRanges = [];
   rangePattern.lastIndex = 0;
   while ((match = rangePattern.exec(noJie)) !== null) {
@@ -213,7 +199,6 @@ async function importPresetTimeSlots() {
   }
 }
 
-
 async function runImportFlow() {
   window.AndroidBridge.showToast("课程导入流程即将开始...");
 
@@ -233,21 +218,22 @@ async function runImportFlow() {
     // 保存课程数据失败，直接退出
     return;
   }
+  const slots = [
+    { number: 1, startTime: "08:00", endTime: "08:50" },
+    { number: 2, startTime: "08:55", endTime: "09:45" },
+    { number: 3, startTime: "10:15", endTime: "11:05" },
+    { number: 4, startTime: "11:10", endTime: "12:00" },
+    { number: 5, startTime: "14:00", endTime: "14:50" },
+    { number: 6, startTime: "14:55", endTime: "15:45" },
+    { number: 7, startTime: "16:15", endTime: "17:05" },
+    { number: 8, startTime: "17:10", endTime: "18:00" },
+    { number: 9, startTime: "19:00", endTime: "19:50" },
+    { number: 10, startTime: "19:55", endTime: "20:45" },
+    { number: 11, startTime: "20:50", endTime: "21:45" },
+  ];
+  await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
   await importPresetTimeSlots();
-  // const slots = [
-  //   { number: 1, startTime: "08:00", endTime: "08:50" },
-  //   { number: 2, startTime: "08:55", endTime: "09:45" },
-  //   { number: 3, startTime: "10:15", endTime: "11:05" },
-  //   { number: 4, startTime: "11:10", endTime: "12:00" },
-  //   { number: 5, startTime: "14:00", endTime: "14:50" },
-  //   { number: 6, startTime: "14:55", endTime: "15:45" },
-  //   { number: 7, startTime: "16:15", endTime: "17:05" },
-  //   { number: 8, startTime: "17:10", endTime: "18:00" },
-  //   { number: 9, startTime: "19:00", endTime: "19:50" },
-  //   { number: 10, startTime: "19:55", endTime: "20:45" },
-  //   { number: 11, startTime: "20:50", endTime: "21:45" },
-  // ];
-  // await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
+
   // 8. 流程**完全成功**，发送结束信号。
   AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
   AndroidBridge.notifyTaskCompletion();
