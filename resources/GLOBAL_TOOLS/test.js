@@ -190,35 +190,6 @@ async function runImportFlow() {
     "确定",
   );
   if (!confirmed) return;
-  // 2. 获取用户输入参数。
-  //   const academicYear = await getAcademicYear();
-  //   if (academicYear === null) {
-  //     AndroidBridge.showToast("导入已取消。");
-  //     // 用户取消，直接退出
-  //     return;
-  //   }
-
-  //   // 3. 获取学期。
-  //   const semesterIndex = await selectSemester();
-  //   if (semesterIndex === null) {
-  //     AndroidBridge.showToast("导入已取消。");
-  //     // 用户取消，直接退出
-  //     return;
-  //   }
-
-  //   // 4. 网络请求和数据解析。
-  //   const courses = await fetchAndParseCourses(academicYear, semesterIndex);
-  //   if (courses === null) {
-  //     // 请求失败或无数据，直接退出
-  //     return;
-  //   }
-
-  //   // 5. [可选] 保存配置数据 (例如学期开始日期)
-  //   const configSaveResult = await saveConfig(courses.config); // 假设 courses 对象中包含配置
-  //   if (!configSaveResult) {
-  //     // 保存配置失败，直接退出
-  //     return;
-  //   }
   // 6. 课程数据保存。
   const saveResult = await saveCourses();
   if (!saveResult) {
@@ -228,22 +199,33 @@ async function runImportFlow() {
 
   // 7. [可选] 导入时间段。
   // 注意：即使时间段导入失败，通常也不阻止最终流程完成。
-    const slots = [
-      new CustomTimeModel(1, "08:00", "08:50"),
-      new CustomTimeModel(2, "08:55", "09:45"),
-      new CustomTimeModel(3, "10:15", "11:05"),
-      new CustomTimeModel(4, "11:10", "12:00"),
-      new CustomTimeModel(5, "14:00", "14:50"),
-      new CustomTimeModel(6, "14:55", "15:45"),
-      new CustomTimeModel(7, "16:15", "17:05"),
-      new CustomTimeModel(8, "17:10", "18:00"),
-      new CustomTimeModel(9, "19:00", "19:50"),
-      new CustomTimeModel(10, "19:55", "20:45"),
-      new CustomTimeModel(11, "20:50", "21:45"),
-    ];
-    await window.AndroidBridgePromise.savePresetTimeSlots(
-      JSON.stringify(slots),
-    );
+  // const slots = [
+  //   new CustomTimeModel(1, "08:00", "08:50"),
+  //   new CustomTimeModel(2, "08:55", "09:45"),
+  //   new CustomTimeModel(3, "10:15", "11:05"),
+  //   new CustomTimeModel(4, "11:10", "12:00"),
+  //   new CustomTimeModel(5, "14:00", "14:50"),
+  //   new CustomTimeModel(6, "14:55", "15:45"),
+  //   new CustomTimeModel(7, "16:15", "17:05"),
+  //   new CustomTimeModel(8, "17:10", "18:00"),
+  //   new CustomTimeModel(9, "19:00", "19:50"),
+  //   new CustomTimeModel(10, "19:55", "20:45"),
+  //   new CustomTimeModel(11, "20:50", "21:45"),
+  // ];
+  const slots = [
+    { number: 1, startTime: "08:00", endTime: "08:50" },
+    { number: 2, startTime: "08:55", endTime: "09:45" },
+    { number: 3, startTime: "10:15", endTime: "11:05" },
+    { number: 4, startTime: "11:10", endTime: "12:00" },
+    { number: 5, startTime: "14:00", endTime: "14:50" },
+    { number: 6, startTime: "14:55", endTime: "15:45" },
+    { number: 7, startTime: "16:15", endTime: "17:05" },
+    { number: 8, startTime: "17:10", endTime: "18:00" },
+    { number: 9, startTime: "19:00", endTime: "19:50" },
+    { number: 10, startTime: "19:55", endTime: "20:45" },
+    { number: 11, startTime: "20:50", endTime: "21:45" },
+  ];
+  await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
   // 8. 流程**完全成功**，发送结束信号。
   AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
   AndroidBridge.notifyTaskCompletion();
