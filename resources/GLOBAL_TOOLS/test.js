@@ -1,5 +1,6 @@
 /**
- *
+ * 济南大学教务适配
+ * Moyu
  */
 class CourseModel {
   name = ""; // 课程名称 (String)
@@ -47,6 +48,7 @@ class CustomTimeModel {
     this.endTime = end;
   }
 }
+
 async function importTimeSlots() {
   const slots = [
     new CustomTimeModel(1, "08:00", "08:50"),
@@ -99,7 +101,7 @@ function parseWeekText(text) {
   // 强制清理
   text = text.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, "").trim();
 
-  console.log("处理前:", JSON.stringify(text));
+  // console.log("处理前:", JSON.stringify(text));
 
   // 不用 split 了，直接全局匹配周数段
   const allWeeks = new Set();
@@ -111,7 +113,7 @@ function parseWeekText(text) {
 
   while ((match = pattern.exec(noJie)) !== null) {
     const [, start, end, type] = match;
-    console.log("匹配:", start, end, type);
+    // console.log("匹配:", start, end, type);
     for (let w = parseInt(start, 10); w <= parseInt(end, 10); w++) {
       if (
         !type ||
@@ -125,7 +127,15 @@ function parseWeekText(text) {
 
   return [...allWeeks].sort((a, b) => a - b);
 }
-
+function offsetColByRow(row) {
+  row = row - 2;
+  if (row % 4 == 0) {
+    return 0;
+  }
+  if (row % 4 == 2) {
+    return 1;
+  }
+}
 function analyzeCourseModel(item) {
   let td = item.closest("td");
   let elements = item.querySelectorAll("p");
@@ -137,7 +147,7 @@ function analyzeCourseModel(item) {
     row: tr.rowIndex, //第几行
     rowSpan: td.rowSpan || 1, //跨几行
     col: td.cellIndex, //第几列
-    colSpan: td.colSpan, //跨几列
+    colSpan: td.colSpan || 1, //跨几列
     cell: td, //本身
   };
   let currentItem = item.querySelector(".title");
@@ -145,12 +155,12 @@ function analyzeCourseModel(item) {
   let teacher = elements[2].lastElementChild.innerText;
   let position = elements[1].lastElementChild.innerText;
   let weeks = parseWeekText(elements[0].lastElementChild.innerText);
-  console.log(weeks);
+  // console.log(weeks);
   return new CourseModel(
-    name,
+    name.replace(/[■☆★◆]/g, ""),
     teacher,
     position,
-    site.col - 1,
+    site.col - 1 + offsetColByRow(site.row),
     site.row - 1,
     site.row + site.rowSpan - 2,
     [...weeks],
@@ -161,13 +171,11 @@ async function saveCourses() {
   const elements = document.querySelectorAll(
     "#innerContainer #table1 div.timetable_con",
   );
-  console.log(elements.length);
   let courseModels = [];
   elements.forEach((item) => {
     let course = analyzeCourseModel(item);
     courseModels.push({ ...course });
   });
-  console.log(courseModels);
   window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courseModels));
 }
 
