@@ -63,25 +63,17 @@ async function importTimeSlots() {
     new CustomTimeModel(10, "19:55", "20:45"),
     new CustomTimeModel(11, "20:50", "21:45"),
   ];
-  return new Promise((resolve, reject) => {
-    try {
-      AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
-
-      resolve(true);
-    } catch (e) {
-      reject(e);
-      console.error("时间导入失败");
-    }
-  })
-    .then(() => {
-      AndroidBridge.showToast("预设时间段导入成功！");
-      return true;
-    })
-    .catch((e) => {
-      console.error("时间段导入失败：", e);
-      AndroidBridge.showToast("预设时间段导入失败！"); // 修复错误提示文案
-      return false;
-    });
+  try {
+    await window.AndroidBridgePromise.savePresetTimeSlots(
+      JSON.stringify(slots),
+    );
+    AndroidBridge.showToast("预设时间段导入成功！");
+    return true;
+  } catch (error) {
+    AndroidBridge.showToast("预设时间段导入失败！");
+    console.error("时间段导入失败：", error);
+    return false;
+  }
 }
 
 function checkLoginEnvironment() {
