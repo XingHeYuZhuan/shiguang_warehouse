@@ -68,11 +68,20 @@ async function importTimeSlots() {
       JSON.stringify(slots),
     );
     AndroidBridge.showToast("预设时间段导入成功！");
+      const confirmed = await window.AndroidBridgePromise.showAlert(
+        "教务导入",
+        "导入时间成功。",
+        "确定",
+      );
     return true;
   } catch (error) {
     AndroidBridge.showToast("预设时间段导入失败！");
+    const confirmed = await window.AndroidBridgePromise.showAlert(
+      "教务导入",
+      "导入时间失败。",
+      "确定",
+    );
     console.error("时间段导入失败：", error);
-    throw error;
     return false;
   }
 }
