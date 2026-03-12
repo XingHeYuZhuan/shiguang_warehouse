@@ -50,6 +50,12 @@ class CustomTimeModel {
 }
 
 async function importTime() {
+  AndroidBridge.showToast("预设时间段导入成功！");
+  const confirmed = await window.AndroidBridgePromise.showAlert(
+    "教务导入",
+    "导入时间中。",
+    "确定",
+  );
   const slots = [
     new CustomTimeModel(1, "08:00", "08:50"),
     new CustomTimeModel(2, "08:55", "09:45"),
