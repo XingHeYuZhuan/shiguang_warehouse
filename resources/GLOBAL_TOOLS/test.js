@@ -69,7 +69,7 @@ async function importTimeSlots() {
       resolve(true);
     } catch (e) {
       reject(e);
-      console.log("时间导入失败");
+      console.error("时间导入失败");
     }
   })
     .then(() => {
@@ -101,19 +101,22 @@ function parseWeekText(text) {
   // 强制清理
   text = text.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, "").trim();
 
-  // console.log("处理前:", JSON.stringify(text));
-
-  // 不用 split 了，直接全局匹配周数段
   const allWeeks = new Set();
-  const pattern = /(\d+)-(\d+)周(?:\((单|双)\))?/g;
-  let match;
 
   // 先去掉节信息（如果有的话）
   const noJie = text.replace(/\(\d+-\d+节\)/g, " ");
 
-  while ((match = pattern.exec(noJie)) !== null) {
+  // 匹配两种格式：
+  // 1. 范围格式：1-16周、1-16周(单)、1-16周(双)
+  // 2. 单周格式：15周、8周(单)、8周(双)
+  const rangePattern = /(\d+)-(\d+)周(?:\((单|双)\))?/g;
+  const singlePattern = /(\d+)周(?:\((单|双)\))?/g;
+
+  let match;
+
+  // 处理范围格式 1-16周
+  while ((match = rangePattern.exec(noJie)) !== null) {
     const [, start, end, type] = match;
-    // console.log("匹配:", start, end, type);
     for (let w = parseInt(start, 10); w <= parseInt(end, 10); w++) {
       if (
         !type ||
@@ -122,6 +125,35 @@ function parseWeekText(text) {
       ) {
         allWeeks.add(w);
       }
+    }
+  }
+
+  // 处理单周格式 15周（避免重复匹配范围中已经匹配过的）
+  // 重置 lastIndex，并且需要排除已经匹配过的范围部分
+  const processedRanges = [];
+  rangePattern.lastIndex = 0;
+  while ((match = rangePattern.exec(noJie)) !== null) {
+    processedRanges.push({
+      start: match.index,
+      end: match.index + match[0].length,
+    });
+  }
+
+  singlePattern.lastIndex = 0;
+  while ((match = singlePattern.exec(noJie)) !== null) {
+    const weekNum = parseInt(match[1], 10);
+    const type = match[2];
+
+    // 检查这个匹配是否已经被范围正则匹配过了（简单判断：如果包含"-"就跳过）
+    const matchStr = match[0];
+    if (matchStr.includes("-")) continue;
+
+    if (
+      !type ||
+      (type === "单" && weekNum % 2 === 1) ||
+      (type === "双" && weekNum % 2 === 0)
+    ) {
+      allWeeks.add(weekNum);
     }
   }
 
@@ -158,8 +190,8 @@ function analyzeCourseModel(item) {
   // console.log(weeks);
   return new CourseModel(
     name.replace(/[■☆★◆]/g, ""),
-    teacher,
-    position,
+    teacher.trim(),
+    position.trim(),
     site.col - 1 + offsetColByRow(site.row),
     site.row - 1,
     site.row + site.rowSpan - 2,
@@ -227,7 +259,21 @@ async function runImportFlow() {
   // 7. [可选] 导入时间段。
   // 注意：即使时间段导入失败，通常也不阻止最终流程完成。
   await importTimeSlots();
-
+  console.log(
+    JSON.stringify([
+      new CustomTimeModel(1, "08:00", "08:50"),
+      new CustomTimeModel(2, "08:55", "09:45"),
+      new CustomTimeModel(3, "10:15", "11:05"),
+      new CustomTimeModel(4, "11:10", "12:00"),
+      new CustomTimeModel(5, "14:00", "14:50"),
+      new CustomTimeModel(6, "14:55", "15:45"),
+      new CustomTimeModel(7, "16:15", "17:05"),
+      new CustomTimeModel(8, "17:10", "18:00"),
+      new CustomTimeModel(9, "19:00", "19:50"),
+      new CustomTimeModel(10, "19:55", "20:45"),
+      new CustomTimeModel(11, "20:50", "21:45"),
+    ]),
+  );
   // 8. 流程**完全成功**，发送结束信号。
   AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
   AndroidBridge.notifyTaskCompletion();
