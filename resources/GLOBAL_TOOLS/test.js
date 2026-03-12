@@ -267,7 +267,7 @@ async function runImportFlow() {
 // runImportFlow();
 (async () => {
   try {
-    await importSchedule();
+    await runImportFlow();
   } catch (error) {
     console.error("课表导入失败：", error);
     // 失败原因直接提示给用户，便于在移动端快速定位问题
