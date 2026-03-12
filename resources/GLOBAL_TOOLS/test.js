@@ -213,11 +213,7 @@ async function runImportFlow() {
   );
   if (!confirmed) return;
   // 6. 课程数据保存。
-  const saveResult = await saveCourses();
-  if (!saveResult) {
-    // 保存课程数据失败，直接退出
-    return;
-  }
+
   const slots = [
     { number: 1, startTime: "08:00", endTime: "08:50" },
     { number: 2, startTime: "08:55", endTime: "09:45" },
@@ -232,7 +228,11 @@ async function runImportFlow() {
     { number: 11, startTime: "20:50", endTime: "21:45" },
   ];
   await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
-  await importPresetTimeSlots();
+  const saveResult = await saveCourses();
+  if (!saveResult) {
+    // 保存课程数据失败，直接退出
+    return;
+  }
 
   // 8. 流程**完全成功**，发送结束信号。
   AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
