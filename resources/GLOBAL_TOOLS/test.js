@@ -177,6 +177,43 @@ async function saveCourses() {
   window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courseModels));
 }
 
+async function importPresetTimeSlots() {
+  console.log("正在准备预设时间段数据...");
+  const presetTimeSlots = [
+    { number: 1, startTime: "08:10", endTime: "08:55" },
+    { number: 2, startTime: "09:00", endTime: "09:45" },
+    { number: 3, startTime: "10:05", endTime: "10:50" },
+    { number: 4, startTime: "10:55", endTime: "11:40" },
+    { number: 5, startTime: "14:30", endTime: "15:15" },
+    { number: 6, startTime: "15:20", endTime: "16:05" },
+    { number: 7, startTime: "16:25", endTime: "17:10" },
+    { number: 8, startTime: "17:15", endTime: "18:00" },
+    { number: 9, startTime: "18:45", endTime: "19:30" },
+    { number: 10, startTime: "19:35", endTime: "20:20" },
+    { number: 11, startTime: "20:25", endTime: "21:10" },
+  ];
+  try {
+    console.log("正在尝试导入预设时间段...");
+    const result = await window.AndroidBridgePromise.savePresetTimeSlots(
+      JSON.stringify(presetTimeSlots),
+    );
+    if (result === true) {
+      console.log("预设时间段导入成功！");
+      window.AndroidBridge.showToast("测试时间段导入成功！");
+      return true;
+    } else {
+      console.log("预设时间段导入未成功，结果：" + result);
+      window.AndroidBridge.showToast("测试时间段导入失败，请查看日志。");
+      return false;
+    }
+  } catch (error) {
+    console.error("导入时间段时发生错误:", error);
+    window.AndroidBridge.showToast("导入时间段失败: " + error.message);
+    return false;
+  }
+}
+
+
 async function runImportFlow() {
   window.AndroidBridge.showToast("课程导入流程即将开始...");
 
@@ -196,36 +233,21 @@ async function runImportFlow() {
     // 保存课程数据失败，直接退出
     return;
   }
-
-  // 7. [可选] 导入时间段。
-  // 注意：即使时间段导入失败，通常也不阻止最终流程完成。
+  await importPresetTimeSlots();
   // const slots = [
-  //   new CustomTimeModel(1, "08:00", "08:50"),
-  //   new CustomTimeModel(2, "08:55", "09:45"),
-  //   new CustomTimeModel(3, "10:15", "11:05"),
-  //   new CustomTimeModel(4, "11:10", "12:00"),
-  //   new CustomTimeModel(5, "14:00", "14:50"),
-  //   new CustomTimeModel(6, "14:55", "15:45"),
-  //   new CustomTimeModel(7, "16:15", "17:05"),
-  //   new CustomTimeModel(8, "17:10", "18:00"),
-  //   new CustomTimeModel(9, "19:00", "19:50"),
-  //   new CustomTimeModel(10, "19:55", "20:45"),
-  //   new CustomTimeModel(11, "20:50", "21:45"),
+  //   { number: 1, startTime: "08:00", endTime: "08:50" },
+  //   { number: 2, startTime: "08:55", endTime: "09:45" },
+  //   { number: 3, startTime: "10:15", endTime: "11:05" },
+  //   { number: 4, startTime: "11:10", endTime: "12:00" },
+  //   { number: 5, startTime: "14:00", endTime: "14:50" },
+  //   { number: 6, startTime: "14:55", endTime: "15:45" },
+  //   { number: 7, startTime: "16:15", endTime: "17:05" },
+  //   { number: 8, startTime: "17:10", endTime: "18:00" },
+  //   { number: 9, startTime: "19:00", endTime: "19:50" },
+  //   { number: 10, startTime: "19:55", endTime: "20:45" },
+  //   { number: 11, startTime: "20:50", endTime: "21:45" },
   // ];
-  const slots = [
-    { number: 1, startTime: "08:00", endTime: "08:50" },
-    { number: 2, startTime: "08:55", endTime: "09:45" },
-    { number: 3, startTime: "10:15", endTime: "11:05" },
-    { number: 4, startTime: "11:10", endTime: "12:00" },
-    { number: 5, startTime: "14:00", endTime: "14:50" },
-    { number: 6, startTime: "14:55", endTime: "15:45" },
-    { number: 7, startTime: "16:15", endTime: "17:05" },
-    { number: 8, startTime: "17:10", endTime: "18:00" },
-    { number: 9, startTime: "19:00", endTime: "19:50" },
-    { number: 10, startTime: "19:55", endTime: "20:45" },
-    { number: 11, startTime: "20:50", endTime: "21:45" },
-  ];
-  await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
+  // await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
   // 8. 流程**完全成功**，发送结束信号。
   AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
   AndroidBridge.notifyTaskCompletion();
