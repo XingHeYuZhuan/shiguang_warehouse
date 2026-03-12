@@ -254,13 +254,4 @@ async function runImportFlow() {
 }
 
 // 启动导入流程
-// runImportFlow();
-(async () => {
-  try {
-    await runImportFlow();
-  } catch (error) {
-    console.error("课表导入失败：", error);
-    // 失败原因直接提示给用户，便于在移动端快速定位问题
-    AndroidBridge.showToast(`导入失败：${error.message}`);
-  }
-})();
+runImportFlow();
