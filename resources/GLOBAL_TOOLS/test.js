@@ -49,7 +49,7 @@ class CustomTimeModel {
   }
 }
 
-async function importTimeSlots() {
+async function importTime() {
   const slots = [
     new CustomTimeModel(1, "08:00", "08:50"),
     new CustomTimeModel(2, "08:55", "09:45"),
@@ -68,11 +68,11 @@ async function importTimeSlots() {
       JSON.stringify(slots),
     );
     AndroidBridge.showToast("预设时间段导入成功！");
-      const confirmed = await window.AndroidBridgePromise.showAlert(
-        "教务导入",
-        "导入时间成功。",
-        "确定",
-      );
+    const confirmed = await window.AndroidBridgePromise.showAlert(
+      "教务导入",
+      "导入时间成功。",
+      "确定",
+    );
     return true;
   } catch (error) {
     AndroidBridge.showToast("预设时间段导入失败！");
@@ -265,7 +265,7 @@ async function runImportFlow() {
 
   // 7. [可选] 导入时间段。
   // 注意：即使时间段导入失败，通常也不阻止最终流程完成。
-  importTimeSlots();
+  await importTime();
  
   // 8. 流程**完全成功**，发送结束信号。
   AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
