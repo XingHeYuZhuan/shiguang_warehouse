@@ -72,6 +72,7 @@ async function importTimeSlots() {
   } catch (error) {
     AndroidBridge.showToast("预设时间段导入失败！");
     console.error("时间段导入失败：", error);
+    throw error;
     return false;
   }
 }
@@ -255,12 +256,21 @@ async function runImportFlow() {
 
   // 7. [可选] 导入时间段。
   // 注意：即使时间段导入失败，通常也不阻止最终流程完成。
-  await importTimeSlots();
-
+  importTimeSlots();
+ 
   // 8. 流程**完全成功**，发送结束信号。
   AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
   AndroidBridge.notifyTaskCompletion();
 }
 
 // 启动导入流程
-runImportFlow();
+// runImportFlow();
+(async () => {
+  try {
+    await importSchedule();
+  } catch (error) {
+    console.error("课表导入失败：", error);
+    // 失败原因直接提示给用户，便于在移动端快速定位问题
+    AndroidBridge.showToast(`导入失败：${error.message}`);
+  }
+})();
