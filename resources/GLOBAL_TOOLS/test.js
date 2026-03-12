@@ -65,7 +65,8 @@ async function importTimeSlots() {
   ];
   return new Promise((resolve, reject) => {
     try {
-      window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
+      AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
+
       resolve(true);
     } catch (e) {
       reject(e);
@@ -187,7 +188,6 @@ function analyzeCourseModel(item) {
   let teacher = elements[2].lastElementChild.innerText;
   let position = elements[1].lastElementChild.innerText;
   let weeks = parseWeekText(elements[0].lastElementChild.innerText);
-  // console.log(weeks);
   return new CourseModel(
     name.replace(/[■☆★◆]/g, ""),
     teacher.trim(),
@@ -208,6 +208,7 @@ async function saveCourses() {
     let course = analyzeCourseModel(item);
     courseModels.push({ ...course });
   });
+  console.log(courseModels);
   window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courseModels));
 }
 
@@ -218,7 +219,12 @@ async function runImportFlow() {
   if (!checkLoginEnvironment()) {
     return;
   }
-
+  const confirmed = await window.AndroidBridgePromise.showAlert(
+    "教务导入",
+    "在‘个人课表’页面进行导入以确保数据导入成功。请仔细核对，本人课表比较规整，无法包含所有情况。",
+    "确定",
+  );
+  if (!confirmed) return;
   // 2. 获取用户输入参数。
   //   const academicYear = await getAcademicYear();
   //   if (academicYear === null) {
@@ -248,7 +254,6 @@ async function runImportFlow() {
   //     // 保存配置失败，直接退出
   //     return;
   //   }
-
   // 6. 课程数据保存。
   const saveResult = await saveCourses();
   if (!saveResult) {
@@ -259,21 +264,7 @@ async function runImportFlow() {
   // 7. [可选] 导入时间段。
   // 注意：即使时间段导入失败，通常也不阻止最终流程完成。
   await importTimeSlots();
-  console.log(
-    JSON.stringify([
-      new CustomTimeModel(1, "08:00", "08:50"),
-      new CustomTimeModel(2, "08:55", "09:45"),
-      new CustomTimeModel(3, "10:15", "11:05"),
-      new CustomTimeModel(4, "11:10", "12:00"),
-      new CustomTimeModel(5, "14:00", "14:50"),
-      new CustomTimeModel(6, "14:55", "15:45"),
-      new CustomTimeModel(7, "16:15", "17:05"),
-      new CustomTimeModel(8, "17:10", "18:00"),
-      new CustomTimeModel(9, "19:00", "19:50"),
-      new CustomTimeModel(10, "19:55", "20:45"),
-      new CustomTimeModel(11, "20:50", "21:45"),
-    ]),
-  );
+
   // 8. 流程**完全成功**，发送结束信号。
   AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
   AndroidBridge.notifyTaskCompletion();
