@@ -49,31 +49,6 @@ class CustomTimeModel {
   }
 }
 
-async function importTime() {
-  const slots = [
-    new CustomTimeModel(1, "08:00", "08:50"),
-    new CustomTimeModel(2, "08:55", "09:45"),
-    new CustomTimeModel(3, "10:15", "11:05"),
-    new CustomTimeModel(4, "11:10", "12:00"),
-    new CustomTimeModel(5, "14:00", "14:50"),
-    new CustomTimeModel(6, "14:55", "15:45"),
-    new CustomTimeModel(7, "16:15", "17:05"),
-    new CustomTimeModel(8, "17:10", "18:00"),
-    new CustomTimeModel(9, "19:00", "19:50"),
-    new CustomTimeModel(10, "19:55", "20:45"),
-    new CustomTimeModel(11, "20:50", "21:45"),
-  ];
-  try {
-    window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
-    AndroidBridge.showToast("预设时间段导入成功！");
-    return true;
-  } catch (error) {
-    AndroidBridge.showToast("预设时间段导入失败！");
-    console.error("时间段导入失败：", error);
-    return false;
-  }
-}
-
 function checkLoginEnvironment() {
   const currentUrl = window.location.href;
   const loginUrl =
@@ -253,8 +228,22 @@ async function runImportFlow() {
 
   // 7. [可选] 导入时间段。
   // 注意：即使时间段导入失败，通常也不阻止最终流程完成。
-  await importTime();
- 
+    const slots = [
+      new CustomTimeModel(1, "08:00", "08:50"),
+      new CustomTimeModel(2, "08:55", "09:45"),
+      new CustomTimeModel(3, "10:15", "11:05"),
+      new CustomTimeModel(4, "11:10", "12:00"),
+      new CustomTimeModel(5, "14:00", "14:50"),
+      new CustomTimeModel(6, "14:55", "15:45"),
+      new CustomTimeModel(7, "16:15", "17:05"),
+      new CustomTimeModel(8, "17:10", "18:00"),
+      new CustomTimeModel(9, "19:00", "19:50"),
+      new CustomTimeModel(10, "19:55", "20:45"),
+      new CustomTimeModel(11, "20:50", "21:45"),
+    ];
+    await window.AndroidBridgePromise.savePresetTimeSlots(
+      JSON.stringify(slots),
+    );
   // 8. 流程**完全成功**，发送结束信号。
   AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
   AndroidBridge.notifyTaskCompletion();
