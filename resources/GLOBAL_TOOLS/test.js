@@ -45,17 +45,11 @@ class CustomTimeModel {
   }
 }
 
-function checkLoginEnvironment() {
-  const currentUrl = window.location.href;
-  const loginUrl =
-    "https://sso.ujn.edu.cn/tpass/login?service=http%3A%2F%2Fjwgl.ujn.edu.cn%2Fsso%2Fdriotlogin";
-  if (currentUrl === loginUrl) {
-    AndroidBridge.showToast("请先登录再导入");
-    return false;
-  } else {
-    return true;
-  }
-}
+
+
+const urlPersonnalClassTable =
+  "jwgl.ujn.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html";
+const urlClassTable = "jwgl.ujn.edu.cn/jwglxt/kbdy/bjkbdy_cxBjkbdyIndex.html";
 
 //解析周数据
 function parseWeekText(text) {
@@ -120,11 +114,12 @@ function offsetColByRow(row) {
     return 1;
   }
 }
-function analyzeCourseModel(item) {
+function analyzeCourseModel(item, flag) {
   let td = item.closest("td");
   let elements = item.querySelectorAll("p");
   if (!td) {
     console.error("找不到单元格");
+    return null;
   }
   let tr = td.parentElement;
   let site = {
@@ -136,9 +131,27 @@ function analyzeCourseModel(item) {
   };
   let currentItem = item.querySelector(".title");
   let name = currentItem.textContent;
-  let teacher = elements[2].lastElementChild.innerText;
-  let position = elements[1].lastElementChild.innerText;
-  let weeks = parseWeekText(elements[0].lastElementChild.innerText);
+  let teacher;
+  let position;
+  let weeks;
+  if (flag == 1) {
+    teacher = elements[2].lastElementChild.innerText;
+    position = elements[1].lastElementChild.innerText;
+    weeks = parseWeekText(elements[0].lastElementChild.innerText);
+  } else {
+    if (elements.length != 1) {
+      teacher =
+        elements[4].firstElementChild.nextSibling.textContent.split("(")[0];
+      position = elements[3].firstElementChild.nextSibling.textContent;
+      weeks = parseWeekText(
+        elements[2].firstElementChild.nextSibling.textContent,
+      );
+    } else {
+      teacher = "";
+      position = "";
+      weeks = parseWeekText("1-20周");
+    }
+  }
   return new CourseModel(
     name.replace(/[■☆★◆]/g, ""),
     teacher.trim(),
@@ -151,53 +164,105 @@ function analyzeCourseModel(item) {
 }
 
 async function saveCourses() {
-  const elements = document.querySelectorAll(
-    "#innerContainer #table1 div.timetable_con",
-  );
+  let flag;
+  let elements;
+  if (window.location.href.includes(urlPersonnalClassTable)) {
+    elements = document.querySelectorAll(
+      "#innerContainer #table1 div.timetable_con",
+    );
+    flag = 1;
+  } else {
+    if (window.location.href.includes(urlClassTable)) {
+      elements = document.querySelectorAll(
+        "#table1.tab-pane>.timetable1 div.timetable_con",
+      );
+      flag = 0;
+    }
+  }
   let courseModels = [];
   elements.forEach((item) => {
-    let course = analyzeCourseModel(item);
+    let course = analyzeCourseModel(item, flag);
     courseModels.push({ ...course });
   });
   console.log(courseModels);
-  window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courseModels));
+  return new Promise(() => {
+    window.AndroidBridgePromise.saveImportedCourses(
+      JSON.stringify(courseModels),
+    );
+  })
+    .then(() => {
+      return true;
+    })
+    .catch((error) => {
+      console.error("保存课程失败:", error);
+      window.AndroidBridge.showToast("保存课程失败，请重试");
+      return false;
+    });
 }
+async function checkEnvirenment() {
+  const nowSite = window.location.href;
 
-
-async function runImportFlow() {
-  window.AndroidBridge.showToast("课程导入流程即将开始...");
-
-  // 1. 公告和前置检查。
-  if (!checkLoginEnvironment()) {
+  const tableType = ["班级课表", "个人课表"];
+  if (
+    !nowSite.includes(urlPersonnalClassTable) &&
+    !nowSite.includes(urlClassTable)
+  ) {
+    window.AndroidBridge.showToast("当前页面不在支持的导入范围内");
+    const selectedOption =
+      await window.AndroidBridgePromise.showSingleSelection(
+        "现在不在可导入的页面中，请选择导入班级课表还是个人课表，之后并确保打开具体课程页面",
+        JSON.stringify(tableType), // 必须是 JSON 字符串
+        -1, // 默认不选中
+      );
+    if (selectedOption === 0) {
+      clickMenu(
+        "N214505",
+        "/kbdy/bjkbdy_cxBjkbdyIndex.html",
+        "班级课表查询",
+        "null",
+      );
+      return false;
+    } else if (selectedOption === 1) {
+      clickMenu(
+        "N253508",
+        "/kbcx/xskbcx_cxXskbcxIndex.html",
+        "个人课表",
+        "null",
+      );
+    } else {
+      return;
+    }
+  } else {
     return;
   }
-  const confirmed = await window.AndroidBridgePromise.showAlert(
-    "教务导入",
-    "在‘个人课表’页面进行导入以确保数据导入成功。请仔细核对，本人课表比较规整，无法包含所有情况。",
-    "确定",
-  );
-  if (!confirmed) return;
+}
 
-  const slots = [
-    new CustomTimeModel(1, "08:00", "08:50"),
-    new CustomTimeModel(2, "08:55", "09:45"),
-    new CustomTimeModel(3, "10:15", "11:05"),
-    new CustomTimeModel(4, "11:10", "12:00"),
-    new CustomTimeModel(5, "14:00", "14:50"),
-    new CustomTimeModel(6, "14:55", "15:45"),
-    new CustomTimeModel(7, "16:15", "17:05"),
-    new CustomTimeModel(8, "17:10", "18:00"),
-    new CustomTimeModel(9, "19:00", "19:50"),
-    new CustomTimeModel(10, "19:55", "20:45"),
-    new CustomTimeModel(11, "20:50", "21:45"),
-  ];
+async function runImportFlow() {
 
-  await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
+  window.AndroidBridge.showToast("课程导入流程即将开始...");
+
+  if (!checkEnvirenment()) return;
   const saveResult = await saveCourses();
   if (!saveResult) {
     return;
   }
+    const slots = [
+      new CustomTimeModel(1, "08:00", "08:50"),
+      new CustomTimeModel(2, "08:55", "09:45"),
+      new CustomTimeModel(3, "10:15", "11:05"),
+      new CustomTimeModel(4, "11:10", "12:00"),
+      new CustomTimeModel(5, "14:00", "14:50"),
+      new CustomTimeModel(6, "14:55", "15:45"),
+      new CustomTimeModel(7, "16:15", "17:05"),
+      new CustomTimeModel(8, "17:10", "18:00"),
+      new CustomTimeModel(9, "19:00", "19:50"),
+      new CustomTimeModel(10, "19:55", "20:45"),
+      new CustomTimeModel(11, "20:50", "21:45"),
+    ];
 
+    await window.AndroidBridgePromise.savePresetTimeSlots(
+      JSON.stringify(slots),
+    );
   // 8. 流程**完全成功**，发送结束信号。
   AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
   AndroidBridge.notifyTaskCompletion();
