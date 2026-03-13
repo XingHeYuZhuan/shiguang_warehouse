@@ -164,8 +164,8 @@ function analyzeCourseModel(item, flag) {
 }
 
 async function saveCourses() {
-  let flag;
-  let elements;
+  let flag = null;
+  let elements = [];
   if (window.location.href.includes(urlPersonnalClassTable)) {
     elements = document.querySelectorAll(
       "#innerContainer #table1 div.timetable_con",
@@ -182,22 +182,21 @@ async function saveCourses() {
   let courseModels = [];
   elements.forEach((item) => {
     let course = analyzeCourseModel(item, flag);
-    courseModels.push({ ...course });
+    if (course) {
+      courseModels.push({ ...course });
+    }
   });
   console.log(courseModels);
-  return new Promise(() => {
-    window.AndroidBridgePromise.saveImportedCourses(
+  try {
+    await window.AndroidBridgePromise.saveImportedCourses(
       JSON.stringify(courseModels),
     );
-  })
-    .then(() => {
-      return true;
-    })
-    .catch((error) => {
-      console.error("保存课程失败:", error);
-      window.AndroidBridge.showToast("保存课程失败，请重试");
-      return false;
-    });
+    return courseModels.length;
+  } catch (error) {
+    console.error("保存课程失败:", error);
+    window.AndroidBridge.showToast("保存课程失败，请重试");
+    return 0;
+  }
 }
 async function checkEnvirenment() {
   const nowSite = window.location.href;
@@ -229,21 +228,23 @@ async function checkEnvirenment() {
         "个人课表",
         "null",
       );
+      return false;
     } else {
-      return;
+      return false;
     }
-  } else {
-    return;
   }
+
+  return true;
 }
 
 async function runImportFlow() {
 
   window.AndroidBridge.showToast("课程导入流程即将开始...");
 
-  if (!checkEnvirenment()) return;
-  const saveResult = await saveCourses();
-  if (!saveResult) {
+  if (!(await checkEnvirenment())) return;
+
+  const savedCourseCount = await saveCourses();
+  if (!savedCourseCount) {
     return;
   }
     const slots = [
@@ -259,12 +260,17 @@ async function runImportFlow() {
       new CustomTimeModel(10, "19:55", "20:45"),
       new CustomTimeModel(11, "20:50", "21:45"),
     ];
-
-    await window.AndroidBridgePromise.savePresetTimeSlots(
-      JSON.stringify(slots),
-    );
+    try {
+      await window.AndroidBridgePromise.savePresetTimeSlots(
+        JSON.stringify(slots),
+      );
+    } catch (error) {
+      console.error("保存时间段失败:", error);
+      window.AndroidBridge.showToast("保存时间段失败，请重试");
+      return;
+    }
   // 8. 流程**完全成功**，发送结束信号。
-  AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
+  AndroidBridge.showToast(`导入成功：共 ${savedCourseCount} 门课程`);
   AndroidBridge.notifyTaskCompletion();
 }
 
