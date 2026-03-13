@@ -282,3 +282,8 @@ schools:
     name: "华侨大学"
     initial: "H"
     resource_folder: "HQU"
+
+  - id: "UJN"
+    name: "济南大学"
+    initial: "J"
+    resource_folder: "UJN" 
