@@ -1,0 +1,8 @@
+adapters: #固定字段
+  - adapter_id: "UJS_01"
+    adapter_name: "江苏大学教务系统"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "ujs_zhengfang_v9.0.js"
+    import_url: "https://jwxt.ujs.edu.cn/sso/jziotlogin"
+    maintainer: "洛初"
+    description: "江苏大学教务系统适配，仅支持个人课表的导入，通过统一认证登录"

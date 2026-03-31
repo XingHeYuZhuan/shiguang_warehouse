@@ -342,3 +342,8 @@ schools:
     name: "东北大学秦皇岛分校"
     initial: "D"
     resource_folder: "NEUQ"
+
+  - id: "UJS"
+    name: "江苏大学"
+    initial: "J"
+    resource_folder: "UJS"
