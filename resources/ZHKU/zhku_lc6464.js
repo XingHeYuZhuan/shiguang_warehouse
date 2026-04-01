@@ -144,17 +144,16 @@ async function chooseCampus() {
 	}
 
 	const labels = CAMPUS_OPTIONS.map((item) => item.label);
-	const defaultIndex = 1; // 默认白云校区
 
-	const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
-		"请选择校区",
-		JSON.stringify(labels),
-		defaultIndex
-	);
+	let selectedIndex = null;
+	do {
+		selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+			"校区检测失败，请选择校区",
+			JSON.stringify(labels),
+			-1
+		);
+	} while (selectedIndex == null || selectedIndex < 0 || selectedIndex >= CAMPUS_OPTIONS.length);
 
-	if (selectedIndex == null || selectedIndex < 0 || selectedIndex >= CAMPUS_OPTIONS.length) {
-		return "baiyun";
-	}
 	return CAMPUS_OPTIONS[selectedIndex].id;
 }
 
@@ -332,9 +331,6 @@ function parseCoursesFromIframeDocument(iframeDoc) {
 			const teacher = cleanText(teacherFont?.textContent ?? "");
 			let position = cleanText(locationFont?.textContent ?? "");
 
-			// 移除教室中的“(白)”“（白云）”“(白)实”等字样，该信息对于学生而言无意义
-			position = position.replace(/[(（]白云?[)）]实?/g, "");
-
 			// 过滤空课程名、网络课和不存在的虚拟位置
 			if (courseName === ""
 				|| position.includes("网络学时，不排时间教室")
@@ -342,6 +338,12 @@ function parseCoursesFromIframeDocument(iframeDoc) {
 				|| /^（?网络课）?/.test(courseName)) {
 				return;
 			}
+
+			// 移除教室中的“(白)”“（白云）”“(白)实”等字样，该信息对于学生而言无意义
+			position = position.replace(/[(（]白云?[)）]实?/g, "");
+
+			// 移除教室末尾的“xxxx学院实验室”字样，这个信息对于学生而言无意义
+			position = position.replace(/[^\d]{2,8}学院实验室$/, "");
 
 			const parsed = parseWeeksAndSections(weekText);
 
