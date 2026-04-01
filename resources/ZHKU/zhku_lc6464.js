@@ -340,10 +340,16 @@ function parseCoursesFromIframeDocument(iframeDoc) {
 			}
 
 			// 移除教室中的“(白)”“（白云）”“(白)实”等字样，该信息对于学生而言无意义
-			position = position.replace(/[(（]白云?[)）]实?/g, "");
+			position = position.replace(/[(（]白云?[)）](?:实(?![A-Za-z]))?/g, "");
 
 			// 移除教室末尾的“xxxx实验室”字样，这个信息对于学生而言无意义
-			position = position.replace(/[^\d]{2,10}实验室$/, "");
+			position = position.replace(/(?:(?<=\d|\d[A-Za-z])(?:[^A-Za-z\d)）]|(?<!\d)[A-Za-z])*实验室(?:[(（]?[\d一二三四五六七八九十甲乙丙丁]+[）)]?|（物理实验室）|（机房）)*)+$/, "");
+
+			// 补全开头的“英东楼”
+			position = position.replace(/^英\s*(\d{3,4})/, "英东楼$1");
+
+			// 移除掉生科楼的“实”
+			position = position.replace(/(?<=生科[AB])实/, "");
 
 			const parsed = parseWeeksAndSections(weekText);
 
