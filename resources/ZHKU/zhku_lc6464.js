@@ -342,8 +342,8 @@ function parseCoursesFromIframeDocument(iframeDoc) {
 			// 移除教室中的“(白)”“（白云）”“(白)实”等字样，该信息对于学生而言无意义
 			position = position.replace(/[(（]白云?[)）]实?/g, "");
 
-			// 移除教室末尾的“xxxx学院实验室”字样，这个信息对于学生而言无意义
-			position = position.replace(/[^\d]{2,8}学院实验室$/, "");
+			// 移除教室末尾的“xxxx实验室”字样，这个信息对于学生而言无意义
+			position = position.replace(/[^\d]{2,10}实验室$/, "");
 
 			const parsed = parseWeeksAndSections(weekText);
 
