@@ -381,3 +381,8 @@ schools:
     name: "山东师范大学"
     initial: "S"
     resource_folder: "SDNU"
+
+  - id: "CUPK"
+    name: "中国石油大学（北京）克拉玛依校区"
+    initial: "Z"
+    resource_folder: "CUPK"
