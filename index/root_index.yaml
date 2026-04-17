@@ -391,3 +391,9 @@ schools:
     name: "中国石油大学（北京）克拉玛依校区"
     initial: "Z"
     resource_folder: "CUPK"
+
+  - id: "SDHYGXY"
+    name: "山东华宇工学院"
+    initial: "S"
+    resource_folder: "SDHYGXY"
+
