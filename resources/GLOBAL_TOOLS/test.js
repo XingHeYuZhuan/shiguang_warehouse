@@ -12,24 +12,32 @@ function parseWeeks(weekStr) {
     return weeks;
 }
 
-async function fetchAndParseCourses() {
-    const rawItems = [];
+function findTable(win) {
+    const t = Array.from(win.document.querySelectorAll('table'))
+        .find(x => x.innerText.includes("星期一") && x.innerText.includes("["));
+    if (t) return t;
     
-    function findTable(win) {
-        const t = Array.from(win.document.querySelectorAll('table')).find(x => x.innerText.includes("星期一") && x.innerText.includes("["));
-        if (t) return t;
-        for (let i = 0; i < win.frames.length; i++) {
-            try { const st = findTable(win.frames[i]); if (st) return st; } catch (e) {}
-        }
-        return null;
+    for (let i = 0; i < win.frames.length; i++) {
+        try { 
+            const st = findTable(win.frames[i]); 
+            if (st) return st; 
+        } catch (e) {}
     }
-    
-    const table = findTable(window);
-    if (!table) return null;
+    return null;
+}
 
+async function fetchAndParseCourses() {
+    const table = findTable(window);
+    
+    if (!table) {
+        throw new Error("未检测到课表数据，请确保已切换到显示课表的页面！");
+    }
+
+    const rawItems = [];
     Array.from(table.rows).forEach(row => {
         const cells = Array.from(row.cells);
         if (cells.length < 7) return;
+        
         cells.forEach((cell, colIndex) => {
             const distanceToLast = cells.length - 1 - colIndex;
             if (distanceToLast > 6) return;
@@ -44,6 +52,7 @@ async function fetchAndParseCourses() {
                     let name = "未知课程";
                     if (i >= 2) name = lines[i-2];
                     else if (i >= 1) name = lines[i-1];
+                    
                     let teacher = (i >= 1 && !lines[i-1].includes('[')) ? lines[i-1] : "未知教师";
                     let position = (i < lines.length - 1) ? lines[i+1] : "未知地点";
 
@@ -111,11 +120,24 @@ async function fetchAndParseCourses() {
 
 async function runImportFlow() {
     try {
+        AndroidBridge.showToast("泰山学院引擎启动，抓取数据中...");
         const courses = await fetchAndParseCourses();
-        if (!courses || courses.length === 0) return;
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        
+        if (!courses || courses.length === 0) {
+            AndroidBridge.showToast("解析完成，但当前课表为空");
+            AndroidBridge.notifyTaskCompletion();
+            return;
+        }
+        
+        const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        if (saveResult === true) {
+            AndroidBridge.showToast(`导入大成功！合并生成 ${courses.length} 个课块`);
+            AndroidBridge.notifyTaskCompletion();
+        }
+    } catch (error) {
+        AndroidBridge.showToast("⚠️ " + error.message);
         AndroidBridge.notifyTaskCompletion();
-    } catch (error) {}
+    }
 }
 
 runImportFlow();
