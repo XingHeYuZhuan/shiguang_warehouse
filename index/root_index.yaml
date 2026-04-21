@@ -406,3 +406,8 @@ schools:
     name: "泰山学院"
     initial: "T"
     resource_folder: "TSU"
+
+  - id: "GDIPU"
+    name: "广东轻工职业技术大学"
+    initial: "G"
+    resource_folder: "GDIPU"
