@@ -385,12 +385,7 @@ const saveSchedule = async (courses, courseConfig, timeSlots) => {
  */
 (async () => {
     try {
-        // 检查登录状态
-        if (!checkLogin()) {
-            AndroidBridge.showToast("尚未登录广东轻工职业技术大学教务系统，请先登录！");
-            throw new Error("未检测到登录状态");
-        }
-        
+
         AndroidBridge.showToast("正在获取课程表数据...");
         
         // 获取当前周数
