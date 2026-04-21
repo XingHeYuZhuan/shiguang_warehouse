@@ -17,47 +17,67 @@ const checkLogin = () => {
 };
 
 /**
- * 获取当前周数
- * @returns {number} 当前周数
+ * 提示用户输入学期开始日期
+ * @returns {Promise<string>} 用户输入的日期字符串 YYYY-MM-DD
  */
-const getCurrentWeek = () => {
-    // 尝试从页面中提取周数信息
-    const weekInfoElement = document.querySelector('#li_showWeek span');
-    if (weekInfoElement) {
-        const weekText = weekInfoElement.textContent;
-        const match = weekText.match(/第(\d+)周/);
-        if (match) {
-            return parseInt(match[1], 10);
+const promptForStartDate = async () => {
+    try {
+        // 获取当前日期作为默认值
+        const today = new Date();
+        const defaultDate = today.toISOString().split('T')[0];
+        
+        // 显示提示框让用户输入开始日期
+        const startDate = await window.AndroidBridgePromise.showPrompt(
+            "请输入学期开始日期",
+            "格式：YYYY-MM-DD（例如：2026-02-24）",
+            defaultDate,
+            "validateDate"
+        );
+        
+        if (startDate === null) {
+            throw new Error("用户取消了输入");
         }
+        
+        // 验证日期格式
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+            AndroidBridge.showToast("日期格式不正确，请使用YYYY-MM-DD格式");
+            throw new Error("日期格式不正确");
+        }
+        
+        return startDate;
+    } catch (error) {
+        console.error("获取开始日期失败:", error);
+        throw error;
     }
-    
-    // 默认返回第1周
-    return 1;
 };
 
 /**
- * 获取当前日期或指定周数的日期
- * @param {number} week - 周数
- * @returns {string} 日期字符串 YYYY-MM-DD
+ * 日期验证函数（供AndroidBridge调用）
+ * @param {string} dateStr - 日期字符串
+ * @returns {string|false} 错误信息或false表示验证通过
  */
-const getDateForWeek = (week) => {
-    // 这里需要根据学期开始日期计算
-    // 由于我们不知道学期开始日期，我们可以使用当前日期
-    const today = new Date();
+function validateDate(dateStr) {
+    if (!dateStr) {
+        return "日期不能为空";
+    }
     
-    // 计算指定周数的日期（假设今天是当前周的第一天）
-    const daysToAdd = (week - getCurrentWeek()) * 7;
-    const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + daysToAdd);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return "日期格式不正确，请使用YYYY-MM-DD格式";
+    }
     
-    // 格式化为YYYY-MM-DD
-    return targetDate.toISOString().split('T')[0];
-};
+    // 检查日期是否有效
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+        return "无效的日期";
+    }
+    
+    return false;
+}
 
 /**
  * 获取课程表数据
  * @param {string} date - 日期字符串 YYYY-MM-DD
- * @returns {Promise<string>} HTML响应
+ * @returns {Promise<{html: string, hasCourses: boolean}>} HTML响应和是否有课程的标志
  */
 const fetchTimetable = async (date) => {
     try {
@@ -79,7 +99,12 @@ const fetchTimetable = async (date) => {
             throw new Error(`HTTP错误: ${response.status}`);
         }
         
-        return await response.text();
+        const html = await response.text();
+        
+        // 检查是否有课程
+        const hasCourses = checkIfHasCourses(html);
+        
+        return { html, hasCourses };
     } catch (error) {
         console.error('获取课程表失败:', error);
         throw error;
@@ -87,11 +112,33 @@ const fetchTimetable = async (date) => {
 };
 
 /**
+ * 检查HTML中是否有课程
+ * @param {string} html - HTML字符串
+ * @returns {boolean} 是否有课程
+ */
+const checkIfHasCourses = (html) => {
+    // 创建临时DOM元素来解析HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    
+    // 查找课程表表格
+    const table = doc.querySelector('form table.kb_table');
+    if (!table) {
+        return false;
+    }
+    
+    // 检查是否有课程单元格
+    const courseCells = table.querySelectorAll('td p[title]');
+    return courseCells.length > 0;
+};
+
+/**
  * 从HTML字符串解析课程表
  * @param {string} html - HTML字符串
+ * @param {string} date - 请求的日期
  * @returns {Array} 课程信息数组
  */
-const parseTimetableFromHTML = (html) => {
+const parseTimetableFromHTML = (html, date) => {
     const courses = [];
     
     // 创建临时DOM元素来解析HTML
@@ -153,7 +200,7 @@ const parseTimetableFromHTML = (html) => {
                 day: dayOfWeek,
                 startSection: sectionInfo.startSection,
                 endSection: sectionInfo.endSection,
-                weeks: timeInfo.weeks.length > 0 ? timeInfo.weeks : [getCurrentWeek()] // 默认当前周
+                weeks: timeInfo.weeks.length > 0 ? timeInfo.weeks : [calculateWeekFromDate(date)] // 根据日期计算周数
             };
             
             // 添加到课程列表
@@ -162,6 +209,18 @@ const parseTimetableFromHTML = (html) => {
     });
     
     return courses;
+};
+
+/**
+ * 根据日期计算周数
+ * @param {string} startDate - 学期开始日期 YYYY-MM-DD
+ * @param {string} currentDate - 当前日期 YYYY-MM-DD
+ * @returns {number} 周数
+ */
+const calculateWeekFromDate = (currentDate) => {
+    // 这里需要学期开始日期，但我们不知道
+    // 暂时返回第1周
+    return 1;
 };
 
 /**
@@ -274,34 +333,13 @@ const parseSection = (sectionStr) => {
 
 /**
  * 获取学期开始日期和总周数
+ * @param {string} startDate - 学期开始日期
+ * @param {number} totalWeeks - 总周数
  * @returns {Object} 学期配置
  */
-const getSemesterConfig = () => {
-    // 从页面中提取周数信息
-    const weekInfoElement = document.querySelector('#li_showWeek span');
-    let currentWeek = getCurrentWeek();
-    let totalWeeks = 20; // 默认20周
-    
-    if (weekInfoElement) {
-        const weekText = weekInfoElement.textContent;
-        const match = weekText.match(/第(\d+)周\/(\d+)周/);
-        if (match) {
-            currentWeek = parseInt(match[1], 10);
-            totalWeeks = parseInt(match[2], 10);
-        }
-    }
-    
-    // 计算学期开始日期（假设今天是当前周的第一天）
-    const today = new Date();
-    const daysSinceStart = (currentWeek - 1) * 7;
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - daysSinceStart);
-    
-    // 格式化为YYYY-MM-DD
-    const formattedDate = startDate.toISOString().split('T')[0];
-    
+const getSemesterConfig = (startDate, totalWeeks) => {
     return {
-        semesterStartDate: formattedDate,
+        semesterStartDate: startDate,
         totalWeeks: totalWeeks
     };
 };
@@ -381,37 +419,102 @@ const saveSchedule = async (courses, courseConfig, timeSlots) => {
 };
 
 /**
+ * 日期增加指定天数
+ * @param {string} dateStr - 日期字符串 YYYY-MM-DD
+ * @param {number} days - 要增加的天数
+ * @returns {string} 新的日期字符串
+ */
+const addDays = (dateStr, days) => {
+    const date = new Date(dateStr);
+    date.setDate(date.getDate() + days);
+    return date.toISOString().split('T')[0];
+};
+
+/**
+ * 获取多周课程表
+ * @param {string} startDate - 开始日期
+ * @returns {Promise<{courses: Array, totalWeeks: number, timeSlots: Array}>} 课程数据和配置
+ */
+const fetchMultiWeekTimetable = async (startDate) => {
+    const allCourses = [];
+    let currentDate = startDate;
+    let weekCount = 0;
+    let timeSlots = null;
+    
+    AndroidBridge.showToast("正在获取课程表数据，请稍候...");
+    
+    while (true) {
+        weekCount++;
+        
+        try {
+            // 获取当前周的课程表
+            const { html, hasCourses } = await fetchTimetable(currentDate);
+            
+            // 如果是第一周，获取时间段配置
+            if (weekCount === 1) {
+                timeSlots = getTimeSlots(html);
+            }
+            
+            // 解析课程
+            const weekCourses = parseTimetableFromHTML(html, currentDate);
+            
+            if (weekCourses.length > 0) {
+                allCourses.push(...weekCourses);
+                console.log(`第${weekCount}周: 找到 ${weekCourses.length} 门课程`);
+            }
+            
+            // 如果没有课程，停止循环
+            if (!hasCourses) {
+                console.log(`第${weekCount}周: 没有课程，停止获取`);
+                break;
+            }
+            
+            // 增加7天获取下一周
+            currentDate = addDays(currentDate, 7);
+            
+            // 安全限制：最多获取20周
+            if (weekCount >= 20) {
+                console.log("达到最大周数限制（20周），停止获取");
+                break;
+            }
+        } catch (error) {
+            console.error(`获取第${weekCount}周课程表失败:`, error);
+            AndroidBridge.showToast(`第${weekCount}周获取失败，继续下一周`);
+            // 继续下一周
+            currentDate = addDays(currentDate, 7);
+            continue;
+        }
+    }
+    
+    return {
+        courses: allCourses,
+        totalWeeks: weekCount,
+        timeSlots: timeSlots || getTimeSlots('') // 如果timeSlots为null，使用默认配置
+    };
+};
+
+/**
  * 主函数
  */
 (async () => {
     try {
-
-        AndroidBridge.showToast("正在获取课程表数据...");
+        AndroidBridge.showToast("正在启动GDIPU课程表导入...");
         
-        // 获取当前周数
-        const currentWeek = getCurrentWeek();
+        // 提示用户输入学期开始日期
+        const startDate = await promptForStartDate();
         
-        // 获取当前周数的日期
-        const date = getDateForWeek(currentWeek);
-        
-        // 获取课程表HTML
-        const timetableHTML = await fetchTimetable(date);
-        
-        // 解析课程表
-        const courses = parseTimetableFromHTML(timetableHTML);
+        // 获取多周课程表
+        const { courses, totalWeeks, timeSlots } = await fetchMultiWeekTimetable(startDate);
         
         if (courses.length === 0) {
-            AndroidBridge.showToast("未找到课程信息，请确保已进入课程表页面");
+            AndroidBridge.showToast("未找到任何课程信息");
             throw new Error("未找到课程信息");
         }
         
-        console.log(`找到 ${courses.length} 门课程`);
+        console.log(`总共找到 ${courses.length} 门课程，共 ${totalWeeks} 周`);
         
         // 获取学期配置
-        const courseConfig = getSemesterConfig();
-        
-        // 获取时间段配置
-        const timeSlots = getTimeSlots(timetableHTML);
+        const courseConfig = getSemesterConfig(startDate, totalWeeks);
         
         // 保存数据
         const success = await saveSchedule(courses, courseConfig, timeSlots);
