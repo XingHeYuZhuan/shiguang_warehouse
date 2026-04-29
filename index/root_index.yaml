@@ -28,6 +28,11 @@ schools:
     initial: "U"
     resource_folder: "urp_jiaowu"
 
+  - id: "BUPT"
+    name: "北京邮电大学"
+    initial: "B"
+    resource_folder: "BUPT"
+
   - id: "CQU"
     name: "重庆大学"
     initial: "C"
