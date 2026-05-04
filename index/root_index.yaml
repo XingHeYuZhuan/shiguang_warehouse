@@ -421,3 +421,8 @@ schools:
     name: "中南民族大学"
     initial: "Z"
     resource_folder: "SCUEC"
+
+  - id: "UZZ"
+    name: "枣庄学院"
+    initial: "Z"
+    resource_folder: "UZZ"
