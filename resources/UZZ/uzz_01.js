@@ -1,224 +1,115 @@
-function parseTable() {
-  const regexName = /[●★○]/g;
-  const courseInfoList = [];
-  const $ = window.jQuery;
-  if (!$) return courseInfoList;
+const UZZ_BASE_URL = window.location.origin;
 
-  $('#kbgrid_table_0 td').each((i, td) => {
-    if ($(td).hasClass('td_wrap') && $(td).text().trim() !== '') {
-      const idAttr = $(td).attr('id');
-      const day = idAttr ? parseInt(idAttr.split('-')[0]) : 0;
-      
-      $(td).find('.timetable_con.text-left').each((i, course) => {
-        const name = $(course).find('.title font').text().replace(regexName, '').trim();
-        const $pList = $(course).find('p');
-        const infoStr = $pList.eq(0).find('font').eq(1).text().trim();
-        const position = $pList.eq(1).find('font').text().trim();
-        const teacher = $pList.eq(2).find('font').text().trim();
+function parseWeeks(weekStr) {
+    if (!weekStr) return [];
+    const segments = weekStr.split(',');
+    let weeks = [];
+    const segmentRegex = /(\d+)(?:-(\d+))?\s*周?(\([单双]\))?/g;
+    for (const segment of segments) {
+        segmentRegex.lastIndex = 0;
+        let match;
+        while ((match = segmentRegex.exec(segment)) !== null) {
+            const start = parseInt(match[1]);
+            const end = match[2] ? parseInt(match[2]) : start;
+            const flagStr = match[3] || '';
+            let flag = 0;
+            if (flagStr.includes('单')) flag = 1;
+            else if (flagStr.includes('双')) flag = 2;
 
-        if (infoStr && infoStr.match(/\((\d+-\d+节)\)/) && infoStr.split('节)')[1]) {
-          const [sections, weeks] = parserInfo(infoStr);
-          if (name && position && teacher && sections.length && weeks.length) {
-            const startSection = sections[0];
-            const endSection = sections[sections.length - 1];
-            const finalPosition = position.split(/\s+/).pop();
-            const data = { name, day, weeks, teacher, position: finalPosition, startSection, endSection };
-            courseInfoList.push(data);
-          }
+            for (let i = start; i <= end; i++) {
+                if (flag === 1 && i % 2 !== 1) continue;
+                if (flag === 2 && i % 2 !== 0) continue;
+                if (!weeks.includes(i)) weeks.push(i);
+            }
         }
-      });
     }
-  });
-  return courseInfoList;
+    return weeks.sort((a, b) => a - b);
 }
 
-function parserList() {
-  const regexName = /[●★○]/g;
-  const regexWeekNum = /周数：|周/g;
-  const regexPosition = /上课地点：/g;
-  const regexTeacher = /教师 ：/g;
-  const $ = window.jQuery;
-  if (!$) return [];
+function parseJsonData(jsonData) {
+    if (!jsonData || !Array.isArray(jsonData.kbList)) return [];
+    const finalCourseList = [];
+    for (const item of jsonData.kbList) {
+        const weeks = parseWeeks(item.zcd);
+        const sectionParts = item.jcs.split('-');
+        const startSection = parseInt(sectionParts[0]);
+        const endSection = parseInt(sectionParts[sectionParts.length - 1]);
+        const day = parseInt(item.xqj);
 
-  let courseInfoList = [];
-  $('#kblist_table tbody').each((day, tbody) => {
-    if (day > 0 && day < 8) {
-      let sections;
-      $(tbody).find('tr:not(:first-child)').each((trIndex, tr) => {
-        let name, font;
-        const $tds = $(tr).find('td');
-        if ($tds.length > 1) {
-          sections = parserSections($tds.eq(0).text());
-          name = $tds.eq(1).find('.title').text().replace(regexName, '').trim();
-          font = $tds.eq(1).find('p font');
-        } else {
-          name = $tds.eq(0).find('.title').text().replace(regexName, '').trim();
-          font = $tds.eq(0).find('p font');
+        if (weeks.length > 0 && !isNaN(day)) {
+            finalCourseList.push({
+                name: item.kcmc.trim(),
+                teacher: item.xm ? item.xm.trim() : "未知",
+                position: item.cdmc ? item.cdmc.trim() : "未知",
+                day: day,
+                startSection: startSection,
+                endSection: endSection,
+                weeks: weeks
+            });
         }
-        
-        const weekStr = $(font[0]).text().replace(regexWeekNum, '').trim();
-        const weeks = parserWeeks(weekStr);
-        const positionRaw = $(font[1]).text().replace(regexPosition, '').trim();
-        const finalPosition = positionRaw.split(/\s+/).pop();
-        const teacher = $(font[2]).text().replace(regexTeacher, '').trim();
-
-        if (name && sections && weeks.length && teacher && finalPosition) {
-          const startSection = sections[0];
-          const endSection = sections[sections.length - 1];
-          const data = { name, day, weeks, teacher, position: finalPosition, startSection, endSection };
-          courseInfoList.push(data);
-        }
-      });
     }
-  });
-  return courseInfoList;
+    return finalCourseList;
 }
 
-function parserInfo(str) {
-  const sections = parserSections(str.match(/\((\d+-\d+节)\)/)[1].replace(/节/g, ''));
-  const weekStrWithMarker = str.split('节)')[1];
-  const weeks = parserWeeks(weekStrWithMarker.replace(/周/g, '').trim());
-  return [sections, weeks];
-}
-
-function parserSections(str) {
-  const [start, end] = str.split('-').map(Number);
-  if (isNaN(start) || isNaN(end) || start > end) return [];
-  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
-}
-
-function parserWeeks(str) {
-  const segments = str.split(',');
-  let weeks = [];
-  const segmentRegex = /(\d+)(?:-(\d+))?\s*\*?(\([单双]\))?/g;
-
-  for (const segment of segments) {
-    const cleanSegment = segment.replace(/周/g, '').trim();
-    segmentRegex.lastIndex = 0;
-    let match;
-    while ((match = segmentRegex.exec(cleanSegment)) !== null) {
-      if (match[0].length === 0) {
-        segmentRegex.lastIndex++;
-        continue;
-      }
-      const start = parseInt(match[1]);
-      const end = match[2] ? parseInt(match[2]) : start;
-      const flagStr = match[3] || '';
-      let flag = 0;
-      if (flagStr.includes('单')) {
-        flag = 1;
-      } else if (flagStr.includes('双')) {
-        flag = 2;
-      }
-
-      for (let i = start; i <= end; i++) {
-        if (flag === 1 && i % 2 !== 1) continue;
-        if (flag === 2 && i % 2 !== 0) continue;
-        weeks.push(i);
-      }
-    }
-  }
-  return [...new Set(weeks)].sort((a, b) => a - b);
-}
-
-async function scrapeAndParseCourses() {
-  AndroidBridge.showToast("正在检查页面并抓取课程数据...");
-  const ts = `1.登陆教务系统\n2.导航到学生课表查询页面\n3.等待课表信息加载，选择对应学年、学期，确认无误后点击【查询】\n4.确保页面上显示了课程表\n5.点击下方【一键导入】`;
-  try {
-    const response = await fetch(window.location.href);
-    const text = await response.text();
-    if (!text.includes("课表查询")) {
-      console.log("页面内容检查失败！");
-      await window.AndroidBridgePromise.showAlert("导入失败", "当前页面似乎不是学生课表查询页面。请检查：\n" + ts, "确定");
-      return null;
-    }
-
-    const typeElement = document.querySelector('#shcPDF');
-    if (!typeElement) {
-      console.log("未能找到视图类型元素 (#shcPDF)");
-      await window.AndroidBridgePromise.showAlert("导入失败", "未能识别课表视图类型，请确认您已点击查询且课表已加载完毕。", "确定");
-      return null;
-    }
-
-    const type = typeElement.dataset['type'];
-    const tableElement = document.querySelector(type === 'list' ? '#kblist_table' : '#kbgrid_table_0');
-    if (!tableElement) {
-      console.log("未能找到课表主体 HTML");
-      await window.AndroidBridgePromise.showAlert("导入失败", `未能找到课表主体 (${type} 视图)，请确认您已点击查询且课表已加载完毕。`, "确定");
-      return null;
-    }
-
-    let result = [];
-    if (type === 'list') {
-      result = parserList();
-    } else {
-      result = parseTable();
-    }
-
-    if (result.length === 0) {
-      AndroidBridge.showToast("未找到任何课程数据，请检查所选学年学期是否正确或本学期无课。");
-      return null;
-    }
-
-    console.log(`JS: 课程数据解析成功，共找到 ${result.length} 门课程。`);
-    return { courses: result };
-  } catch (error) {
-    AndroidBridge.showToast(`抓取或解析失败: ${error.message}`);
-    console.error('JS: Scrape/Parse Error:', error);
-    await window.AndroidBridgePromise.showAlert("抓取或解析失败", `发生错误：${error.message}。请重试或联系开发者。`, "确定");
-    return null;
-  }
-}
-
-async function saveCourses(parsedCourses) {
-  AndroidBridge.showToast(`正在保存 ${parsedCourses.length} 门课程...`);
-  console.log(`JS: 尝试保存 ${parsedCourses.length} 门课程...`);
-  try {
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses, null, 2));
-    console.log("JS: 课程保存成功！");
-    return true;
-  } catch (error) {
-    AndroidBridge.showToast(`课程保存失败: ${error.message}`);
-    console.error('JS: Save Courses Error:', error);
-    return false;
-  }
-}
+const TimeSlots = [
+    { number: 1, startTime: "08:00", endTime: "08:50" },
+    { number: 2, startTime: "08:50", endTime: "09:40" },
+    { number: 3, startTime: "10:10", endTime: "11:00" },
+    { number: 4, startTime: "11:00", endTime: "11:50" },
+    { number: 5, startTime: "14:30", endTime: "15:20" },
+    { number: 6, startTime: "15:20", endTime: "16:10" },
+    { number: 7, startTime: "16:40", endTime: "17:30" },
+    { number: 8, startTime: "17:30", endTime: "18:20" },
+    { number: 9, startTime: "19:30", endTime: "20:20" },
+    { number: 10, startTime: "20:20", endTime: "21:10" }
+];
 
 async function runImportFlow() {
-  const alertConfirmed = await window.AndroidBridgePromise.showAlert(
-    "教务系统课表导入",
-    "导入前请确保您已在浏览器中成功登录教务系统，并处于课表查询页面且已点击查询。",
-    "好的，开始导入"
-  );
-  if (!alertConfirmed) {
-    AndroidBridge.showToast("用户取消了导入。");
-    return;
-  }
+    const $ = window.jQuery;
+    
+    // 强拦截：由于正方系统的 gnmkdm 模块会话校验，必须要求用户在课表页面才能请求 API
+    if (!$ || !$('#xnm').length || !$('#xqm').length) {
+        await window.AndroidBridgePromise.showAlert(
+            "导入提示", 
+            "正方教务系统限制：请务必先点击进入【正方教务管理系统】->【个人课表查询】页面后，再点击一键导入！", 
+            "我知道了"
+        );
+        return;
+    }
 
-  if (typeof window.jQuery === 'undefined' && typeof $ === 'undefined') {
-    const errorMsg = "当前教务系统页面似乎没有加载 jQuery 库。本脚本依赖 jQuery 进行 DOM 解析。";
-    AndroidBridge.showToast(errorMsg);
-    await window.AndroidBridgePromise.showAlert("导入失败", errorMsg + "\n请尝试刷新页面或使用其他导入方式。", "确定");
-    console.error("JS: 缺少 jQuery 依赖，流程终止。");
-    return;
-  }
+    AndroidBridge.showToast("正在获取当前页面课表数据...");
+    
+    // 直接静默提取页面上已经选好的学年和学期
+    const xnm = $('#xnm').val();
+    const xqm = $('#xqm').val();
 
-  const result = await scrapeAndParseCourses();
-  if (result === null) {
-    console.log("JS: 课程获取或解析失败，流程终止。");
-    return;
-  }
+    try {
+        const apiUrl = `${UZZ_BASE_URL}/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151`;
+        const body = `xnm=${xnm}&xqm=${xqm}&kzlx=ck&xsdm=&kclbdm=`;
 
-  const { courses } = result;
-  const saveResult = await saveCourses(courses);
-  if (!saveResult) {
-    console.log("JS: 课程保存失败，流程终止。");
-    return;
-  }
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: body
+        });
 
-  AndroidBridge.showToast(`课程导入成功，共导入 ${courses.length} 门课程！`);
-  console.log("JS: 整个导入流程执行完毕并成功。");
-  AndroidBridge.notifyTaskCompletion();
+        const json = await response.json();
+        const courses = parseJsonData(json);
+
+        if (courses.length === 0) {
+            await window.AndroidBridgePromise.showAlert("导入失败", "该学年学期未找到课程数据，请确认页面上显示的课表是否为空。", "确定");
+            return;
+        }
+
+        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TimeSlots));
+
+        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程！`);
+        AndroidBridge.notifyTaskCompletion();
+    } catch (e) {
+        await window.AndroidBridgePromise.showAlert("导入失败", "接口请求异常，请确认教务系统网络通畅。", "确定");
+        console.error(e);
+    }
 }
 
 runImportFlow();
