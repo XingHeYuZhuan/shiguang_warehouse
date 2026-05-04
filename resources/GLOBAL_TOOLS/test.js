@@ -1,15 +1,14 @@
 /**
- * 枣庄学院 (uzz.edu.cn) 拾光课程表专用适配脚本
+ * 枣庄学院 (uzz.edu.cn) 拾光课程表专用适配脚本 (大节适配版)
  * 基于正方教务系统 API 接口 (JSON 数据解析)
  */
 
-const UZZ_BASE_URL = window.location.origin; // 自动获取当前教务系统域名
+const UZZ_BASE_URL = window.location.origin;
 
 function parseWeeks(weekStr) {
     if (!weekStr) return [];
     const segments = weekStr.split(',');
     let weeks = [];
-    // 匹配 1-18周(单), 2-18周(双), 1-18周 等
     const segmentRegex = /(\d+)(?:-(\d+))?\s*周?(\([单双]\))?/g;
     for (const segment of segments) {
         segmentRegex.lastIndex = 0;
@@ -36,11 +35,19 @@ function parseJsonData(jsonData) {
     if (!jsonData || !Array.isArray(jsonData.kbList)) return [];
     const finalCourseList = [];
     for (const item of jsonData.kbList) {
-        // kcmc:课名, xm:教师, cdmc:教室, xqj:星期几, jcs:节次(如"1-2"), zcd:周次描述
         const weeks = parseWeeks(item.zcd);
+        
+        // 核心修改：小节转大节映射
+        // 正方系统 API 返回的 item.jcs 通常是 "1-2" 或 "3-4"
         const sectionParts = item.jcs.split('-');
-        const startSection = parseInt(sectionParts[0]);
-        const endSection = parseInt(sectionParts[sectionParts.length - 1]);
+        const rawStart = parseInt(sectionParts[0]);
+        const rawEnd = parseInt(sectionParts[sectionParts.length - 1]);
+        
+        // 小节除以2并向上取整，转换为大节
+        // 1,2 -> 1 | 3,4 -> 2 | 5,6 -> 3 | 7,8 -> 4 | 9,10 -> 5
+        const startSection = Math.ceil(rawStart / 2);
+        const endSection = Math.ceil(rawEnd / 2);
+        
         const day = parseInt(item.xqj);
 
         if (weeks.length > 0 && !isNaN(day)) {
@@ -58,13 +65,13 @@ function parseJsonData(jsonData) {
     return finalCourseList;
 }
 
-// 枣庄学院作息时间表：1节课1h40m，课间30m
+// 枣庄学院作息时间表 (按大节配置)
 const TimeSlots = [
     { number: 1, startTime: "08:00", endTime: "09:40" },
     { number: 2, startTime: "10:10", endTime: "11:50" },
     { number: 3, startTime: "14:30", endTime: "16:10" },
     { number: 4, startTime: "16:40", endTime: "18:20" },
-    { number: 5, startTime: "19:30", endTime: "21:10" } // 假设晚间档
+    { number: 5, startTime: "19:30", endTime: "21:10" } // 晚课
 ];
 
 async function runImportFlow() {
@@ -75,7 +82,6 @@ async function runImportFlow() {
     );
     if (!alertConfirmed) return;
 
-    // 1. 获取学年 (例如 2025)
     const currentYear = new Date().getFullYear().toString();
     const academicYear = await window.AndroidBridgePromise.showPrompt(
         "选择学年",
@@ -85,14 +91,13 @@ async function runImportFlow() {
     );
     if (!academicYear) return;
 
-    // 2. 选择学期
     const semesterIdx = await window.AndroidBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(["第一学期", "第二学期"]),
         0
     );
     if (semesterIdx === null || semesterIdx === -1) return;
-    const xqm = semesterIdx === 0 ? "3" : "12"; // 正方规范: 3是秋季，12是春季
+    const xqm = semesterIdx === 0 ? "3" : "12";
 
     AndroidBridge.showToast("正在通过 API 获取原始数据...");
     
@@ -114,13 +119,10 @@ async function runImportFlow() {
             return;
         }
 
-        // 3. 保存课程数据
         await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        
-        // 4. 保存作息时间
         await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TimeSlots));
 
-        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程并同步作息时间！`);
+        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程！`);
         AndroidBridge.notifyTaskCompletion();
     } catch (e) {
         AndroidBridge.showToast("接口请求失败，请检查登录状态");
