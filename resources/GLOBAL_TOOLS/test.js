@@ -1,8 +1,3 @@
-/**
- * 枣庄学院 (uzz.edu.cn) 拾光课程表专用适配脚本 (大节适配版)
- * 基于正方教务系统 API 接口 (JSON 数据解析)
- */
-
 const UZZ_BASE_URL = window.location.origin;
 
 function parseWeeks(weekStr) {
@@ -37,17 +32,9 @@ function parseJsonData(jsonData) {
     for (const item of jsonData.kbList) {
         const weeks = parseWeeks(item.zcd);
         
-        // 核心修改：小节转大节映射
-        // 正方系统 API 返回的 item.jcs 通常是 "1-2" 或 "3-4"
         const sectionParts = item.jcs.split('-');
-        const rawStart = parseInt(sectionParts[0]);
-        const rawEnd = parseInt(sectionParts[sectionParts.length - 1]);
-        
-        // 小节除以2并向上取整，转换为大节
-        // 1,2 -> 1 | 3,4 -> 2 | 5,6 -> 3 | 7,8 -> 4 | 9,10 -> 5
-        const startSection = Math.ceil(rawStart / 2);
-        const endSection = Math.ceil(rawEnd / 2);
-        
+        const startSection = parseInt(sectionParts[0]);
+        const endSection = parseInt(sectionParts[sectionParts.length - 1]);
         const day = parseInt(item.xqj);
 
         if (weeks.length > 0 && !isNaN(day)) {
@@ -65,13 +52,19 @@ function parseJsonData(jsonData) {
     return finalCourseList;
 }
 
-// 枣庄学院作息时间表 (按大节配置)
 const TimeSlots = [
-    { number: 1, startTime: "08:00", endTime: "09:40" },
-    { number: 2, startTime: "10:10", endTime: "11:50" },
-    { number: 3, startTime: "14:30", endTime: "16:10" },
-    { number: 4, startTime: "16:40", endTime: "18:20" },
-    { number: 5, startTime: "19:30", endTime: "21:10" } // 晚课
+    { number: 1, startTime: "08:00", endTime: "08:50" },
+    { number: 2, startTime: "08:50", endTime: "09:40" }, 
+    
+    { number: 3, startTime: "10:10", endTime: "11:00" },
+    { number: 4, startTime: "11:00", endTime: "11:50" },  
+
+    { number: 5, startTime: "14:30", endTime: "15:20" },
+    { number: 6, startTime: "15:20", endTime: "16:10" }, 
+    
+    { number: 7, startTime: "16:40", endTime: "17:30" },
+    { number: 8, startTime: "17:30", endTime: "18:20" }, 
+
 ];
 
 async function runImportFlow() {
