@@ -31,7 +31,6 @@ function parseJsonData(jsonData) {
     const finalCourseList = [];
     for (const item of jsonData.kbList) {
         const weeks = parseWeeks(item.zcd);
-        
         const sectionParts = item.jcs.split('-');
         const startSection = parseInt(sectionParts[0]);
         const endSection = parseInt(sectionParts[sectionParts.length - 1]);
@@ -54,49 +53,40 @@ function parseJsonData(jsonData) {
 
 const TimeSlots = [
     { number: 1, startTime: "08:00", endTime: "08:50" },
-    { number: 2, startTime: "08:50", endTime: "09:40" }, 
-    
+    { number: 2, startTime: "08:50", endTime: "09:40" },
     { number: 3, startTime: "10:10", endTime: "11:00" },
-    { number: 4, startTime: "11:00", endTime: "11:50" },  
-
+    { number: 4, startTime: "11:00", endTime: "11:50" },
     { number: 5, startTime: "14:30", endTime: "15:20" },
-    { number: 6, startTime: "15:20", endTime: "16:10" }, 
-    
+    { number: 6, startTime: "15:20", endTime: "16:10" },
     { number: 7, startTime: "16:40", endTime: "17:30" },
-    { number: 8, startTime: "17:30", endTime: "18:20" }, 
-
+    { number: 8, startTime: "17:30", endTime: "18:20" },
+    { number: 9, startTime: "19:30", endTime: "20:20" },
+    { number: 10, startTime: "20:20", endTime: "21:10" }
 ];
 
 async function runImportFlow() {
-    const alertConfirmed = await window.AndroidBridgePromise.showAlert(
-        "枣庄学院课表导入",
-        "请确保您已登录教务系统，并在导入过程中保持网络畅通。",
-        "开始导入"
-    );
-    if (!alertConfirmed) return;
-
-    const currentYear = new Date().getFullYear().toString();
-    const academicYear = await window.AndroidBridgePromise.showPrompt(
-        "选择学年",
-        "请输入起始学年 (如 2025-2026 填 2025):",
-        currentYear,
-        "" 
-    );
-    if (!academicYear) return;
-
-    const semesterIdx = await window.AndroidBridgePromise.showSingleSelection(
-        "选择学期",
-        JSON.stringify(["第一学期", "第二学期"]),
-        0
-    );
-    if (semesterIdx === null || semesterIdx === -1) return;
-    const xqm = semesterIdx === 0 ? "3" : "12";
-
-    AndroidBridge.showToast("正在通过 API 获取原始数据...");
+    const $ = window.jQuery;
     
+    // 强拦截：由于正方系统的 gnmkdm 模块会话校验，必须要求用户在课表页面才能请求 API
+    if (!$ || !$('#xnm').length || !$('#xqm').length) {
+        await window.AndroidBridgePromise.showAlert(
+            "导入提示", 
+            "正方教务系统限制：请务必先点击进入【正方教务管理系统】->【个人课表查询】页面后，再点击一键导入！", 
+            "我知道了"
+        );
+        return;
+    }
+
+    AndroidBridge.showToast("正在获取当前页面课表数据...");
+    
+    // 直接静默提取页面上已经选好的学年和学期
+    const xnm = $('#xnm').val();
+    const xqm = $('#xqm').val();
+
     try {
+        // N2151 是正方的学生课表查询功能模块代码
         const apiUrl = `${UZZ_BASE_URL}/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151`;
-        const body = `xnm=${academicYear}&xqm=${xqm}&kzlx=ck&xsdm=&kclbdm=`;
+        const body = `xnm=${xnm}&xqm=${xqm}&kzlx=ck&xsdm=&kclbdm=`;
 
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -108,7 +98,7 @@ async function runImportFlow() {
         const courses = parseJsonData(json);
 
         if (courses.length === 0) {
-            AndroidBridge.showToast("未找到课程，请确认学年学期是否有误。");
+            await window.AndroidBridgePromise.showAlert("导入失败", "该学年学期未找到课程数据，请确认页面上显示的课表是否为空。", "确定");
             return;
         }
 
@@ -118,7 +108,7 @@ async function runImportFlow() {
         AndroidBridge.showToast(`成功导入 ${courses.length} 门课程！`);
         AndroidBridge.notifyTaskCompletion();
     } catch (e) {
-        AndroidBridge.showToast("接口请求失败，请检查登录状态");
+        await window.AndroidBridgePromise.showAlert("导入失败", "接口请求异常，请确认教务系统网络通畅。", "确定");
         console.error(e);
     }
 }
