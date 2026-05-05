@@ -1,7 +1,8 @@
 //拾光课程表适配JNU脚本（fetch API）
 //本脚本的时间段自动导入仅适配珠海校区，其它校区可自行重新设置上课时间段
 
-//生成年份数组
+//根据URL特征判断当前所在界面
+
 const yearArr = [];
 for(let i=1990; i<=2100; i++){
     yearArr.push(i);
@@ -12,7 +13,7 @@ function getDaysInMonth(year, month) {
     return new Date(year, month, 0).getDate();
 }
 
-//根据URL特征判断当前所在界面
+//检查当前界面
 function checkCurrentPage() {
     const currenturl = window.location.href.toLowerCase(); //获取当前URL并转为小写
     if (currenturl.includes("login?")) {
@@ -27,12 +28,12 @@ function checkCurrentPage() {
     return -1; //未知错误，返回值-1
 }
 
-//显示一个公告信息弹窗
+//显示是否确认导入课程弹窗
 async function confirmAlert() {
     try {
         const confirmed = await window.AndroidBridgePromise.showAlert(
             "重要提醒",
-            "自动加载上课时间段仅支持珠海校区，\n每周第一天默认为星期日，可自行修改。\n是否确认获取课表？",
+            "自动加载上课时间段仅支持珠海校区，\n是否确认获取课表？",
             "确认",
         );
         if (confirmed) {
@@ -46,6 +47,19 @@ async function confirmAlert() {
         AndroidBridge.showToast("显示弹窗出错！" + error.message);
         return false; // 出现错误时也返回 false
     }
+}
+
+//显示到设置中选择开学日期的提醒
+async function setinfoAlert() {
+    const confirmed = await window.AndroidBridgePromise.showAlert(
+        "重要提醒",
+        "请到设置界面选择当前学期的开学日期",
+        "好的"
+    );
+    if (!confirmed) {
+        return false;
+    }
+    return true;
 }
 
 //显示一个是否手动输入学年学期信息的弹窗
@@ -347,75 +361,19 @@ async function saveCourses(courseData) {
 //导入课表配置
 async function saveConfig(semesterTotalWeeks) {
     // 注意：只传入要修改的字段，其他字段（如 semesterTotalWeeks）会使用 Kotlin 模型中的默认值
-    let semesterStartData = "";
-    let choseResult = 1;
-
-    //显示三次单项选择框，向用户获取开学时间
-    try {
-        const yearIndex = await window.AndroidBridgePromise.showSingleSelection(
-            "请选择开学时间（年份）",
-            JSON.stringify(yearArr),
-            36
-        );
-        if (yearIndex !== null && yearIndex >= 0 && yearIndex < yearArr.length) {
-            const year = yearArr[yearIndex];
-            const monthIndex = await window.AndroidBridgePromise.showSingleSelection(
-                "请选择开学时间（月份）",
-                JSON.stringify([1,2,3,4,5,6,7,8,9,10,11,12]),
-                2
-            );
-            if (monthIndex !== null && monthIndex >= 0 && monthIndex < 12) {
-                const month =[1,2,3,4,5,6,7,8,9,10,11,12][monthIndex];
-                const dayArr = [];
-                for (let i = 1; i <= getDaysInMonth(year,month); i++) {
-                    dayArr.push(i);
-                }
-                const dayIndex = await window.AndroidBridgePromise.showSingleSelection(
-                    "请选择开学时间（日期）",
-                    JSON.stringify(dayArr),
-                    7
-                );
-                if (dayIndex !== null && dayIndex >= 0 && dayIndex < dayArr.length) {
-                    const day = dayArr[dayIndex];
-                    const yearStr = year.toString();
-                    const monthStr = month.toString().padStart(2,"0"); //补充为两位
-                    const dayStr = day.toString().padStart(2,"0"); //补充为两位
-                    semesterStartData =  yearStr + '-' + monthStr + '-' + dayStr;
-                    AndroidBridge.showToast("你选择的开学时间为：" + semesterStartData);
-                } else {
-                    choseResult = 0;
-                }
-            } else {
-                choseResult = 0;
-            }
-        } else {
-            choseResult = 0;
-        }
-    } catch (error) {
-        AndroidBridge.showToast("显示列表出错！" + error.message);
-        return -1; // 出现错误时也返回 -1
-    }
-
-    if(!choseResult){
-        AndroidBridge.showToast("用户取消了选择，将按默认开学日期2026-3-9导入配置");
-        semesterStartData = "2026-03-09";
-    }
-
-
 
     try {
         const courseConfigData = {
-            "semesterStartDate": semesterStartData, //月份要使用两位数，否则软件会崩溃
+            // "semesterStartDate": semesterStartData, //月份要使用两位数，否则软件会崩溃
             "semesterTotalWeeks": Number(semesterTotalWeeks),
             "defaultClassDuration": 45,
             "defaultBreakDuration": 10,
-            "firstDayOfWeek": 7
+            "firstDayOfWeek": 1
         };
         const configJsonString = JSON.stringify(courseConfigData);
         const result = await window.AndroidBridgePromise.saveCourseConfig(configJsonString);
         if (result === true) {
             return 0;
-            //AndroidBridge.showToast("课表配置导入成功！");
         } else {
             AndroidBridge.showToast("课表配置导入失败");
             return -1;
@@ -455,7 +413,13 @@ async function runAllDemosSequentially() {
     }
     await importPresetTimeSlots();
     const saveConfigResult = await saveConfig(totalNum);
-    if(saveConfigResult === -1)
+
+    if(saveConfigResult === 0)
+    {
+        //课表导入成功，提示用户设置开学日期
+        await setinfoAlert();
+    }
+    else if(saveConfigResult === -1)
     {
         return;
     }
