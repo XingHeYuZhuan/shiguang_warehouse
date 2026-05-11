@@ -456,3 +456,8 @@ schools:
     name: "长春工程学院"
     initial: "C"
     resource_folder: "CCIT"       
+
+  - id: "IMNC"
+    name: "呼和浩特民族学院"
+    initial: "H"
+    resource_folder: "IMNC"

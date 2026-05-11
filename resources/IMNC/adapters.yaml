@@ -1,0 +1,8 @@
+adapters:
+  - adapter_id: "IMNC_01"
+    adapter_name: "呼和浩特民族学院教务系统"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "imnc_01.js"
+    import_url: "https://webvpn.imnc.edu.cn"
+    maintainer: "浮笙-WindDrift"
+    description: "无需校园网，使用 WebVPN 登录，登录后依次点击【教务管理系统】-【本学期课表】-【个人课表】，在【小节课表】页面（即第1节、第2节...）点击下方【执行导入】。"
