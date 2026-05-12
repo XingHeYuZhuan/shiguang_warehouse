@@ -461,3 +461,8 @@ schools:
     name: "呼和浩特民族学院"
     initial: "H"
     resource_folder: "IMNC"
+
+  - id: "NCUT"
+    name: "北方工业大学"
+    initial: "N"
+    resource_folder: "NCUT"
