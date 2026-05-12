@@ -4,5 +4,5 @@ adapters:
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "ncut_01.js"
     import_url: "https://jwxtbk.ncut.edu.cn/jsxsd/"
-    maintainer: "你的名字或 GitHub 用户名"
+    maintainer: "EnderHCO3"
     description: "适配北方工业大学本科教务管理系统课表导入"
