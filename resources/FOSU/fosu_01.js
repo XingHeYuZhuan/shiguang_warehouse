@@ -329,7 +329,10 @@ function parseSemesterInfo() {
         startDate = getSecondWeekMonday(year, 2);
     }
     
-    const formattedDate = startDate.toISOString().split('T')[0];
+    const year = startDate.getFullYear();
+    const month = String(startDate.getMonth() + 1).padStart(2, '0');
+    const day = String(startDate.getDate()).padStart(2, '0');
+    const formattedDate = `${year}-${month}-${day}`;
     
     return {
         semester: semesterValue,
