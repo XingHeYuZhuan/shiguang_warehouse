@@ -10,13 +10,22 @@ function parseWeeksString(weekStr) {
     const weeks = [];
     if (!weekStr) return weeks;
     
-    const cleanStr = weekStr.replace(/\(周\)/g, '').replace(/周/g, '').trim();
+    let cleanStr = weekStr;
+    while (cleanStr.includes('(周)')) {
+        cleanStr = cleanStr.replace('(周)', '');
+    }
+    while (cleanStr.includes('周')) {
+        cleanStr = cleanStr.replace('周', '');
+    }
+    cleanStr = cleanStr.trim();
     
     const parts = cleanStr.split(',');
     for (const part of parts) {
         const trimmed = part.trim();
         if (trimmed.includes('-')) {
-            const [start, end] = trimmed.split('-').map(s => parseInt(s.trim(), 10));
+            const nums = trimmed.split('-').map(s => parseInt(s.trim(), 10));
+            const start = nums[0];
+            const end = nums[1];
             if (!isNaN(start) && !isNaN(end)) {
                 for (let w = start; w <= end; w++) {
                     weeks.push(w);
@@ -34,14 +43,60 @@ function parseWeeksString(weekStr) {
 }
 
 function parseSectionFromText(text) {
-    const match = text.match(/\[(\d+)-(\d+)(?:-\d+)*\]节/);
-    if (match) {
-        return {
-            start: parseInt(match[1], 10),
-            end: parseInt(match[2], 10)
-        };
+    const startIdx = text.indexOf('[');
+    const endIdx = text.indexOf(']节');
+    if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+        return null;
     }
-    return null;
+    
+    const sectionStr = text.substring(startIdx + 1, endIdx);
+    const sections = sectionStr.split('-').map(s => parseInt(s.trim(), 10));
+    
+    if (sections.some(s => isNaN(s))) {
+        return null;
+    }
+    
+    return {
+        start: Math.min(...sections),
+        end: Math.max(...sections)
+    };
+}
+
+function removeSectionFromText(text) {
+    const startIdx = text.indexOf('[');
+    const endIdx = text.indexOf(']节');
+    if (startIdx === -1 || endIdx === -1) {
+        return text;
+    }
+    return text.substring(0, startIdx).trim();
+}
+
+function extractFontContent(line) {
+    const startTag = line.indexOf('<font');
+    if (startTag === -1) return null;
+    
+    const closeTag = line.indexOf('>', startTag);
+    if (closeTag === -1) return null;
+    
+    const endTag = line.indexOf('</font>', closeTag);
+    if (endTag === -1) return null;
+    
+    return line.substring(closeTag + 1, endTag).trim();
+}
+
+function removeHtmlTags(text) {
+    let result = '';
+    let inTag = false;
+    for (let i = 0; i < text.length; i++) {
+        if (text[i] === '<') {
+            inTag = true;
+        } else if (text[i] === '>') {
+            inTag = false;
+        } else if (!inTag) {
+            result += text[i];
+        }
+    }
+    return result.trim();
 }
 
 function parseCourseFromDiv(divContent, dayIndex, sectionIndex) {
@@ -51,7 +106,33 @@ function parseCourseFromDiv(divContent, dayIndex, sectionIndex) {
         return courses;
     }
     
-    const courseBlocks = divContent.split(/-----------------+/);
+    const courseBlocks = [];
+    let currentBlock = '';
+    let dashCount = 0;
+    
+    for (let i = 0; i < divContent.length; i++) {
+        if (divContent[i] === '-') {
+            dashCount++;
+        } else {
+            if (dashCount >= 10) {
+                if (currentBlock.trim()) {
+                    courseBlocks.push(currentBlock);
+                }
+                currentBlock = '';
+            } else if (dashCount > 0) {
+                for (let j = 0; j < dashCount; j++) {
+                    currentBlock += '-';
+                }
+            }
+            currentBlock += divContent[i];
+            dashCount = 0;
+        }
+    }
+    if (currentBlock.trim()) {
+        courseBlocks.push(currentBlock);
+    }
+    
+    let pendingCourse = null;
     
     for (const block of courseBlocks) {
         const trimmedBlock = block.trim();
@@ -60,71 +141,205 @@ function parseCourseFromDiv(divContent, dayIndex, sectionIndex) {
         const lines = trimmedBlock.split('<br>').map(l => l.trim()).filter(l => l);
         if (lines.length === 0) continue;
         
-        let courseName = '';
+        const courseName = removeHtmlTags(lines[0]);
         let teacher = '';
         let position = '';
         let weeks = [];
         let startSection = sectionIndex * 2 - 1;
         let endSection = sectionIndex * 2;
         
-        courseName = lines[0].replace(/<[^>]*>/g, '').trim();
-        
         for (let i = 1; i < lines.length; i++) {
             const line = lines[i];
             
             if (line.includes('title="老师"')) {
-                const match = line.match(/<font[^>]*>([^<]*)<\/font>/);
-                if (match) {
-                    teacher = match[1].trim();
+                const content = extractFontContent(line);
+                if (content) {
+                    teacher = content;
                 }
             } else if (line.includes('title="周次(节次)"')) {
-                const match = line.match(/<font[^>]*>([^<]*)<\/font>/);
-                if (match) {
-                    weeks = parseWeeksString(match[1]);
+                const content = extractFontContent(line);
+                if (content) {
+                    weeks = parseWeeksString(content);
                 }
             } else if (line.includes('title="教室"')) {
-                const match = line.match(/<font[^>]*>([^<]*)<\/font>/);
-                if (match) {
-                    position = match[1].trim();
-                    const sectionMatch = parseSectionFromText(match[1]);
+                const content = extractFontContent(line);
+                if (content) {
+                    position = content;
+                    const sectionMatch = parseSectionFromText(content);
                     if (sectionMatch) {
                         startSection = sectionMatch.start;
                         endSection = sectionMatch.end;
-                        position = position.replace(/\[\d+-\d+(?:-\d+)*\]节/g, '').trim();
+                        position = removeSectionFromText(content);
                     }
                 }
             }
         }
         
-        if (courseName && weeks.length > 0) {
-            courses.push({
+        if (teacher && !weeks.length) {
+            pendingCourse = {
                 name: courseName,
                 teacher: teacher,
-                position: position,
+                position: '',
                 day: dayIndex,
                 startSection: startSection,
                 endSection: endSection,
-                weeks: weeks
-            });
+                weeks: []
+            };
+        } else if (weeks.length > 0) {
+            if (pendingCourse && pendingCourse.name === courseName) {
+                pendingCourse.position = position;
+                pendingCourse.startSection = startSection;
+                pendingCourse.endSection = endSection;
+                pendingCourse.weeks = weeks;
+                courses.push(pendingCourse);
+                pendingCourse = null;
+            } else {
+                if (courseName && weeks.length > 0) {
+                    courses.push({
+                        name: courseName,
+                        teacher: teacher,
+                        position: position,
+                        day: dayIndex,
+                        startSection: startSection,
+                        endSection: endSection,
+                        weeks: weeks
+                    });
+                }
+            }
         }
     }
     
     return courses;
 }
 
+function findTagContent(html, tagName, startFrom) {
+    const openTag = '<' + tagName;
+    const closeTag = '</' + tagName + '>';
+    
+    let start = html.indexOf(openTag, startFrom || 0);
+    if (start === -1) return null;
+    
+    const tagEnd = html.indexOf('>', start);
+    if (tagEnd === -1) return null;
+    
+    let depth = 1;
+    let pos = tagEnd + 1;
+    
+    while (depth > 0 && pos < html.length) {
+        const nextOpen = html.indexOf(openTag, pos);
+        const nextClose = html.indexOf(closeTag, pos);
+        
+        if (nextClose === -1) return null;
+        
+        if (nextOpen !== -1 && nextOpen < nextClose) {
+            depth++;
+            pos = html.indexOf('>', nextOpen) + 1;
+        } else {
+            depth--;
+            if (depth === 0) {
+                return {
+                    content: html.substring(tagEnd + 1, nextClose),
+                    endPos: nextClose + closeTag.length
+                };
+            }
+            pos = nextClose + closeTag.length;
+        }
+    }
+    return null;
+}
+
+function findAllTags(html, tagName) {
+    const results = [];
+    let pos = 0;
+    while (true) {
+        const result = findTagContent(html, tagName, pos);
+        if (!result) break;
+        results.push(result.content);
+        pos = result.endPos;
+    }
+    return results;
+}
+
+function findTagWithAttr(html, tagName, attrName, attrValue) {
+    const openTag = '<' + tagName;
+    const closeTag = '</' + tagName + '>';
+    
+    let pos = 0;
+    while (true) {
+        let start = html.indexOf(openTag, pos);
+        if (start === -1) return null;
+        
+        const tagEnd = html.indexOf('>', start);
+        if (tagEnd === -1) return null;
+        
+        const tagDecl = html.substring(start, tagEnd + 1);
+        
+        const attrPattern = attrName + '="';
+        const attrStart = tagDecl.indexOf(attrPattern);
+        if (attrStart !== -1) {
+            const attrValueStart = attrStart + attrPattern.length;
+            const attrValueEnd = tagDecl.indexOf('"', attrValueStart);
+            if (attrValueEnd !== -1) {
+                const foundValue = tagDecl.substring(attrValueStart, attrValueEnd);
+                if (foundValue === attrValue || foundValue.includes(attrValue)) {
+                    let depth = 1;
+                    let searchPos = tagEnd + 1;
+                    
+                    while (depth > 0 && searchPos < html.length) {
+                        const nextOpen = html.indexOf(openTag, searchPos);
+                        const nextClose = html.indexOf(closeTag, searchPos);
+                        
+                        if (nextClose === -1) return null;
+                        
+                        if (nextOpen !== -1 && nextOpen < nextClose) {
+                            depth++;
+                            searchPos = html.indexOf('>', nextOpen) + 1;
+                        } else {
+                            depth--;
+                            if (depth === 0) {
+                                return html.substring(tagEnd + 1, nextClose);
+                            }
+                            searchPos = nextClose + closeTag.length;
+                        }
+                    }
+                }
+            }
+        }
+        
+        pos = tagEnd + 1;
+    }
+    return null;
+}
+
+function parseSemesterValue(semesterValue) {
+    const parts = semesterValue.split('-');
+    if (parts.length !== 3) return null;
+    
+    const startYear = parts[0];
+    const endYear = parts[1];
+    const semesterNum = parts[2];
+    
+    if (startYear.length !== 4 || endYear.length !== 4 || semesterNum.length !== 1) {
+        return null;
+    }
+    
+    return {
+        startYear: parseInt(startYear, 10),
+        endYear: parseInt(endYear, 10),
+        semesterNum: semesterNum
+    };
+}
+
 function parseHtmlTable(htmlContent) {
     const courses = [];
     
-    const tableMatch = htmlContent.match(/<table[^>]*id="kbtable"[^>]*>[\s\S]*?<\/table>/i);
-    if (!tableMatch) {
+    const tableContent = findTagWithAttr(htmlContent, 'table', 'id', 'kbtable');
+    if (!tableContent) {
         console.error('未找到课程表格');
         return courses;
     }
     
-    const tableHtml = tableMatch[0];
-    
-    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/gi;
-    const rows = tableHtml.match(rowRegex) || [];
+    const rows = findAllTags(tableContent, 'tr');
     
     let sectionIndex = 0;
     
@@ -133,44 +348,50 @@ function parseHtmlTable(htmlContent) {
             continue;
         }
         
-        const thMatch = row.match(/<th[^>]*>[\s\S]*?第(\S+)大节[\s\S]*?<\/th>/i);
-        if (thMatch) {
+        const thContent = findTagContent(row, 'th', 0);
+        if (thContent) {
+            const thText = thContent.content;
             const sectionNames = ['一', '二', '三', '四', '五', '六'];
-            sectionIndex = sectionNames.indexOf(thMatch[1]) + 1;
+            for (let i = 0; i < sectionNames.length; i++) {
+                if (thText.includes('第' + sectionNames[i] + '大节')) {
+                    sectionIndex = i + 1;
+                    break;
+                }
+            }
         }
         
         if (sectionIndex === 0) continue;
         
-        const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/gi;
-        const cells = row.match(cellRegex) || [];
+        const cells = findAllTags(row, 'td');
         
         let dayIndex = 1;
         
         for (const cell of cells) {
-            const kbcontentRegex = /<div[^>]*class="kbcontent"[^>]*>[\s\S]*?<\/div>/gi;
-            const kbcontentDivs = cell.match(kbcontentRegex) || [];
+            let kbcontentDivs = [];
             
-            for (const div of kbcontentDivs) {
-                const contentMatch = div.match(/<div[^>]*>([\s\S]*?)<\/div>/i);
-                if (contentMatch) {
-                    const divContent = contentMatch[1];
-                    const parsedCourses = parseCourseFromDiv(divContent, dayIndex, sectionIndex);
-                    courses.push(...parsedCourses);
-                }
-            }
-            
-            if (kbcontentDivs.length === 0) {
-                const kbcontent1Regex = /<div[^>]*class="kbcontent1"[^>]*>[\s\S]*?<\/div>/gi;
-                const kbcontent1Divs = cell.match(kbcontent1Regex) || [];
+            let divPos = 0;
+            while (true) {
+                const divStart = cell.indexOf('<div', divPos);
+                if (divStart === -1) break;
                 
-                for (const div of kbcontent1Divs) {
-                    const contentMatch = div.match(/<div[^>]*>([\s\S]*?)<\/div>/i);
-                    if (contentMatch) {
-                        const divContent = contentMatch[1];
-                        const parsedCourses = parseCourseFromDiv(divContent, dayIndex, sectionIndex);
-                        courses.push(...parsedCourses);
+                const divDeclEnd = cell.indexOf('>', divStart);
+                if (divDeclEnd === -1) break;
+                
+                const divDecl = cell.substring(divStart, divDeclEnd + 1);
+                
+                if (divDecl.includes('class="kbcontent"') && !divDecl.includes('class="kbcontent1"')) {
+                    const divContent = findTagContent(cell.substring(divStart), 'div', 0);
+                    if (divContent) {
+                        kbcontentDivs.push(divContent.content);
                     }
                 }
+                
+                divPos = divDeclEnd + 1;
+            }
+            
+            for (const divContent of kbcontentDivs) {
+                const parsedCourses = parseCourseFromDiv(divContent, dayIndex, sectionIndex);
+                courses.push(...parsedCourses);
             }
             
             dayIndex++;
@@ -184,7 +405,7 @@ function mergeSameCourses(courses) {
     const courseMap = new Map();
     
     for (const course of courses) {
-        const key = `${course.name}-${course.teacher}-${course.position}-${course.day}`;
+        const key = `${course.name}-${course.teacher}-${course.position}-${course.day}-${course.startSection}-${course.endSection}`;
         
         if (courseMap.has(key)) {
             const existing = courseMap.get(key);
@@ -193,8 +414,6 @@ function mergeSameCourses(courses) {
                     existing.weeks.push(week);
                 }
             }
-            existing.startSection = Math.min(existing.startSection, course.startSection);
-            existing.endSection = Math.max(existing.endSection, course.endSection);
         } else {
             courseMap.set(key, { ...course, weeks: [...course.weeks] });
         }
@@ -294,12 +513,12 @@ function parseSemesterInfo() {
     
     console.log('当前学期:', semesterValue);
     
-    const match = semesterValue.match(/(\d{4})-(\d{4})-(\d)/);
-    if (!match) {
+    const parsed = parseSemesterValue(semesterValue);
+    if (!parsed) {
         return { semester: semesterValue, totalWeeks: 19 };
     }
     
-    const [, startYear, endYear, semesterNum] = match;
+    const { startYear, endYear, semesterNum } = parsed;
     let startDate;
     
     function getSecondWeekMonday(year, month) {
@@ -322,11 +541,9 @@ function parseSemesterInfo() {
     }
     
     if (semesterNum === '1') {
-        const year = parseInt(startYear);
-        startDate = getSecondWeekMonday(year, 8);
+        startDate = getSecondWeekMonday(startYear, 8);
     } else {
-        const year = parseInt(endYear);
-        startDate = getSecondWeekMonday(year, 2);
+        startDate = getSecondWeekMonday(endYear, 2);
     }
     
     const year = startDate.getFullYear();
