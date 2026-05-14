@@ -302,25 +302,31 @@ function parseSemesterInfo() {
     const [, startYear, endYear, semesterNum] = match;
     let startDate;
     
-    function adjustToMonday(date) {
-        let dayOfWeek = date.getDay();
+    function getSecondWeekMonday(year, month) {
+        let firstDay = new Date(year, month, 1);
+        let dayOfWeek = firstDay.getDay();
         if (dayOfWeek === 0) dayOfWeek = 7;
-        let monday = new Date(date);
-        monday.setDate(date.getDate() - (dayOfWeek - 1));
         
-        if (monday.getDate() <= 7) {
-            monday.setDate(monday.getDate() + 7);
+        let firstMonday = new Date(year, month, 1);
+        if (dayOfWeek === 1) {
+            // 1号就是周一，第一周周一就是1号
+        } else {
+            // 1号不是周一，第一周周一是下周一
+            firstMonday.setDate(1 + (8 - dayOfWeek));
         }
         
-        return monday;
+        let secondMonday = new Date(firstMonday);
+        secondMonday.setDate(firstMonday.getDate() + 7);
+        
+        return secondMonday;
     }
     
     if (semesterNum === '1') {
         const year = parseInt(startYear);
-        startDate = adjustToMonday(new Date(year, 8, 8));
+        startDate = getSecondWeekMonday(year, 8);
     } else {
         const year = parseInt(endYear);
-        startDate = adjustToMonday(new Date(year, 2, 8));
+        startDate = getSecondWeekMonday(year, 2);
     }
     
     const formattedDate = startDate.toISOString().split('T')[0];
