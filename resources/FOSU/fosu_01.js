@@ -304,7 +304,7 @@ function parseSemesterInfo() {
     
     if (semesterNum === '1') {
         const year = parseInt(startYear);
-        startDate = new Date(year, 8, 1);
+        startDate = new Date(year, 8, 8);
         let dayOfWeek = startDate.getDay();
         if (dayOfWeek === 0) dayOfWeek = 7;
         if (dayOfWeek !== 1) {
@@ -312,7 +312,7 @@ function parseSemesterInfo() {
         }
     } else {
         const year = parseInt(endYear);
-        startDate = new Date(year, 1, 20);
+        startDate = new Date(year, 2, 8);
         let dayOfWeek = startDate.getDay();
         if (dayOfWeek === 0) dayOfWeek = 7;
         if (dayOfWeek !== 1) {
