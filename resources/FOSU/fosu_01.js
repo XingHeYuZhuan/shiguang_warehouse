@@ -367,6 +367,16 @@ async function saveCourseConfig() {
 }
 
 async function runImportFlow() {
+    const alertConfirmed = await window.AndroidBridgePromise.showAlert(
+        "佛山大学教务系统课表导入",
+        "【重要】本系统需要使用校园网访问，请确保已连接校园网后再操作。\n\n导入步骤：\n1. 登录教务系统\n2. 导航到【培养管理】→【学期理论课表】\n3. 确认课表已加载显示\n4. 点击确定开始导入",
+        "好的，开始导入"
+    );
+    if (!alertConfirmed) {
+        AndroidBridge.showToast("用户取消了导入。");
+        return;
+    }
+
     AndroidBridge.showToast("开始解析课程表...");
 
     console.log("=== 开始课程表解析和导入流程 ===");
