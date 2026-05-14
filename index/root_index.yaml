@@ -138,6 +138,11 @@ schools:
     initial: "F"
     resource_folder: "FJCPC"
 
+  - id: "FOSU"
+    name: "佛山大学"
+    initial: "F"
+    resource_folder: "FOSU"
+
   - id: "SDDFVC"
     name: "山东药品食品职业学院"
     initial: "S"
