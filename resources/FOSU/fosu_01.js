@@ -302,22 +302,22 @@ function parseSemesterInfo() {
     const [, startYear, endYear, semesterNum] = match;
     let startDate;
     
+    function adjustToMonday(date) {
+        let dayOfWeek = date.getDay();
+        if (dayOfWeek === 0) {
+            date.setDate(date.getDate() + 1);
+        } else if (dayOfWeek !== 1) {
+            date.setDate(date.getDate() - (dayOfWeek - 1));
+        }
+        return date;
+    }
+    
     if (semesterNum === '1') {
         const year = parseInt(startYear);
-        startDate = new Date(year, 8, 8);
-        let dayOfWeek = startDate.getDay();
-        if (dayOfWeek === 0) dayOfWeek = 7;
-        if (dayOfWeek !== 1) {
-            startDate.setDate(startDate.getDate() + (8 - dayOfWeek));
-        }
+        startDate = adjustToMonday(new Date(year, 8, 8));
     } else {
         const year = parseInt(endYear);
-        startDate = new Date(year, 2, 8);
-        let dayOfWeek = startDate.getDay();
-        if (dayOfWeek === 0) dayOfWeek = 7;
-        if (dayOfWeek !== 1) {
-            startDate.setDate(startDate.getDate() + (8 - dayOfWeek));
-        }
+        startDate = adjustToMonday(new Date(year, 2, 8));
     }
     
     const formattedDate = startDate.toISOString().split('T')[0];
