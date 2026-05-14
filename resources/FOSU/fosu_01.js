@@ -304,12 +304,15 @@ function parseSemesterInfo() {
     
     function adjustToMonday(date) {
         let dayOfWeek = date.getDay();
-        if (dayOfWeek === 0) {
-            date.setDate(date.getDate() + 1);
-        } else if (dayOfWeek !== 1) {
-            date.setDate(date.getDate() - (dayOfWeek - 1));
+        if (dayOfWeek === 0) dayOfWeek = 7;
+        let monday = new Date(date);
+        monday.setDate(date.getDate() - (dayOfWeek - 1));
+        
+        if (monday.getDate() <= 7) {
+            monday.setDate(monday.getDate() + 7);
         }
-        return date;
+        
+        return monday;
     }
     
     if (semesterNum === '1') {
