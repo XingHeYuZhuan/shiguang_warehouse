@@ -472,7 +472,7 @@ schools:
     initial: "B"
     resource_folder: "NCUT"
     
-    - id: "JXNU"
+  - id: "JXNU"
     name: "江西师范大学"
     initial: "J"
     resource_folder: "JXNU"
