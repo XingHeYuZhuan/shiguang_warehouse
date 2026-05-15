@@ -49,13 +49,13 @@ function parseCellText(line) {
         }
 
         if (!teacher && after.length > 0 && !after.match(/^\d+班$/)) {
-            teacher = after.replace(/\.\d+班$/, '').trim();
+            teacher = after.替换(/\.\d+班$/, '').trim();
         }
     } else {
         name = line;
     }
 
-    name = name.replace(/\s+/g, '');
+    name = name.替换(/\s+/g, '');
     if (!/[\u4e00-\u9fa5a-zA-Z]/.test(name)) return null;
     if (name.length > 50) name = name.substring(0, 50);
 
