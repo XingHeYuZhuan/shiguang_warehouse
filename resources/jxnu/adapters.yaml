@@ -1,0 +1,8 @@
+adapters: 
+      - adapter_id: "JXNU" 
+            adapter_name: "江西师大教务系统"
+            category: "BACHELOR_AND_ASSOCIATEL"
+            asset_js_path: "jxnu.js" 
+            import_url: "https://jwc.jxnu.edu.cn/"
+            maintainer: "glxgo"
+            description: "本校学生适配，登录教务在线后，点击导入"
