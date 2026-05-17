@@ -481,3 +481,9 @@ schools:
     name: "南昌航空大学科技学院"
     initial: "N"
     resource_folder: "STCNCHU"
+
+    
+  - id: "XATU"
+    name: "西安工业大学"
+    initial: "X"
+    resource_folder: "XATU"
