@@ -507,8 +507,8 @@ schools:
     initial: "Z"
     resource_folder: "CAUC"
 
-  - id: "ECJTU"    # id 唯一值
-    name: "华东交通大学" # 名称
-    initial: "H"          # 排序首字母
-    resource_folder: "ECJTU"   # 资源文件夹名称
+  - id: "ECJTU"    
+    name: "华东交通大学" 
+    initial: "H"          
+    resource_folder: "ECJTU"   
 
