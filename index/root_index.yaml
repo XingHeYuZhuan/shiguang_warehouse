@@ -3,11 +3,27 @@
 # CI/CD 构建脚本会读取此文件，以确定需要处理哪些学校的适配器资源。
 
 schools:
+  - id: "ECJTU"    # id 唯一值
+    name: "华东交通大学" # 名称
+    initial: "E"          # 排序首字母
+    resource_folder: "ECJTU"   # 资源文件夹名称
   - id: "GLOBAL_TOOLS"    # id 唯一值
     name: "通用工具与服务" # 名称
     initial: "G"          # 排序首字母
     resource_folder: "GLOBAL_TOOLS"   # 资源文件夹名称
 
+  - id: "WENHUA"    # id 唯一值
+    name: "文华学院" # 名称
+    initial: "W"          # 排序首字母
+    resource_folder: "WENHUA"   # 资源文件夹名称
+  - id: "XYAFU"    # id 唯一值
+    name: "信阳农林学院" # 名称
+    initial: "X"          # 排序首字母
+    resource_folder: "XYAFU"   # 资源文件夹名称
+  - id: "ZJUT"    # id 唯一值
+    name: "浙江工业大学" # 名称
+    initial: "Z"          # 排序首字母
+    resource_folder: "ZJUT"   # 资源文件夹名称
   - id: "zhengfang_jiaowu"
     name: "正方教务-通用教务"
     initial: "Z"
