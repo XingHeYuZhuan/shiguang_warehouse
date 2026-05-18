@@ -505,4 +505,10 @@ schools:
   - id: "CAUC"
     name: "中国民航大学"
     initial: "Z"
-    resource_folder: "CAUC"  
+    resource_folder: "CAUC"
+
+  - id: "WENHUA"    # id 唯一值
+    name: "文华学院" # 名称
+    initial: "W"          # 排序首字母
+    resource_folder: "WENHUA"   # 资源文件夹名称
+
