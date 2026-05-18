@@ -482,7 +482,16 @@ schools:
     initial: "N"
     resource_folder: "STCNCHU"
 
-    
+  - id: "CFEC"
+    name: "重庆财经学院"
+    initial: "C"
+    resource_folder: "CFEC"
+
+  - id: "AHZYYGZ"
+    name: "安徽中医药高等专科学校"
+    initial: "A"
+    resource_folder: "AHZYYGZ"
+
   - id: "XATU"
     name: "西安工业大学"
     initial: "X"
