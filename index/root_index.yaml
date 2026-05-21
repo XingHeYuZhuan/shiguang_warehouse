@@ -38,10 +38,10 @@ schools:
     initial: "C"
     resource_folder: "CQU"
 
-  - id: "CQJT"
+  - id: "CQJTU"
     name: "重庆交通大学"
     initial: "C"
-    resource_folder: "CQJT"
+    resource_folder: "CQJTU"
 
   - id: "CQCST"
     name: "重庆城市科技学院"
