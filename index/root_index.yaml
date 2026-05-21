@@ -3,10 +3,10 @@
 # CI/CD 构建脚本会读取此文件，以确定需要处理哪些学校的适配器资源。
 
 schools:
-  - id: "GLOBAL_TOOLS"    # id 唯一值
+  - id: "GLOBAL_TOOLS" # id 唯一值
     name: "通用工具与服务" # 名称
-    initial: "G"          # 排序首字母
-    resource_folder: "GLOBAL_TOOLS"   # 资源文件夹名称
+    initial: "G" # 排序首字母
+    resource_folder: "GLOBAL_TOOLS" # 资源文件夹名称
 
   - id: "zhengfang_jiaowu"
     name: "正方教务-通用教务"
@@ -37,6 +37,11 @@ schools:
     name: "重庆大学"
     initial: "C"
     resource_folder: "CQU"
+
+  - id: "CQJT"
+    name: "重庆交通大学"
+    initial: "C"
+    resource_folder: "CQJT"
 
   - id: "CQCST"
     name: "重庆城市科技学院"
@@ -406,7 +411,7 @@ schools:
     name: "宁波工程学院"
     initial: "N"
     resource_folder: "NBUT"
-  
+
   - id: "HUAYU"
     name: "山东华宇工学院"
     initial: "S"
@@ -431,7 +436,7 @@ schools:
     name: "枣庄学院"
     initial: "Z"
     resource_folder: "UZZ"
-  
+
   - id: "CMC"
     name: "成都医学院"
     initial: "C"
@@ -440,18 +445,18 @@ schools:
   - id: "SDIPCT"
     name: "山东石油化工学院"
     initial: "S"
-    resource_folder: "SDIPCT"  
+    resource_folder: "SDIPCT"
 
   - id: "GDUST"
     name: "广东科技学院"
     initial: "G"
     resource_folder: "GDUST"
-  
+
   - id: "UPC"
     name: "中国石油大学(华东)"
     initial: "Z"
-    resource_folder: "UPC"   
-    
+    resource_folder: "UPC"
+
   - id: "TJAU"
     name: "天津农学院"
     initial: "T"
@@ -460,7 +465,7 @@ schools:
   - id: "CCIT"
     name: "长春工程学院"
     initial: "C"
-    resource_folder: "CCIT"       
+    resource_folder: "CCIT"
 
   - id: "IMNC"
     name: "呼和浩特民族学院"
@@ -471,7 +476,7 @@ schools:
     name: "北方工业大学"
     initial: "B"
     resource_folder: "NCUT"
-    
+
   - id: "JXNU"
     name: "江西师范大学"
     initial: "J"
