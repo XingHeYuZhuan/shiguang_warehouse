@@ -1,5 +1,5 @@
 /**
- * 呼和浩特民族学院 (IMNC) 课表解析脚本
+ * 呼和浩特民族学院 (IMNC) 课表解析脚本-通过 WebVPN 登录
  * 放置于测试目录用于真机测试
  */
 
@@ -103,6 +103,55 @@ function fetchAndParseCourses() {
     return courses;
 }
 
+function cleanCellText(cell) {
+    return cell.textContent.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function parseNoArrangementCourses() {
+    let table = document.querySelector('#noArrangement');
+    if (!table) return [];
+
+    let rows = table.querySelectorAll('tr');
+    let courses = [];
+    let seen = {};
+
+    for (let i = 1; i < rows.length; i++) {
+        let cells = rows[i].querySelectorAll('td');
+        if (cells.length < 8) continue;
+
+        let course = {
+            courseId: cleanCellText(cells[0]),
+            name: cleanCellText(cells[1]),
+            sequence: cleanCellText(cells[2]),
+            teacher: cleanCellText(cells[3]) || '未填写教师',
+            combinedClass: cleanCellText(cells[4]),
+            weeks: cleanCellText(cells[5]),
+            day: cleanCellText(cells[6]),
+            position: cleanCellText(cells[7])
+        };
+
+        if (!course.courseId && !course.name) continue;
+
+        let key = [course.courseId, course.name, course.sequence, course.teacher, course.combinedClass, course.weeks, course.day, course.position].join('|');
+        if (seen[key]) continue;
+
+        seen[key] = true;
+        courses.push(course);
+    }
+
+    return courses;
+}
+
+function formatNoArrangementMessage(courses) {
+    let lines = courses.map((course, index) => {
+        let teacher = course.teacher || '未填写教师';
+        let weeks = course.weeks || '未填写周次';
+        return `${index + 1}. ${course.name} / ${teacher} / ${weeks}`;
+    });
+
+    return `检测到 ${courses.length} 门课程没有具体上课时间或地点，无法自动放入课表：\n\n${lines.join('\n')}\n\n请在确认课程时间后重新导入，点击【继续】将导入已知课程。`;
+}
+
 // 调度流程
 async function runImportFlow() {
     try {
@@ -124,6 +173,15 @@ async function runImportFlow() {
         if (!courses || courses.length === 0) {
             await window.AndroidBridgePromise.showAlert("错误", "未在当前页面找到课表数据，请确认是否处于课表页面，或联系适配开发者。", "好的");
             return;
+        }
+
+        let noArrangementCourses = parseNoArrangementCourses();
+        if (noArrangementCourses.length > 0) {
+            await window.AndroidBridgePromise.showAlert(
+                "存在未安排课程",
+                formatNoArrangementMessage(noArrangementCourses),
+                "继续"
+            );
         }
         
         await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
