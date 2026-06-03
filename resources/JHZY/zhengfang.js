@@ -202,19 +202,16 @@ async function saveCourses(parsedCourses) {
     }
 }
 
-// 江西航空职业技术学院作息时间
-// 如与实际不符，请从教务系统确认后修正
+// 江西航空职业技术学院作息时间（每节40分钟）
 const TimeSlots = [
-    { number: 1, startTime: "08:00", endTime: "08:45" },
-    { number: 2, startTime: "08:50", endTime: "09:35" },
-    { number: 3, startTime: "09:50", endTime: "10:35" },
-    { number: 4, startTime: "10:40", endTime: "11:25" },
-    { number: 5, startTime: "14:00", endTime: "14:45" },
-    { number: 6, startTime: "14:50", endTime: "15:35" },
-    { number: 7, startTime: "15:50", endTime: "16:35" },
-    { number: 8, startTime: "16:40", endTime: "17:25" },
-    { number: 9, startTime: "19:00", endTime: "19:45" },
-    { number: 10, startTime: "19:50", endTime: "20:35" }
+    { number: 1, startTime: "09:00", endTime: "09:40" },
+    { number: 2, startTime: "09:45", endTime: "10:25" },
+    { number: 3, startTime: "10:35", endTime: "11:15" },
+    { number: 4, startTime: "11:20", endTime: "12:00" },
+    { number: 5, startTime: "13:30", endTime: "14:10" },
+    { number: 6, startTime: "14:15", endTime: "14:55" },
+    { number: 7, startTime: "15:05", endTime: "15:45" },
+    { number: 8, startTime: "15:50", endTime: "16:30" }
 ];
 
 async function importPresetTimeSlots(timeSlots) {
