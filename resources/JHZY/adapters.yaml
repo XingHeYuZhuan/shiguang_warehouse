@@ -1,0 +1,9 @@
+# resources/JHZY/adapters.yaml
+adapters:
+  - adapter_id: "JHZY_01"
+    adapter_name: "正方教务-江西航空职业技术学院"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "zhengfang.js"
+    import_url: "https://jw.jhzyedu.cn/xtgl/login_slogin.html?ydType=0"
+    maintainer: "JN"
+    description: "江西航空职业技术学院正方教务系统V9.0课表导入。登录后导航到学生课表查询页面，点击查询后执行导入。"
