@@ -1,4 +1,4 @@
-# resources/JHZY/adapters.yaml
+# resources/JHZYEDU/adapters.yaml
 adapters:
   - adapter_id: "JHZYEDU_01"
     adapter_name: "正方教务-江西航空职业技术学院"
