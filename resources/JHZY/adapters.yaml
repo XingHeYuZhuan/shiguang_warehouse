@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "zhengfang.js"
     import_url: "https://jw.jhzyedu.cn/xtgl/login_slogin.html?ydType=0"
     maintainer: "JN"
-    description: "江西航空职业技术学院正方教务系统V9.0课表导入。登录后导航到学生课表查询页面，点击查询后执行导入。"
+    description: "江西航空职业技术学院正方教务V9.0 API导入。登录教务系统后即可一键导入，自动获取课表及作息时间。"
