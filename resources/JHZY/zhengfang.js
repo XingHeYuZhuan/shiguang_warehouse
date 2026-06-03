@@ -211,7 +211,7 @@ const TimeSlots = [
     { number: 5, startTime: "13:30", endTime: "14:10" },
     { number: 6, startTime: "14:15", endTime: "14:55" },
     { number: 7, startTime: "15:05", endTime: "15:45" },
-    { number: 8, startTime: "15:50", endTime: "16:30" }
+    { number: 8, startTime: "15:49", endTime: "16:30" }
 ];
 
 async function importPresetTimeSlots(timeSlots) {
