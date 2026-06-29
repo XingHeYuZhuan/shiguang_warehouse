@@ -575,4 +575,4 @@ schools:
   - id: "TR"
     name: "铜仁学院"
     initial: "T"
-    resource_folder: "TR_01"
+    resource_folder: "TR"
