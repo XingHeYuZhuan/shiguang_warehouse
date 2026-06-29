@@ -84,8 +84,10 @@ function parseCourseData(jsonData) {
         const timeInfo = item.time;
         const courseList = item.courseList || [];
         
-        // weekCode 映射: 2=周一, 3=周二, 4=周三, 5=周四, 6=周五, 7=周六, 1=周日
-        const day = parseInt(weekInfo.weekCode);
+        // 教务weekCode: 1=周日,2=周一,3=周二,4=周三,5=周四,6=周五,7=周六
+        // 规范day: 1=周一,2=周二,3=周三,4=周四,5=周五,6=周六,7=周日
+        const weekCodeMap = { "1": 7, "2": 1, "3": 2, "4": 3, "5": 4, "6": 5, "7": 6 };
+        const day = weekCodeMap[weekInfo.weekCode];
         
         for (let course of courseList) {
             const { startSection, endSection } = parseSection(course.time);
@@ -231,7 +233,21 @@ async function runImportFlow() {
             throw new Error("未解析到课程数据，可能该学期暂无课表。");
         }
         
-        // 7. 保存预设时间段
+        // 7. 保存学期开始日期配置
+        if (currentSemester && currentSemester.ksrq) {
+            try {
+                const config = {
+                    semesterStartDate: currentSemester.ksrq,
+                    defaultClassDuration: 50,
+                    defaultBreakDuration: 10
+                };
+                await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+            } catch (e) {
+                // 忽略配置保存失败
+            }
+        }
+        
+        // 8. 保存预设时间段
         const timeSlots = getTimeSlots();
         try {
             await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
@@ -239,7 +255,7 @@ async function runImportFlow() {
             AndroidBridge.showToast("时间段导入失败，但课程将继续导入。");
         }
         
-        // 8. 保存课程数据
+        // 9. 保存课程数据
         const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (saveResult) {
             AndroidBridge.showToast("成功导入 " + courses.length + " 条课程记录！");
