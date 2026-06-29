@@ -1,0 +1,9 @@
+# resources/TR_01/adapters.yaml
+adapters:
+  - adapter_id: "TR_01"
+    adapter_name: "铜仁学院联奕教务"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "tr_01.js"
+    import_url: "https://gztrc.edu.cn:17232/"
+    maintainer: "Daoguan-king"
+    description: "铜仁学院联奕科技教务系统适配"
