@@ -84,8 +84,10 @@ function parseCourseData(jsonData) {
         const timeInfo = item.time;
         const courseList = item.courseList || [];
         
-        // weekCode 映射: 2=周一, 3=周二, 4=周三, 5=周四, 6=周五, 7=周六, 1=周日
-        const day = parseInt(weekInfo.weekCode);
+        // 教务weekCode: 1=周日,2=周一,3=周二,4=周三,5=周四,6=周五,7=周六
+        // 规范day: 1=周一,2=周二,3=周三,4=周四,5=周五,6=周六,7=周日
+        const weekCodeMap = { "1": 7, "2": 1, "3": 2, "4": 3, "5": 4, "6": 5, "7": 6 };
+        const day = weekCodeMap[weekInfo.weekCode];
         
         for (let course of courseList) {
             const { startSection, endSection } = parseSection(course.time);
