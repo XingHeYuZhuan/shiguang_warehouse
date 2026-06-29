@@ -571,3 +571,8 @@ schools:
     name: "四川师范大学"
     initial: "S"
     resource_folder: "SICNU"
+
+  - id: "TR_01"
+    name: "铜仁学院"
+    initial: "T"
+    resource_folder: "TR_01"
