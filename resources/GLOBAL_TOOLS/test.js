@@ -100,7 +100,10 @@ function parseCourseData(jsonData) {
                 day: day,
                 startSection: startSection,
                 endSection: endSection,
-                weeks: weeks
+                weeks: weeks,
+                isCustomTime: true,
+                customStartTime: timeInfo.startTime,
+                customEndTime: timeInfo.endTime
             });
         }
     }
@@ -233,7 +236,21 @@ async function runImportFlow() {
             throw new Error("未解析到课程数据，可能该学期暂无课表。");
         }
         
-        // 7. 保存预设时间段
+        // 7. 保存学期开始日期配置
+        if (currentSemester && currentSemester.ksrq) {
+            try {
+                const config = {
+                    semesterStartDate: currentSemester.ksrq,
+                    defaultClassDuration: 50,
+                    defaultBreakDuration: 10
+                };
+                await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+            } catch (e) {
+                // 忽略配置保存失败
+            }
+        }
+        
+        // 8. 保存预设时间段
         const timeSlots = getTimeSlots();
         try {
             await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
@@ -241,7 +258,7 @@ async function runImportFlow() {
             AndroidBridge.showToast("时间段导入失败，但课程将继续导入。");
         }
         
-        // 8. 保存课程数据
+        // 9. 保存课程数据
         const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (saveResult) {
             AndroidBridge.showToast("成功导入 " + courses.length + " 条课程记录！");
