@@ -5,4 +5,4 @@ adapters:
     asset_js_path: "nwpu_01.js"
     import_url: "https://jwxt.nwpu.edu.cn/student/for-std/course-table"
     maintainer: "用户7227"
-    description: "西北工业大学本科教务系统适配（EAMS）"
+    description: "西北工业大学本科教务系统适配（EAMS），支持自动获取学期信息、作息时间段和课程数据"
