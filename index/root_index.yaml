@@ -382,6 +382,7 @@ schools:
     name: "江苏大学"
     initial: "J"
     resource_folder: "UJS"
+
   - id: "CQUET"
     name: "重庆电子科技职业大学"
     initial: "C"
@@ -512,6 +513,11 @@ schools:
     initial: "X"
     resource_folder: "XATU"
 
+  - id: "NWPU"
+    name: "西北工业大学"
+    initial: "X"
+    resource_folder: "NWPU"
+
   - id: "NJTECH"
     name: "南京工业大学"
     initial: "N"
@@ -541,7 +547,7 @@ schools:
     name: "浙江工业大学"
     initial: "Z"
     resource_folder: "ZJUT"
-  
+
   - id: "HFNU"
     name: "合肥师范学院"
     initial: "H"
@@ -560,12 +566,12 @@ schools:
   - id: "IMU"
     name: "内蒙古大学"
     initial: "N"
-    resource_folder: "IMU"    
+    resource_folder: "IMU"
 
   - id: "QQHRU"
     name: "齐齐哈尔大学"
     initial: "Q"
-    resource_folder: "QQHRU"  
+    resource_folder: "QQHRU"
 
   - id: "SICNU"
     name: "四川师范大学"
