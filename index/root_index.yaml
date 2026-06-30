@@ -572,7 +572,7 @@ schools:
     initial: "S"
     resource_folder: "SICNU"
 
-  - id: "TR"
+  - id: "GZTRC"
     name: "铜仁学院"
     initial: "T"
-    resource_folder: "TR"
+    resource_folder: "GZTRC"
