@@ -1,0 +1,8 @@
+adapters:
+  - adapter_id: "QAU_01"
+    adapter_name: "青岛农业大学综合教务管理系统-强智教务系统"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "qau_01.js"
+    import_url: "http://jwglxt.qau.edu.cn/" # 填入学校教务系统的实际登录地址
+    maintainer: "ReGoMark"
+    description: "适用于青岛农业大学(仅限青岛校区、平度校区和蓝谷校区）本科生的个人课表导入"
