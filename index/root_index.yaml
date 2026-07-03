@@ -592,3 +592,8 @@ schools:
     name: "浙江中医药大学"
     initial: "Z"
     resource_folder: "ZCMU"
+
+  - id: "QAU"
+    name: "青岛农业大学"
+    initial: "Q"
+    resource_folder: "QAU"
