@@ -1,6 +1,8 @@
 /**
- * 青岛农业大学综合教务管理系统（强智科技）
- * by ReGoMark, 2026.07.03
+ * 青岛农业大学综合教务管理系统(强智科技)
+ * by ReGoMark, 2026.07.04
+ * 支持切换校区, 对应不同上课时间
+ * 支持单元格合并 (如 1-2, 3-4 节课程相同时合并为 1-4 节)
  */
 
 // ─────────────────────────────────────────────
@@ -13,7 +15,6 @@
  */
 function parseWeeks(weekStr) {
     let weeks = [];
-    // 去掉括号内的修饰文字，如 "(限选)" "(必修)"
     weekStr = weekStr.replace(/\(.*?\)/g, '').trim();
     let parts = weekStr.split(',');
     for (let part of parts) {
@@ -35,10 +36,8 @@ function parseWeeks(weekStr) {
  * 解析行标题中的节次范围
  * 例如 "第1,2节" → { start: 1, end: 2 }
  *      "第5节"   → { start: 5, end: 5 }
- *      "第8,9节" → { start: 8, end: 9 }
  */
 function parseSectionFromThHeader(thText) {
-    // 匹配形如 "第1,2节" 或 "第5节" 或 "第10,11节"
     let match = thText.match(/第([\d,]+)节/);
     if (!match) return null;
     let nums = match[1].split(',').map(n => parseInt(n)).filter(n => !isNaN(n));
@@ -51,7 +50,7 @@ function parseSectionFromThHeader(thText) {
 // ─────────────────────────────────────────────
 
 /**
- * 从课表页面的 Document 中提取并去重课程数据
+ * 从课表页面的 Document 中提取并去重、合并课程数据
  */
 function extractCoursesFromDoc(doc) {
     let parsedCourses = [];
@@ -61,25 +60,19 @@ function extractCoursesFromDoc(doc) {
 
     const rows = table.getElementsByTagName('tr');
 
-    // 跳过表头行(0)，从第1行开始（节次数据行）
-    // 最后一行是备注行（colspan=7），也跳过
     for (let i = 1; i < rows.length - 1; i++) {
         const row = rows[i];
 
-        // 从该行的 <th> 解析节次范围
         const th = row.querySelector('th');
         if (!th) continue;
         const sectionInfo = parseSectionFromThHeader(th.innerText || th.textContent);
         if (!sectionInfo) continue;
 
-        // 遍历该行的 7 个 <td>（周一到周日）
         const cells = row.getElementsByTagName('td');
         for (let j = 0; j < cells.length; j++) {
-            const dayOfWeek = j + 1; // 1=周一 … 7=周日
+            const dayOfWeek = j + 1;
             const cell = cells[j];
 
-            // 读取详版 div（class="kbcontent"，含教师信息）
-            // 注意：不选 kbcontent1（简版，无教师）
             const detailDivs = cell.querySelectorAll('div.kbcontent');
             if (detailDivs.length === 0) continue;
 
@@ -87,7 +80,6 @@ function extractCoursesFromDoc(doc) {
                 let htmlContent = div.innerHTML;
                 if (!htmlContent.trim() || htmlContent.trim() === '&nbsp;') return;
 
-                // 同一格多门课之间用连续破折号 + <br> 分隔
                 let courseBlocks = htmlContent.split(/-{5,}\s*<br\s*\/?>/i);
 
                 courseBlocks.forEach(block => {
@@ -103,7 +95,7 @@ function extractCoursesFromDoc(doc) {
                         endSection: sectionInfo.end
                     };
 
-                    // 1. 提取课程名：取第一行非空纯文本
+                    // 1. 课程名
                     let lines = tempDiv.innerHTML.split(/<br\s*\/?>/i);
                     for (let line of lines) {
                         let cleanLine = line.replace(/<[^>]+>/g, '').trim();
@@ -113,24 +105,22 @@ function extractCoursesFromDoc(doc) {
                         }
                     }
 
-                    // 2. 提取教师（QAU 的 title 是 "老师"，不是 "教师"）
+                    // 2. 教师（QAU title="老师"）
                     let teacherFont = tempDiv.querySelector('font[title="老师"]');
                     courseObj.teacher = teacherFont
                         ? (teacherFont.innerText || teacherFont.textContent).trim()
                         : "未知";
 
-                    // 3. 提取教室
+                    // 3. 教室
                     let positionFont = tempDiv.querySelector('font[title="教室"]');
                     courseObj.position = positionFont
                         ? (positionFont.innerText || positionFont.textContent).trim()
                         : "待定";
 
-                    // 4. 提取周次
-                    // QAU 格式：<font title='周次(节次)'>1-4,6,11-13(周)(限选)</font>
+                    // 4. 周次
                     let timeFont = tempDiv.querySelector('font[title="周次(节次)"]');
                     if (timeFont) {
                         let timeText = (timeFont.innerText || timeFont.textContent).trim();
-                        // 提取 "(周)" 之前的部分作为周次
                         let weekMatch = timeText.match(/^(.+?)\(周\)/);
                         if (weekMatch) {
                             courseObj.weeks = parseWeeks(weekMatch[1]);
@@ -157,7 +147,35 @@ function extractCoursesFromDoc(doc) {
         }
     });
 
-    return uniqueCourses;
+    // ── 合并相邻节次（最多合并两个大节，即 1-4 节）──
+    // 条件：同天、同名、同教师、同教室、同周次，节次紧邻，且合并后跨度不超过 4 节
+    const sorted = uniqueCourses.sort((a, b) => {
+        if (a.day !== b.day) return a.day - b.day;
+        if (a.name !== b.name) return a.name.localeCompare(b.name);
+        const wa = a.weeks.join(','), wb = b.weeks.join(',');
+        if (wa !== wb) return wa.localeCompare(wb);
+        return a.startSection - b.startSection;
+    });
+
+    const merged = [];
+    for (const cur of sorted) {
+        const prev = merged[merged.length - 1];
+        const canMerge = prev
+            && prev.day === cur.day
+            && prev.name === cur.name
+            && prev.teacher === cur.teacher
+            && prev.position === cur.position
+            && prev.weeks.join(',') === cur.weeks.join(',')
+            && prev.endSection + 1 === cur.startSection
+            && (cur.endSection - prev.startSection) <= 3;
+        if (canMerge) {
+            prev.endSection = cur.endSection;
+        } else {
+            merged.push({ ...cur });
+        }
+    }
+
+    return merged;
 }
 
 // ─────────────────────────────────────────────
@@ -165,14 +183,14 @@ function extractCoursesFromDoc(doc) {
 // ─────────────────────────────────────────────
 
 /**
- * 青岛农业大学作息时间表
+ * 三个校区的作息时间表
  */
-function getPresetTimeSlots() {
-    return [
+const CAMPUS_TIME_SLOTS = {
+    "青岛校区": [
         { "number": 1,  "startTime": "08:00", "endTime": "08:45" },
         { "number": 2,  "startTime": "08:55", "endTime": "09:40" },
         { "number": 3,  "startTime": "09:55", "endTime": "10:40" },
-        { "number": 4,  "startTime": "10:55", "endTime": "11:35" },
+        { "number": 4,  "startTime": "10:50", "endTime": "11:35" },
         { "number": 5,  "startTime": "11:35", "endTime": "12:00" },
         { "number": 6,  "startTime": "14:00", "endTime": "14:45" },
         { "number": 7,  "startTime": "14:55", "endTime": "15:40" },
@@ -180,8 +198,34 @@ function getPresetTimeSlots() {
         { "number": 9,  "startTime": "16:50", "endTime": "17:35" },
         { "number": 10, "startTime": "18:50", "endTime": "19:35" },
         { "number": 11, "startTime": "19:45", "endTime": "20:30" }
-    ];
-}
+    ],
+    "平度校区": [
+        { "number": 1,  "startTime": "08:30", "endTime": "09:15" },
+        { "number": 2,  "startTime": "09:25", "endTime": "10:10" },
+        { "number": 3,  "startTime": "10:20", "endTime": "11:05" },
+        { "number": 4,  "startTime": "11:15", "endTime": "12:00" },
+        { "number": 5,  "startTime": "12:00", "endTime": "12:25" },
+        { "number": 6,  "startTime": "14:00", "endTime": "14:45" },
+        { "number": 7,  "startTime": "14:55", "endTime": "15:40" },
+        { "number": 8,  "startTime": "15:50", "endTime": "16:35" },
+        { "number": 9,  "startTime": "16:45", "endTime": "17:30" },
+        { "number": 10, "startTime": "18:50", "endTime": "19:35" },
+        { "number": 11, "startTime": "19:45", "endTime": "20:30" }
+    ],
+    "蓝谷校区": [
+        { "number": 1,  "startTime": "08:30", "endTime": "09:15" },
+        { "number": 2,  "startTime": "09:20", "endTime": "10:05" },
+        { "number": 3,  "startTime": "10:15", "endTime": "11:00" },
+        { "number": 4,  "startTime": "11:05", "endTime": "11:50" },
+        { "number": 5,  "startTime": "13:10", "endTime": "13:55" },
+        { "number": 6,  "startTime": "14:00", "endTime": "14:45" },
+        { "number": 7,  "startTime": "14:55", "endTime": "15:40" },
+        { "number": 8,  "startTime": "15:45", "endTime": "16:30" },
+        { "number": 9,  "startTime": "16:35", "endTime": "17:20" },
+        { "number": 10, "startTime": "18:30", "endTime": "19:15" },
+        { "number": 11, "startTime": "19:25", "endTime": "20:15" }
+    ]
+};
 
 function getCourseConfig() {
     return {
@@ -220,7 +264,7 @@ async function runImportFlow() {
             });
         }
 
-        // 让用户选择学期
+        // 选择学期
         if (semesters.length > 0) {
             let selectedIdx = await window.AndroidBridgePromise.showSingleSelection(
                 "请选择要导入的学期",
@@ -248,6 +292,23 @@ async function runImportFlow() {
             }
         }
 
+        // 选择校区
+        const campusNames = Object.keys(CAMPUS_TIME_SLOTS);
+        const campusIdx = await window.AndroidBridgePromise.showSingleSelection(
+            "请选择您所在的校区",
+            JSON.stringify(campusNames),
+            0
+        );
+
+        if (campusIdx === null) {
+            AndroidBridge.showToast("已取消导入");
+            return;
+        }
+
+        const selectedCampus = campusNames[campusIdx];
+        const timeSlots = CAMPUS_TIME_SLOTS[selectedCampus];
+
+        // 解析课程
         const courses = extractCoursesFromDoc(doc);
 
         if (courses.length === 0) {
@@ -259,8 +320,9 @@ async function runImportFlow() {
             return;
         }
 
+        // 保存
         await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(getCourseConfig()));
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(getPresetTimeSlots()));
+        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
 
         const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (!saveResult) {
@@ -268,7 +330,7 @@ async function runImportFlow() {
             return;
         }
 
-        AndroidBridge.showToast(`成功导入 ${courses.length} 节课程及作息时间！`);
+        AndroidBridge.showToast(`成功导入 ${courses.length} 节课程（${selectedCampus}作息）！`);
         AndroidBridge.notifyTaskCompletion();
 
     } catch (error) {
