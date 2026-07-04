@@ -597,3 +597,8 @@ schools:
     name: "青岛农业大学"
     initial: "Q"
     resource_folder: "QAU"
+
+  - id: "CSUFT"
+    name: "中南林业科技大学"
+    initial: "Z"
+    resource_folder: "CSUFT"
