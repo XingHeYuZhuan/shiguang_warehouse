@@ -110,9 +110,9 @@ function validateYearInput(input) {
 
 async function promptUserToStart() {
     return await window.AndroidBridgePromise.showAlert(
-        "常州机电学院学生课表导入",
-        "导入前请确保您已成功登录教务系统，并处于个人课表查询页面。",
-        "好的，开始导入"
+        "常机电学生课表导入",
+        "导入前请确保您已成功登录教务系统。",
+        "开始导入"
     );
 }
 
@@ -143,67 +143,58 @@ function getSemesterCode(semesterIndex) {
 
 async function fetchAndParseCourses(academicYear, semesterIndex) {
     const semesterCode = getSemesterCode(semesterIndex);
-    const requestBody = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=`;
+    const requestBody = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=&kclxdm=`;
 
-    const currentUrl = window.location.href;
-    const basePath = currentUrl.substring(0, currentUrl.lastIndexOf("/") + 1);
-    const apiUrl = basePath + "xskbcx_cxXsgrkb.html?gnmkdm=N2151";
+    const targetUrls = [
+        "https://webapp.czimt.edu.cn/http/77726476706e69737468656265737421fae042d2242a65557d468aa2/kbcx/xskbcx_cxXsgrkb.html?vpn-12-o1-jwc.czmec.cn&gnmkdm=N2151",
+        "http://jwc.czmec.cn/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151"
+    ];
 
-    AndroidBridge.showToast("正在获取课表数据...");
-    console.log("JS: 请求 URL:", apiUrl);
-    console.log("JS: 请求 Body:", requestBody);
+    for (const url of targetUrls) {
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" 
+                },
+                body: requestBody,
+                credentials: "include"
+            });
 
-    try {
-        const response = await fetch(apiUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-                "X-Requested-With": "XMLHttpRequest"
-            },
-            body: requestBody,
-            credentials: "include"
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const jsonText = await response.text();
-        const jsonData = JSON.parse(jsonText);
-
-        if (!jsonData || !jsonData.kbList) {
-            throw new Error("返回数据格式不正确");
-        }
-
-        const parsedCourses = parseJsonData(jsonData);
-        if (parsedCourses.length === 0) {
-            AndroidBridge.showToast("未解析到有效课程数据。");
-            return null;
-        }
-
-        return {
-            courses: parsedCourses,
-            config: {
-                semesterStartDate: null,
-                semesterTotalWeeks: 20
+            if (response.ok) {
+                const jsonText = await response.text();
+                const jsonData = JSON.parse(jsonText);
+                if (jsonData && jsonData.kbList) {
+                    const parsedCourses = parseJsonData(jsonData);
+                    if (parsedCourses.length > 0) {
+                        return {
+                            courses: parsedCourses,
+                            config: {
+                                semesterStartDate: null,
+                                semesterTotalWeeks: 20
+                            }
+                        };
+                    }
+                }
             }
-        };
-    } catch (e) {
-        console.error("JS: 获取课表失败:", e);
-        AndroidBridge.showToast("获取课表失败，请确认已登录且网络正常。");
-        return null;
+        } catch (e) {
+            console.error(`Entry failed: ${url}`);
+        }
     }
+    AndroidBridge.showToast("未能获取课表数据，请检查网络环境或登录状态。");
+    return null;
 }
 
 async function saveCourses(parsedCourses) {
     AndroidBridge.showToast(`正在保存 ${parsedCourses.length} 门课程...`);
+    console.log(`JS: 尝试保存 ${parsedCourses.length} 门课程...`);
     try {
         await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses, null, 2));
         console.log("JS: 课程保存成功！");
         return true;
     } catch (error) {
         AndroidBridge.showToast(`课程保存失败: ${error.message}`);
-        console.error('JS: Save Courses Error:', error);
+        console.error('JS: Save Courses Error:', error);A
         return false;
     }
 }
