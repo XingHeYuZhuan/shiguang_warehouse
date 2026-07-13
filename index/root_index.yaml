@@ -622,3 +622,8 @@ schools:
     name: "甘肃财贸职业学院"
     initial: "G"
     resource_folder: "GSCMXY"
+
+  - id: "QUT"
+    name: "青岛理工大学"
+    initial: "Q"
+    resource_folder: "QUT"
