@@ -21,6 +21,9 @@ function parseWeeks(weekStr) {
 /**
  * 提取课程数据
  */
+/**
+ * 提取课程数据（已优化多节连堂课合并与去重逻辑）
+ */
 function extractCoursesFromDoc(doc) {
     let parsedCourses = [];
     const table = doc.getElementById('timetable');
@@ -69,11 +72,12 @@ function extractCoursesFromDoc(doc) {
                     let timeFont = tempDiv.querySelector('font[title="周次(节次)"]');
                     if (timeFont) {
                         let timeText = timeFont.innerText.trim();
-                        let timeMatch = timeText.match(/(.+?)\(周\)\[(\d+)-(\d+)节\]/);
+                        let timeMatch = timeText.match(/(.+?)\(周\)\[([\d-]+)节\]/);
                         if (timeMatch) {
                             courseObj.weeks = parseWeeks(timeMatch[1]);
-                            courseObj.startSection = parseInt(timeMatch[2]);
-                            courseObj.endSection = parseInt(timeMatch[3]);
+                            let sections = timeMatch[2].split('-');
+                            courseObj.startSection = parseInt(sections[0]);
+                            courseObj.endSection = parseInt(sections[sections.length - 1]);
                         } else {
                             let weekOnlyMatch = timeText.match(/(.+?)\(周\)/);
                             if (weekOnlyMatch) {
@@ -85,7 +89,19 @@ function extractCoursesFromDoc(doc) {
                     } else return; 
 
                     if (courseObj.name && courseObj.weeks && courseObj.weeks.length > 0) {
-                        parsedCourses.push(courseObj);
+                        let isDuplicate = parsedCourses.some(c => 
+                            c.day === courseObj.day &&
+                            c.name === courseObj.name &&
+                            c.startSection === courseObj.startSection &&
+                            c.endSection === courseObj.endSection &&
+                            c.teacher === courseObj.teacher &&
+                            c.position === courseObj.position &&
+                            JSON.stringify(c.weeks) === JSON.stringify(courseObj.weeks)
+                        );
+                        
+                        if (!isDuplicate) {
+                            parsedCourses.push(courseObj);
+                        }
                     }
                 });
             });

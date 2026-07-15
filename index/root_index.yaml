@@ -213,6 +213,11 @@ schools:
     initial: "H"
     resource_folder: "HUSE"
 
+  - id: "HUST"
+    name: "华中科技大学"
+    initial: "H"
+    resource_folder: "HUST"
+
   - id: "JSNU"
     name: "江苏师范大学"
     initial: "J"
@@ -597,6 +602,36 @@ schools:
     name: "青岛农业大学"
     initial: "Q"
     resource_folder: "QAU"
+
+  - id: "HUNNU"
+    name: "湖南师范大学"
+    initial: "H"
+    resource_folder: "HUNNU"
+
+  - id: "WHUT"
+    name: "武汉理工大学"
+    initial: "W"
+    resource_folder: "WHUT"
+
+  - id: "CJLU"
+    name: "中国计量大学"
+    initial: "Z"
+    resource_folder: "CJLU"
+
+  - id: "CZIMT"
+    name: "常州机电职业技术学院"
+    initial: "C"
+    resource_folder: "CZIMT"
+
+  - id: "GSCMXY"
+    name: "甘肃财贸职业学院"
+    initial: "G"
+    resource_folder: "GSCMXY"
+
+  - id: "QUT"
+    name: "青岛理工大学"
+    initial: "Q"
+    resource_folder: "QUT"
 
   - id: "CSUFT"
     name: "中南林业科技大学"
