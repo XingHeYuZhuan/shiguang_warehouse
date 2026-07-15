@@ -1,4 +1,3 @@
-# adapters.yaml
 adapters:
   - adapter_id: "CSUFT_QZ_01"
     adapter_name: "中南林业科技大学（强智教务）"

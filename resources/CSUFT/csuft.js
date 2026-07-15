@@ -1,138 +1,160 @@
-/**
- * csuft.js - 中南林业科技大学 强智教务系统适配脚本
- * 
- * 两种模式自动切换：
- *   A. 当前页面有 #kbtable → 直接从 DOM 读取（一键模式）
- *   B. 没有则让用户粘贴 HTML 源码（降级模式）
- */
+// 中南林业科技大学(csuft.edu.cn) 拾光课程表适配脚本
+// 强智教务系统，通过 WebVPN 访问
 
-const PRESET_TIME_SLOTS = [
-    { number: 1,  startTime: "08:00", endTime: "08:45" },
-    { number: 2,  startTime: "08:55", endTime: "09:40" },
-    { number: 3,  startTime: "10:00", endTime: "10:45" },
-    { number: 4,  startTime: "10:55", endTime: "11:40" },
-    { number: 5,  startTime: "14:00", endTime: "14:45" },
-    { number: 6,  startTime: "14:55", endTime: "15:40" },
-    { number: 7,  startTime: "16:00", endTime: "16:45" },
-    { number: 8,  startTime: "16:55", endTime: "17:40" },
-    { number: 9,  startTime: "19:00", endTime: "19:45" },
+window.validateYearInput = function(input) {
+    return /^[0-9]{4}$/.test(input) ? false : "请输入四位数字的学年！";
+};
+
+function parseWeeks(weekStr) {
+    const weeks = [];
+    if (!weekStr) return weeks;
+    const pure = weekStr.split('(')[0];
+    pure.split(',').forEach(seg => {
+        if (seg.includes('-')) {
+            const [s, e] = seg.split('-').map(Number);
+            if (!isNaN(s) && !isNaN(e)) {
+                for (let i = s; i <= e; i++) weeks.push(i);
+            }
+        } else {
+            const w = parseInt(seg);
+            if (!isNaN(w)) weeks.push(w);
+        }
+    });
+    return [...new Set(weeks)].sort((a, b) => a - b);
+}
+
+function mergeCourses(courses) {
+    if (courses.length <= 1) return courses;
+    courses.sort((a, b) => {
+        return a.name.localeCompare(b.name) || a.day - b.day || a.startSection - b.startSection;
+    });
+    const merged = [];
+    let cur = courses[0];
+    for (let i = 1; i < courses.length; i++) {
+        const n = courses[i];
+        if (cur.name === n.name && cur.teacher === n.teacher && cur.position === n.position && cur.day === n.day && cur.endSection + 1 === n.startSection) {
+            cur.endSection = n.endSection;
+        } else {
+            merged.push(cur);
+            cur = n;
+        }
+    }
+    merged.push(cur);
+    return merged;
+}
+
+const SECTION_MAP = {
+    '第1，2节': [1, 2], '第1,2节': [1, 2], '第1, 2节': [1, 2],
+    '第3，4节': [3, 4], '第3,4节': [3, 4], '第3, 4节': [3, 4],
+    '第5，6节': [5, 6], '第5,6节': [5, 6], '第5, 6节': [5, 6],
+    '第7，8节': [7, 8], '第7,8节': [7, 8], '第7, 8节': [7, 8],
+    '第9，10节': [9, 10], '第9,10节': [9, 10], '第9, 10节': [9, 10],
+};
+
+const TIME_SLOTS = [
+    { number: 1, startTime: "08:00", endTime: "08:45" },
+    { number: 2, startTime: "08:55", endTime: "09:40" },
+    { number: 3, startTime: "10:00", endTime: "10:45" },
+    { number: 4, startTime: "10:55", endTime: "11:40" },
+    { number: 5, startTime: "14:00", endTime: "14:45" },
+    { number: 6, startTime: "14:55", endTime: "15:40" },
+    { number: 7, startTime: "16:00", endTime: "16:45" },
+    { number: 8, startTime: "16:55", endTime: "17:40" },
+    { number: 9, startTime: "19:00", endTime: "19:45" },
     { number: 10, startTime: "19:55", endTime: "20:40" },
 ];
 
-function parseWeeks(str) {
-    var s = str.replace(/[（(]周[)）]/g, '').trim();
-    var r = [];
-    s.split(',').forEach(function(p) {
-        p = p.trim();
-        if (p.includes('-')) {
-            var a = p.split('-').map(Number);
-            for (var i = a[0]; i <= a[1]; i++) r.push(i);
-        } else {
-            var n = Number(p);
-            if (!isNaN(n)) r.push(n);
-        }
+function parseSchedule(doc) {
+    const table = doc.getElementById('kbtable');
+    if (!table) return [];
+    let raw = [];
+    const rows = Array.from(table.querySelectorAll('tr')).filter(r => r.querySelector('td'));
+    rows.forEach(row => {
+        const th = row.querySelector('th');
+        if (!th) return;
+        const thText = th.textContent.trim();
+        if (thText.includes('备注')) return;
+        const section = SECTION_MAP[thText];
+        if (!section) return;
+        const cells = row.querySelectorAll('td');
+        cells.forEach((cell, idx) => {
+            const day = idx + 1;
+            const divs = cell.querySelectorAll('div.kbcontent');
+            divs.forEach(div => {
+                const html = div.innerHTML.trim();
+                if (!html || html === '&nbsp;' || div.innerText.trim().length < 2) return;
+                const blocks = html.split(/[-]{5,}/);
+                blocks.forEach(block => {
+                    if (!block.trim()) return;
+                    const temp = document.createElement('div');
+                    temp.innerHTML = block;
+                    let name = '';
+                    for (let node of temp.childNodes) {
+                        if (node.nodeType === 3 && node.textContent.trim() !== '') {
+                            name = node.textContent.trim();
+                            break;
+                        }
+                    }
+                    const teacher = (temp.querySelector('font[title="老师"]') || temp.querySelector('font[title="教师"]'))?.innerText || '';
+                    const position = temp.querySelector('font[title="教室"]')?.innerText || '';
+                    const weekStr = temp.querySelector('font[title="周次(节次)"]')?.innerText || '';
+                    if (name && section[0] > 0) {
+                        raw.push({
+                            name: name,
+                            teacher: teacher,
+                            weeks: parseWeeks(weekStr),
+                            position: position,
+                            day: day,
+                            startSection: section[0],
+                            endSection: section[1]
+                        });
+                    }
+                });
+            });
+        });
     });
-    return r;
+    return mergeCourses(raw);
 }
 
-function parseCell(html, day, start, end) {
-    var r = [];
-    if (!html || html.trim() === '&nbsp;') return r;
-    html.split(/[-]{5,}/).forEach(function(block) {
-        block = block.trim();
-        if (!block || block === '&nbsp;') return;
-        var m = block.match(/^([^<]+?)(?:<br>|$)/);
-        if (!m) return;
-        var name = m[1].trim();
-        if (!name) return;
-        var teacher = '', pos = '', weeks = [];
-        var t = block.match(/<font[^>]*title="老师"[^>]*>([^<]+)<\/font>/);
-        if (t) teacher = t[1].trim();
-        var w = block.match(/<font[^>]*title="周次[^"]*"[^>]*>([^<]+)<\/font>/);
-        if (w) weeks = parseWeeks(w[1].trim());
-        var p = block.match(/<font[^>]*title="教室"[^>]*>([^<]+)<\/font>/);
-        if (p) pos = p[1].trim();
-        r.push({ name: name, teacher: teacher, position: pos, day: day, startSection: start, endSection: end, weeks: weeks, isCustomTime: false });
-    });
-    return r;
-}
-
-function parse(html) {
-    var all = [];
-    var patterns = [
-        { re: /第1[，,]\s*2节/, s: 1, e: 2 },
-        { re: /第3[，,]\s*4节/, s: 3, e: 4 },
-        { re: /第5[，,]\s*6节/, s: 5, e: 6 },
-        { re: /第7[，,]\s*8节/, s: 7, e: 8 },
-        { re: /第9[，,]\s*10节/, s: 9, e: 10 },
-    ];
-    var tm = html.match(/<table[^>]*id="kbtable"[^>]*>([\s\S]*?)<\/table>/i);
-    if (!tm) throw new Error('未找到 kbtable');
-    var rows = tm[1].matchAll(/<tr>([\s\S]*?)<\/tr>/gi);
-    for (var rm of rows) {
-        var rh = rm[1];
-        var thm = rh.match(/<th[^>]*>([\s\S]*?)<\/th>/i);
-        if (!thm) continue;
-        var tht = thm[1].replace(/<[^>]+>/g, '').trim();
-        if (tht.includes('备注')) continue;
-        var sec = null;
-        for (var p of patterns) { if (p.re.test(tht)) { sec = p; break; } }
-        if (!sec) continue;
-        var tds = rh.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi);
-        var col = 0;
-        for (var td of tds) {
-            var day = col + 1;
-            var kb = td[1].match(/<div[^>]*class="kbcontent"[^>]*>([\s\S]*?)<\/div>/i);
-            if (kb) {
-                var ch = kb[1].trim();
-                if (ch && ch !== '&nbsp;') all.push.apply(all, parseCell(ch, day, sec.s, sec.e));
-            }
-            col++;
-        }
-    }
-    return all;
-}
-
-function getSemester() {
-    var sel = document.getElementById('xnxq01id');
-    return sel && sel.value ? sel.value : null;
-}
-
-async function run() {
+async function runImportFlow() {
     try {
-        var hasTable = !!document.getElementById('kbtable');
-        var confirmed = await window.AndroidBridgePromise.showAlert(
-            "中南林业科技大学课表导入",
-            hasTable ? "检测到课表页面，将自动读取数据并导入。" : "请粘贴课表页面的HTML源码。",
-            "开始"
-        );
-        if (!confirmed) { AndroidBridge.showToast("已取消"); return; }
+        const confirmed = await window.AndroidBridgePromise.showAlert("提示", "请确保已成功登录教务系统。是否开始导入？", "开始");
+        if (!confirmed) return;
 
-        var courses;
-        if (hasTable) {
-            courses = parse(document.documentElement.outerHTML);
-        } else {
-            var src = await window.AndroidBridgePromise.showPrompt("粘贴HTML源码", "请粘贴课表页面的完整HTML源码：", "", "");
-            if (!src || !src.trim()) { AndroidBridge.showToast("已取消"); return; }
-            courses = parse(src);
-        }
+        const year = await window.AndroidBridgePromise.showPrompt("选择学年", "请输入要导入的起始学年（例如 2025-2026 应输入2025）:", "", "validateYearInput");
+        if (!year) return;
 
-        if (!courses || courses.length === 0) {
-            await window.AndroidBridgePromise.showAlert("提示", "未解析到课程数据，请确认页面是否正确。", "确定");
+        const semesterIdx = await window.AndroidBridgePromise.showSingleSelection("选择学期", JSON.stringify(["第一学期", "第二学期"]), -1);
+        if (semesterIdx === null) return;
+
+        const semId = `${year}-${parseInt(year) + 1}-${semesterIdx + 1}`;
+        AndroidBridge.showToast("正在获取课表数据...");
+
+        const url = "https://http-jwgl-csuft-edu-cn-80.webvpn.csuft.edu.cn/jsxsd/xskb/xskb_list.do";
+        const resp = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `xnxq01id=${semId}`,
+            credentials: "include"
+        });
+
+        const html = await resp.text();
+        const courses = parseSchedule(new DOMParser().parseFromString(html, "text/html"));
+
+        if (courses.length === 0) {
+            AndroidBridge.showToast("未找到课程，请检查学年学期选择或登录状态。");
             return;
         }
 
+        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({ semesterTotalWeeks: 20, firstDayOfWeek: 1 }));
+        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
         await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        try { await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(PRESET_TIME_SLOTS)); } catch(e) {}
-        try { await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({ semesterTotalWeeks: 20, firstDayOfWeek: 1 })); } catch(e) {}
 
-        await window.AndroidBridgePromise.showAlert("完成", "成功导入 " + courses.length + " 条课程记录。", "确定");
+        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程`);
         AndroidBridge.notifyTaskCompletion();
     } catch (err) {
-        console.error(err);
-        try { await window.AndroidBridgePromise.showAlert("错误", err.message || String(err), "确定"); } catch(e) {}
-        AndroidBridge.notifyTaskCompletion();
+        AndroidBridge.showToast("错误: " + err.message);
     }
 }
 
-run();
+runImportFlow();
