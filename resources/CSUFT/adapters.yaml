@@ -3,6 +3,6 @@ adapters:
     adapter_name: "中南林业科技大学（强智教务）"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "csuft.js"
-    import_url: "https://http-jwgl-csuft-edu-cn-80.webvpn.csuft.edu.cn/jsxsd/xskb/xskb_list.do"
+    import_url: "https://https-cas-csuft-edu-cn-443.webvpn.csuft.edu.cn/cas/login?service=https://webvpn.csuft.edu.cn/callback/cas/eAF0IG5N"
     maintainer: "jinnianliuxing"
     description: "中南林业科技大学强智教务系统课表导入"
