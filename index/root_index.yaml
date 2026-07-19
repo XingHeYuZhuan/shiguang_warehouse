@@ -548,6 +548,11 @@ schools:
     initial: "X"
     resource_folder: "XYAFU"
 
+  - id: "XJZFU"
+    name: "新疆政法学院"
+    initial: "X"
+    resource_folder: "XJZFU"
+
   - id: "ZJUT"
     name: "浙江工业大学"
     initial: "Z"
