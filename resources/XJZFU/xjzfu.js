@@ -85,23 +85,48 @@ async function fetchTermWeeks(termCode) {
     return data.datas;
 }
 
-async function fetchCurrentTermCode() {
+async function fetchTermList() {
     const res = await fetch(
         'https://jwxt.xjzfu.edu.cn/jwapp/sys/homeapp/api/home/kb/xnxq.do',
         { headers: { 'fetch-api': 'true' }, credentials: 'include' }
     );
     const data = await res.json();
-    const current = data.datas.find(d => d.selected === true);
-    if (!current) throw new Error('未找到当前学期');
-    console.log('当前学期代码:', current.itemCode);
-    return current.itemCode;
+    if (data.code !== '0') throw new Error(data.msg || '获取学期列表失败');
+    const datas = data.datas || [];
+    if (datas.length === 0) throw new Error('学期列表为空');
+    let defaultIndex = 0;
+    const termNames = [];
+    const termCodes = [];
+    datas.forEach((d, i) => {
+        termNames.push(d.itemName);
+        termCodes.push(d.itemCode);
+        if (d.selected === true) defaultIndex = i;
+    });
+    return { termNames, termCodes, defaultIndex };
 }
 
 async function importCourseSchedule() {
     try {
+        AndroidBridge.showToast('正在获取学期列表...');
+
+        const termList = await fetchTermList();
+
+        let selectedIdx = termList.defaultIndex;
+        if (typeof window.AndroidBridgePromise !== 'undefined') {
+            const choice = await window.AndroidBridgePromise.showSingleSelection(
+                '请选择要导入的学期',
+                JSON.stringify(termList.termNames),
+                termList.defaultIndex
+            );
+            if (choice === null) {
+                AndroidBridge.showToast('已取消导入');
+                return false;
+            }
+            selectedIdx = choice;
+        }
+
+        const termCode = termList.termCodes[selectedIdx];
         AndroidBridge.showToast('正在获取课表数据...');
-        const termCode = await fetchCurrentTermCode();
-        console.log('获取termCode为:',termCode,'的课表数据');
         const datas = await fetchScheduleData(termCode);
         const arrangedList = datas.arrangedList || [];
 
