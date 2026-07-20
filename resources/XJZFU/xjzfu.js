@@ -85,11 +85,23 @@ async function fetchTermWeeks(termCode) {
     return data.datas;
 }
 
+async function fetchCurrentTermCode() {
+    const res = await fetch(
+        'https://jwxt.xjzfu.edu.cn/jwapp/sys/homeapp/api/home/kb/xnxq.do',
+        { headers: { 'fetch-api': 'true' }, credentials: 'include' }
+    );
+    const data = await res.json();
+    const current = data.datas.find(d => d.selected === true);
+    if (!current) throw new Error('未找到当前学期');
+    console.log('当前学期代码:', current.itemCode);
+    return current.itemCode;
+}
+
 async function importCourseSchedule() {
     try {
         AndroidBridge.showToast('正在获取课表数据...');
-
-        const termCode = '2025-2026-2';
+        const termCode = await fetchCurrentTermCode();
+        console.log('获取termCode为:',termCode,'的课表数据');
         const datas = await fetchScheduleData(termCode);
         const arrangedList = datas.arrangedList || [];
 
