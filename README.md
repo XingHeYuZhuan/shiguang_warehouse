@@ -23,8 +23,10 @@ shiguang_warehouse/
 │   ├───GLOBAL_TOOLS/        # 通用工具
 │   │   ├───adapters.yaml
 │   │   ├───school.js        # 组件测试脚本
-│   │   └───starlink.js      # 星链课表分享导入脚本
+│   │   └───...
 │   └───...
+├───proto/
+|   └───school_index.proto #索引模板文件 可使用protoc等工具编译为其他平台代码用于解析仓库索引
 └───...
 ```
 
