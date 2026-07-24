@@ -316,7 +316,7 @@ async function saveConfig(config) {
  * 第三步：保存课程数据
  */
 async function saveCourses(courses) {
-    if (courses.length == 0) {
+    if (courses.length === 0) {
         AndroidBridge.showToast("没有课程数据需要导入");
         return true;
     }
@@ -360,8 +360,8 @@ async function runImportFlow() {
             );
             return;
         }
-        if (pageData.semesters.length == 0) {
-            await window.AndroidAbstraction.showAlert(
+        if (pageData.semesters.length === 0) {
+            await window.AndroidBridgePromise.showAlert(
                 "导入失败",
                 "未能获取学期列表，请刷新页面后重试。",
                 "确定"
@@ -388,7 +388,6 @@ async function runImportFlow() {
             );
             if (selectedIndex === null || selectedIndex < 0 || selectedIndex >= semesters.length) {
                 AndroidBridge.showToast("导入已取消");
-                runtime.notifyTaskCompletion();
                 return;
             }
             selectedSemester = semesters[selectedIndex];
@@ -399,8 +398,21 @@ async function runImportFlow() {
             if (!apiData) return;
 
             var tableVm = apiData.studentTableVm;
-            notifyTaskCompletion();
-            return;
+            if (tableVm && tableVm.activities && tableVm.activities.length > 0) {
+                activities = tableVm.activities;
+                break;
+            }
+
+            // 无数据，弹窗提示后重新选择
+            var retry = await window.AndroidBridgePromise.showAlert(
+                "无课程数据",
+                "「" + selectedSemester.name + "」没有课程数据，请选择其他学期。",
+                "重新选择"
+            );
+            if (!retry) {
+                AndroidBridge.showToast("导入已取消");
+                return;
+            }
         }
 
         console.log("[NWPU] 获取到 " + activities.length + " 条课程活动");
@@ -414,22 +426,21 @@ async function runImportFlow() {
         var timeSlots = extractTimeSlots(apiData);
 
         // 7. 提取课表配置
-        inline-dialog('singleselection', args, message. var courseConfig = extractCourseConfig(semesterInfo, activities);
+        var courseConfig = extractCourseConfig(semesterInfo, activities);
 
         // 8. 转换课程数据
         var courses = convertCourses(activities);
 
         // 9. 三步导入：时间段 → 配置 → 课程
         var timeSlotResult = await saveTimeSlots(timeSlots);
-        while (true) {
-            if (!timeSlotResult) return;
+        if (!timeSlotResult) return;
 
         var configResult = await saveConfig(courseConfig);
         if (!configResult) return;
 
         var courseResult = await saveCourses(courses);
         if (!courseResult) return;
-        }
+
         // 完成
         AndroidBridge.showToast("课表导入完成！");
         AndroidBridge.notifyTaskCompletion();
