@@ -345,7 +345,7 @@ function parseScheduleHtml(html) {
 }
 
 /**
- * 转换课程数据格式以符合时光课表规范
+ * 转换课程数据格式以符合拾光课程表规范
  * @param {Array} rawCourses 原始课程数据
  * @returns {Array} 转换后的课程数据
  */
@@ -474,6 +474,50 @@ async function getSemesterList() {
             }
         });
     }
+
+    // 仅保留最新学期往前五年内的学期选项
+    const semesterYearPattern = /^(\d{4})-(\d{4})-(\d+)$/;
+    const semesterStartYears = [];
+    const semesterRecords = semesterValues.map((value, index) => {
+        const label = semesters[index] || '';
+        const valueMatch = String(value).match(semesterYearPattern);
+        const labelMatch = String(label).match(semesterYearPattern);
+        const startYear = valueMatch ? Number(valueMatch[1]) : (labelMatch ? Number(labelMatch[1]) : null);
+
+        if (startYear !== null) {
+            semesterStartYears.push(startYear);
+        }
+
+        return { index, value, label, startYear };
+    });
+
+    if (semesterStartYears.length > 0) {
+        const latestStartYear = Math.max(...semesterStartYears);
+        const minStartYear = latestStartYear - 4;
+        const filteredSemesters = [];
+        const filteredSemesterValues = [];
+        let filteredDefaultIndex = -1;
+
+        semesterRecords.forEach((record) => {
+            if (record.startYear !== null && record.startYear >= minStartYear) {
+                filteredSemesters.push(record.label);
+                filteredSemesterValues.push(record.value);
+                if (record.index === defaultIndex) {
+                    filteredDefaultIndex = filteredSemesters.length - 1;
+                }
+            }
+        });
+
+        semesters = filteredSemesters;
+        semesterValues = filteredSemesterValues;
+
+        if (filteredDefaultIndex !== -1) {
+            defaultIndex = filteredDefaultIndex;
+        } else if (defaultIndex >= semesterValues.length) {
+            defaultIndex = Math.max(semesterValues.length - 1, 0);
+        }
+    }
+
     return { semesters, semesterValues, defaultIndex, htmlText };
 }
 
@@ -533,7 +577,7 @@ async function fetchAndParseCourses(html) {
 }
 
 /**
- * 保存课程数据到时光课表
+ * 保存课程数据到拾光课程表
  * @param {Array} courses 课程数组
  * @returns {boolean} 保存是否成功
  */
@@ -550,7 +594,7 @@ async function saveCourses(courses) {
 }
 
 /**
- * 导入预设时间段到时光课表
+ * 导入预设时间段到拾光课程表
  * @param {number} campusIdx 校区索引
  * @returns {boolean} 导入是否成功
  */

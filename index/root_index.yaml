@@ -213,6 +213,11 @@ schools:
     initial: "H"
     resource_folder: "HUSE"
 
+  - id: "HUST"
+    name: "华中科技大学"
+    initial: "H"
+    resource_folder: "HUST"
+
   - id: "JSNU"
     name: "江苏师范大学"
     initial: "J"
@@ -382,6 +387,7 @@ schools:
     name: "江苏大学"
     initial: "J"
     resource_folder: "UJS"
+
   - id: "CQUET"
     name: "重庆电子科技职业大学"
     initial: "C"
@@ -512,6 +518,11 @@ schools:
     initial: "X"
     resource_folder: "XATU"
 
+  - id: "NWPU"
+    name: "西北工业大学"
+    initial: "X"
+    resource_folder: "NWPU"
+
   - id: "NJTECH"
     name: "南京工业大学"
     initial: "N"
@@ -537,11 +548,16 @@ schools:
     initial: "X"
     resource_folder: "XYAFU"
 
+  - id: "XJZFU"
+    name: "新疆政法学院"
+    initial: "X"
+    resource_folder: "XJZFU"
+
   - id: "ZJUT"
     name: "浙江工业大学"
     initial: "Z"
     resource_folder: "ZJUT"
-  
+
   - id: "HFNU"
     name: "合肥师范学院"
     initial: "H"
@@ -560,12 +576,12 @@ schools:
   - id: "IMU"
     name: "内蒙古大学"
     initial: "N"
-    resource_folder: "IMU"    
+    resource_folder: "IMU"
 
   - id: "QQHRU"
     name: "齐齐哈尔大学"
     initial: "Q"
-    resource_folder: "QQHRU"  
+    resource_folder: "QQHRU"
 
   - id: "SICNU"
     name: "四川师范大学"
@@ -576,3 +592,63 @@ schools:
     name: "铜仁学院"
     initial: "T"
     resource_folder: "GZTRC"
+
+  - id: "GZU"
+    name: "贵州大学"
+    initial: "G"
+    resource_folder: "GZU"
+
+  - id: "ZCMU"
+    name: "浙江中医药大学"
+    initial: "Z"
+    resource_folder: "ZCMU"
+
+  - id: "QAU"
+    name: "青岛农业大学"
+    initial: "Q"
+    resource_folder: "QAU"
+
+  - id: "HUNNU"
+    name: "湖南师范大学"
+    initial: "H"
+    resource_folder: "HUNNU"
+
+  - id: "WHUT"
+    name: "武汉理工大学"
+    initial: "W"
+    resource_folder: "WHUT"
+
+  - id: "CJLU"
+    name: "中国计量大学"
+    initial: "Z"
+    resource_folder: "CJLU"
+
+  - id: "CZIMT"
+    name: "常州机电职业技术学院"
+    initial: "C"
+    resource_folder: "CZIMT"
+
+  - id: "GSCMXY"
+    name: "甘肃财贸职业学院"
+    initial: "G"
+    resource_folder: "GSCMXY"
+
+  - id: "QUT"
+    name: "青岛理工大学"
+    initial: "Q"
+    resource_folder: "QUT"
+
+  - id: "CSUFT"
+    name: "中南林业科技大学"
+    initial: "Z"
+    resource_folder: "CSUFT"
+
+  - id: "JLU"
+    name: "吉林大学"
+    initial: "J"
+    resource_folder: "JLU"
+
+  - id: "USTC"
+    name: "中国科学技术大学"
+    initial: "Z"
+    resource_folder: "USTC"

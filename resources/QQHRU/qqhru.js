@@ -65,7 +65,7 @@ async function selectSemester() {
  */
 async function fetchValidApiUrl() {
     try {
-        const indexUrl = "http://111.43.36.164/student/courseSelect/calendarSemesterCurriculum/index";
+        const indexUrl = "https://172-20-139-153-7700.webvpn.qqhru.edu.cn/student/courseSelect/calendarSemesterCurriculum/index";
         const response = await fetch(indexUrl, { method: "GET", credentials: "include" });
         const htmlText = await response.text();
         
@@ -96,7 +96,7 @@ async function fetchAndParseJwData(academicYear, semesterIndex) {
         const planCode = `${academicYear}-${endYear}-${semesterValue}-1`;
 
         AndroidBridge.showToast("正在获取教务数据...");
-        const fullApiUrl = `http://111.43.36.164${targetApiSubUrl}`;
+        const fullApiUrl = `https://172-20-139-153-7700.webvpn.qqhru.edu.cn${targetApiSubUrl}`;
         const response = await fetch(fullApiUrl, {
             "headers": { "content-type": "application/x-www-form-urlencoded; charset=UTF-8" },
             "body": `&planCode=${planCode}`,

@@ -7,9 +7,11 @@
     function extractCourseHtmlDebugInfo(courseHtml) {
         const text = String(courseHtml || "");
         const hasTaskActivity = /new\s+TaskActivity\s*\(/i.test(text);
+        const hasUnitCount = /\bvar\s+unitCount\s*=\s*\d+/i.test(text);
         return {
             responseLength: text.length,
-            hasTaskActivity
+            hasTaskActivity,
+            hasUnitCount
         };
     }
     async function requestText(url, options) {
@@ -63,7 +65,7 @@
 
     // 清除课程名后面的课程序号
     function cleanCourseName(name) {
-        return String(name || "").replace(/\(\d+\)\s*$/, "").trim();
+        return String(name || "").replace(/\([\d.]+\)\s*$/, "").trim();
     }
 
     // 解析周次位图字符串
@@ -164,15 +166,9 @@
         const unitCount = unitCountMatch ? parseInt(unitCountMatch[1], 10) : 0;
         if (!Number.isInteger(unitCount) || unitCount <= 0) return [];
         const courses = [];
-        const stats = {
-            blocks: 0,
-            teacherRecovered: 0,
-            teacherUnresolvedExpression: 0
-        };
         const blockRe = /activity\s*=\s*new\s+TaskActivity\(([^]*?)\)\s*;\s*index\s*=\s*(?:(\d+)\s*\*\s*unitCount\s*\+\s*(\d+)|(\d+))\s*;\s*table\d+\.activities\[index\]/g;
         let match;
         while ((match = blockRe.exec(text)) !== null) {
-            stats.blocks += 1;
             const argsText = match[1] || "";
             const args = splitJsArgs(argsText);
             if (args.length < 7) continue;
@@ -193,12 +189,7 @@
             let teacher = unquoteJsLiteral(args[1]);
             if (teacher && !/^['"]/.test(String(args[1]).trim()) && /join\s*\(/.test(String(args[1]))) {
                 const resolved = resolveTeachersForTaskActivityBlock(text, match.index);
-                if (resolved) {
-                    teacher = resolved;
-                    stats.teacherRecovered += 1;
-                } else {
-                    stats.teacherUnresolvedExpression += 1;
-                }
+                if (resolved) teacher = resolved;
             }
             const name = cleanCourseName(unquoteJsLiteral(args[3]));
             const position = unquoteJsLiteral(args[5]);
@@ -215,12 +206,6 @@
                 weeks
             });
         }
-        console.info("[课程解析 TaskActivity]", {
-            blocks: stats.blocks,
-            parsedCourses: courses.length,
-            teacherRecovered: stats.teacherRecovered,
-            teacherUnresolvedExpression: stats.teacherUnresolvedExpression
-        });
         return mergeContiguousSections(courses);
     }
 
@@ -264,15 +249,15 @@
         const merged = [];
         for (const item of list) {
             const prev = merged[merged.length - 1];
-            const canMerge = prev
+            const sameCourse = prev
                 && prev.name === item.name
                 && prev.teacher === item.teacher
                 && prev.position === item.position
                 && prev.day === item.day
-                && prev.weeks.join(",") === item.weeks.join(",")
-                && prev.endSection + 1 >= item.startSection;
+                && JSON.stringify(prev.weeks) === JSON.stringify(item.weeks);
+            const isContiguous = sameCourse && prev.endSection + 1 === item.startSection;
 
-            if (canMerge) {
+            if (isContiguous) {
                 prev.endSection = Math.max(prev.endSection, item.endSection);
             } else {
                 merged.push({ ...item });
@@ -293,39 +278,11 @@
         ];
     }
 
-    function validateSemesterStartDateInput(input) {
-        const value = String(input || "").trim();
-        if (!value) return "请输入开学日期";
-        if (!/^\d{4}[-/.]\d{2}[-/.]\d{2}$/.test(value)) return "请输入 YYYY-MM-DD";
-        const normalized = value.replace(/[/.]/g, "-");
-        const parts = normalized.split("-");
-        const year = Number(parts[0]);
-        const month = Number(parts[1]);
-        const day = Number(parts[2]);
-        if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return "请输入有效日期";
-        const date = new Date(year, month - 1, day);
-        const isValidDate = date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
-        return isValidDate ? false : "请输入有效日期";
-    }
 
-    window.validateSemesterStartDateInput = validateSemesterStartDateInput;
-
-    async function selectSemesterStartDate() {
-        const picked = await window.AndroidBridgePromise.showPrompt(
-            "选择开学日期",
-            "请输入开学日期（YYYY-MM-DD）",
-            "",
-            "validateSemesterStartDateInput"
-        );
-        if (picked === null) return null;
-        const value = String(picked || "").trim().replace(/[/.]/g, "-");
-        return value || null;
-    }
     async function runImportFlow() {
         if (!window.AndroidBridgePromise) {
             throw new Error("AndroidBridgePromise 不可用，无法进行导入交互。");
         }
-        AndroidBridge.showToast("开始自动探测长江大学教务参数...");
 
         // 探测学生 ID 和学期组件
         const entryUrl = `${BASE}/eams/courseTableForStd.action?&sf_request_type=ajax`;
@@ -357,19 +314,13 @@
         const selectIndex = await window.AndroidBridgePromise.showSingleSelection(
             "请选择导入学期",
             JSON.stringify(recentSemesters.map((s) => s.name || s.id)),
-            recentSemesters.length - 1
+            -1
         );
         if (selectIndex === null) {
             AndroidBridge.showToast("已取消导入");
             return;
         }
-        const index = Number.isInteger(Number(selectIndex)) ? Number(selectIndex) : recentSemesters.length - 1;
-        const selectedSemester = recentSemesters[index >= 0 && index < recentSemesters.length ? index : recentSemesters.length - 1];
-        const semesterStartDate = await selectSemesterStartDate();
-        if (semesterStartDate === null) {
-            AndroidBridge.showToast("已取消导入");
-            return;
-        }
+        const selectedSemester = recentSemesters[selectIndex];
         AndroidBridge.showToast("正在获取课表数据...");
 
         // 拉取并解析课表
@@ -389,14 +340,13 @@
             const debugInfo = extractCourseHtmlDebugInfo(courseHtml);
             await window.AndroidBridgePromise.showAlert(
                 "解析失败",
-                `未能从课表响应中识别到课程。\n响应长度: ${debugInfo.responseLength}\n包含 TaskActivity: ${debugInfo.hasTaskActivity}`,
+                `未能从课表响应中识别到课程。\n响应长度: ${debugInfo.responseLength}\n包含 TaskActivity: ${debugInfo.hasTaskActivity}\n包含 unitCount: ${debugInfo.hasUnitCount}`,
                 "确定"
             );
             return;
         }
         await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
         await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(getPresetTimeSlots()));
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({ semesterStartDate }));
         AndroidBridge.showToast(`导入成功，共 ${courses.length} 条课程`);
         AndroidBridge.notifyTaskCompletion();
     }

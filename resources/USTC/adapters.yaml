@@ -1,0 +1,9 @@
+# resources/USTC/adapters.yaml
+adapters:
+  - adapter_id: "USTC"
+    adapter_name: "中国科学技术大学本科教务"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "ustc.js"
+    import_url: "https://id.ustc.edu.cn/cas/login?service=https%3A%2F%2Fjw.ustc.edu.cn%2Fucas-sso%2Flogin"
+    maintainer: "Enthusjast"
+    description: "中国科学技术大学本科教务系统适配，登录后进入课表查询页面，等待课表加载完成后点击导入"
