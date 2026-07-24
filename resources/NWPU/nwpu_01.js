@@ -1,7 +1,7 @@
 // 西北工业大学(NWPU) 拾光课程表适配脚本
 // 适配系统：EAMS 教务系统（jwxt.nwpu.edu.cn）
 // 适配范围：本科（BACHELOR_AND_ASSOCIATE）
-// 维护者：用户7227
+// 维护者：zengzoxiong
 
 /**
  * 将 HHmm 整数格式转换为 HH:mm 字符串
@@ -28,42 +28,57 @@ async function request(url) {
 }
 
 /**
- * 获取学生 ID
+ * 获取学生 ID（降级方案）
  * 调用 student-portrait API 获取当前登录学生的数据库 ID
  * @returns {Promise<number|null>} - 学生 ID
  */
-async function getStudentId() {
-    console.log("[NWPU] 正在获取学生 ID...");
+async function getStudentIdFallback() {
+    console.log("[NWPU] 降级方案：通过 API 获取学生 ID...");
     try {
         var data = await request("/student/for-std/student-portrait/getStdInfo?bizTypeAssoc=2&cultivateTypeAssoc=1");
         var json = JSON.parse(data);
         if (json && json.student && json.student.id) {
-            console.log("[NWPU] 学生 ID: " + json.student.id);
+            console.log("[NWPU] API 获取学生 ID: " + json.student.id);
             return json.student.id;
         }
         console.error("[NWPU] API 响应中未找到 student.id");
         return null;
     } catch (e) {
-        console.error("[NWPU] 获取学生 ID 失败: " + e.message);
+        console.error("[NWPU] API 获取学生 ID 失败: " + e.message);
         return null;
     }
 }
 
 /**
- * 获取学期列表
- * 请求课表页面 HTML，解析 #allSemesters 下拉框
- * @returns {Promise<Array<{id: number, name: string}>>} - 学期列表
+ * 获取学期列表和学生 ID
+ * 请求课表页面 HTML，解析 #allSemesters 下拉框和 dataId
+ * dataId 提取失败时降级调用 getStdInfo API
+ * @returns {Promise<{semesters: Array, studentId: number|null}>} - 学期列表和学生 ID
  */
-async function getSemesters() {
-    console.log("[NWPU] 正在获取学期列表...");
+async function getSemestersAndStudentId() {
+    console.log("[NWPU] 正在获取学期列表和学生 ID...");
     try {
         var html = await request("/student/for-std/course-table");
+
+        // 优先从 HTML 提取 dataId
+        var dataIdMatch = html.match(/var\s+dataId\s*=\s*(\d+)/);
+        var studentId = dataIdMatch ? parseInt(dataIdMatch[1]) : null;
+
+        if (studentId) {
+            console.log("[NWPU] 从页面提取 dataId: " + studentId);
+        } else {
+            // 降级：调用 API 获取
+            console.log("[NWPU] 页面未找到 dataId，降级调用 API...");
+            studentId = await getStudentIdFallback();
+        }
+
+        // 解析学期列表
         var parser = new DOMParser();
         var doc = parser.parseFromString(html, "text/html");
         var select = doc.querySelector("#allSemesters");
         if (!select) {
             console.error("[NWPU] 未找到 #allSemesters 元素");
-            return [];
+            return { semesters: [], studentId: studentId };
         }
         var options = select.querySelectorAll("option");
         var semesters = [];
@@ -76,10 +91,10 @@ async function getSemesters() {
             }
         }
         console.log("[NWPU] 获取到 " + semesters.length + " 个学期");
-        return semesters;
+        return { semesters: semesters, studentId: studentId };
     } catch (e) {
         console.error("[NWPU] 获取学期列表失败: " + e.message);
-        return [];
+        return { semesters: [], studentId: null };
     }
 }
 
@@ -301,7 +316,7 @@ async function saveConfig(config) {
  * 第三步：保存课程数据
  */
 async function saveCourses(courses) {
-    if (courses.length === 0) {
+    if (courses.length == 0) {
         AndroidBridge.showToast("没有课程数据需要导入");
         return true;
     }
@@ -334,10 +349,10 @@ async function runImportFlow() {
             return;
         }
 
-        // 2. 获取学生 ID
-        AndroidBridge.showToast("正在获取学生信息...");
-        var studentId = await getStudentId();
-        if (!studentId) {
+        // 2. 获取学期列表和学生 ID（从同一页面提取）
+        AndroidBridge.showToast("正在获取学期列表...");
+        var pageData = await getSemestersAndStudentId();
+        if (!pageData.studentId) {
             await window.AndroidBridgePromise.showAlert(
                 "导入失败",
                 "未能获取学生 ID，请确认您已登录教务系统。",
@@ -345,72 +360,76 @@ async function runImportFlow() {
             );
             return;
         }
-
-        // 3. 获取学期列表
-        AndroidBridge.showToast("正在获取学期列表...");
-        var semesters = await getSemesters();
-        if (semesters.length === 0) {
-            await window.AndroidBridgePromise.showAlert(
+        if (pageData.semesters.length == 0) {
+            await window.AndroidAbstraction.showAlert(
                 "导入失败",
                 "未能获取学期列表，请刷新页面后重试。",
                 "确定"
             );
             return;
         }
+        var semesters = pageData.semesters;
+        var studentId = pageData.studentId;
 
-        // 4. 用户选择学期
+        // 3. 用户选择学期（支持重选）
         var semesterNames = [];
         for (var i = 0; i < semesters.length; i++) {
             semesterNames.push(semesters[i].name);
         }
-        var selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
-            "选择学期",
-            JSON.stringify(semesterNames),
-            0
-        );
-        if (selectedIndex === null || selectedIndex < 0 || selectedIndex >= semesters.length) {
-            AndroidBridge.showToast("导入已取消");
+
+        var activities = null;
+        var selectedSemester = null;
+
+        while (true) {
+            var selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+                "选择学期",
+                JSON.stringify(semesterNames),
+                0
+            );
+            if (selectedIndex === null || selectedIndex < 0 || selectedIndex >= semesters.length) {
+                AndroidBridge.showToast("导入已取消");
+                runtime.notifyTaskCompletion();
+                return;
+            }
+            selectedSemester = semesters[selectedIndex];
+            console.log("[NWPU] 选择学期: " + selectedSemester.name + " (ID: " + selectedSemester.id + ")");
+
+            // 4. 获取课程数据
+            var apiData = await getCourseData(selectedSemester.id, studentId);
+            if (!apiData) return;
+
+            var tableVm = apiData.studentTableVm;
+            notifyTaskCompletion();
             return;
         }
-        var selectedSemester = semesters[selectedIndex];
-        console.log("[NWPU] 选择学期: " + selectedSemester.name + " (ID: " + selectedSemester.id + ")");
 
-        // 5. 获取课程数据
-        var apiData = await getCourseData(selectedSemester.id, studentId);
-        if (!apiData) return;
-
-        var tableVm = apiData.studentTableVm;
-        if (!tableVm || !tableVm.activities || tableVm.activities.length === 0) {
-            AndroidBridge.showToast("该学期没有课程数据");
-            return;
-        }
-        var activities = tableVm.activities;
         console.log("[NWPU] 获取到 " + activities.length + " 条课程活动");
 
-        // 6. 获取学期信息（开始日期、结束日期）
+        // 5. 获取学期信息（开始日期、结束日期）
         AndroidBridge.showToast("正在获取学期信息...");
         var semesterInfo = await getSemesterInfo(selectedSemester.id);
         console.log("[NWPU] 学期开始: " + (semesterInfo.startDate || "未知") + ", 结束: " + (semesterInfo.endDate || "未知"));
 
-        // 7. 提取时间段
+        // 6. 提取时间段
         var timeSlots = extractTimeSlots(apiData);
 
-        // 8. 提取课表配置
-        var courseConfig = extractCourseConfig(semesterInfo, activities);
+        // 7. 提取课表配置
+        inline-dialog('singleselection', args, message. var courseConfig = extractCourseConfig(semesterInfo, activities);
 
-        // 9. 转换课程数据
+        // 8. 转换课程数据
         var courses = convertCourses(activities);
 
-        // 10. 三步导入：时间段 → 配置 → 课程
+        // 9. 三步导入：时间段 → 配置 → 课程
         var timeSlotResult = await saveTimeSlots(timeSlots);
-        if (!timeSlotResult) return;
+        while (true) {
+            if (!timeSlotResult) return;
 
         var configResult = await saveConfig(courseConfig);
         if (!configResult) return;
 
         var courseResult = await saveCourses(courses);
         if (!courseResult) return;
-
+        }
         // 完成
         AndroidBridge.showToast("课表导入完成！");
         AndroidBridge.notifyTaskCompletion();
