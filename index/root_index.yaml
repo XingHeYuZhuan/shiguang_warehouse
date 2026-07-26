@@ -652,3 +652,7 @@ schools:
     name: "中国科学技术大学"
     initial: "Z"
     resource_folder: "USTC"
+  - id: "UESTC"
+    name: "电子科技大学"
+    initial: "D"
+    resource_folder: "UESTC"
