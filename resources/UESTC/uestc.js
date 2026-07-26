@@ -258,12 +258,18 @@ function cleanStr(s) {
 //  课程分组与转换
 // ═══════════════════════════════════════════════════════════
 
+/** 去掉课程名末尾的课程编码，如 "大学物理Ⅱ(D1200440.18)" → "大学物理Ⅱ" */
+function cleanCourseName(name) {
+  return name.replace(/\s*\([A-Z]{1,3}\d+\.[\w.]+\)\s*$/, '');
+}
+
 /**
  * 将解析出的活动条目合并为课程列表
  * 同一天 + 同课程名 + 同教师的连续节次合并为一条课程
  * "停课" 条目：其周次从正常条目中扣除，本身不作为独立课程输出
  */
 function mergeToCourses(activities) {
+  // 第1步：按 (天, 课程名, 教师) 分组（跨房间）
   const groups = {};
   for (const act of activities) {
     const key = `${act.day}|${act.courseName}|${act.teacherName}`;
@@ -271,58 +277,84 @@ function mergeToCourses(activities) {
     groups[key].push(act);
   }
 
-  const courses = [];
+  const allCourses = [];
   for (const key of Object.keys(groups)) {
     const acts = groups[key];
     const normals = acts.filter(a => a.roomName !== '停课');
-    const canceled = acts.filter(a => a.roomName === '停课');
+    if (normals.length === 0) continue;
 
-    if (normals.length === 0) continue; // 全是停课，跳过
-
-    // 收集停课周次（用于扣除）
-    const canceledWeeks = new Set();
-    for (const ca of canceled) {
-      for (const w of parseWeeks(ca.validWeeks)) canceledWeeks.add(w);
+    // 第2步：按 (period, room) 聚合，每个组合得到独立周次集合
+    // cellWeeks: "period|room" → Set<week>
+    const cellWeeks = {};
+    for (const act of normals) {
+      const p = act.period;
+      const room = act.roomName || '';
+      const cellKey = `${p}|${room}`;
+      if (!cellWeeks[cellKey]) cellWeeks[cellKey] = new Set();
+      for (const w of parseWeeks(act.validWeeks)) cellWeeks[cellKey].add(w);
     }
 
-    // 按节次排序
-    normals.sort((a, b) => a.period - b.period);
+    // 第3步：按房间分组，每个房间内找连续节次区间，合并周次
+    const rooms = [...new Set(normals.map(a => a.roomName || ''))];
+    const roomEntries = [];
 
-    // 找连续区间
-    let i = 0;
-    while (i < normals.length) {
-      let j = i;
-      while (j + 1 < normals.length && normals[j + 1].period === normals[j].period + 1) {
-        j++;
+    for (const room of rooms) {
+      // 收集该房间所有 period 的周次
+      const roomPeriods = {};
+      for (const [cellKey, weeks] of Object.entries(cellWeeks)) {
+        const [p, r] = cellKey.split('|');
+        if (r === room) roomPeriods[Number(p)] = new Set([...weeks]);
       }
 
-      // 合并该区间内所有正常周次，再扣除停课周次
-      const mergedWeeks = new Set();
-      for (let k = i; k <= j; k++) {
-        for (const wk of parseWeeks(normals[k].validWeeks)) {
-          if (!canceledWeeks.has(wk)) mergedWeeks.add(wk);
+      const periods = Object.keys(roomPeriods).map(Number).sort((a, b) => a - b);
+      if (periods.length === 0) continue;
+
+      // 找连续区间（但相邻 period 周次差异过大时断开）
+      let i = 0;
+      while (i < periods.length) {
+        let j = i;
+        while (j + 1 < periods.length && periods[j + 1] === periods[j] + 1) {
+          // 如果下一个 period 的周次与本区间已有周次交集 < 30%，则断开
+          const curWeeks = new Set();
+          for (let k = i; k <= j; k++) {
+            for (const w of roomPeriods[periods[k]]) curWeeks.add(w);
+          }
+          const nextWeeks = roomPeriods[periods[j + 1]];
+          const intersect = [...curWeeks].filter(w => nextWeeks.has(w)).length;
+          const union = new Set([...curWeeks, ...nextWeeks]).size;
+          const overlapRatio = union > 0 ? intersect / union : 0;
+          if (overlapRatio < 0.3) break;
+          j++;
         }
+
+        const mergedWeeks = new Set();
+        for (let k = i; k <= j; k++) {
+          for (const w of roomPeriods[periods[k]]) mergedWeeks.add(w);
+        }
+
+        roomEntries.push({
+          room, startSection: periods[i], endSection: periods[j], weeks: mergedWeeks,
+        });
+
+        i = j + 1;
       }
+    }
 
-      // 取该区间最常见的位置（非空优先）
-      const positions = normals.slice(i, j + 1).map(a => a.roomName).filter(Boolean);
-      const position = positions.length > 0 ? positions[0] : '';
-
-      courses.push({
-        name: normals[0].courseName,
+    for (const entry of roomEntries) {
+      const weeks = [...entry.weeks].sort((a, b) => a - b);
+      allCourses.push({
+        name: cleanCourseName(normals[0].courseName),
         teacher: normals[0].teacherName,
-        position: position,
+        position: entry.room,
         day: normals[0].day,
-        startSection: normals[i].period,
-        endSection: normals[j].period,
-        weeks: [...mergedWeeks].sort((a, b) => a - b),
+        startSection: entry.startSection,
+        endSection: entry.endSection,
+        weeks: weeks,
       });
-
-      i = j + 1;
     }
   }
 
-  return courses;
+  return allCourses;
 }
 
 // ═══════════════════════════════════════════════════════════
