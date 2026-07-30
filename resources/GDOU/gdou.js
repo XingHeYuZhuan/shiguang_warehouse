@@ -237,7 +237,7 @@ async function saveCourses(parsedCourses) {
     }
 }
 
-// 广东海洋大学上课时间（真实作息，仅供参考，可自行核对）
+// 广东海洋大学上课时间
 const TimeSlots = [
     { number: 1, startTime: "08:10", endTime: "08:55" },
     { number: 2, startTime: "09:00", endTime: "09:45" },
