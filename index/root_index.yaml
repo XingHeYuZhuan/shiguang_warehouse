@@ -652,7 +652,13 @@ schools:
     name: "中国科学技术大学"
     initial: "Z"
     resource_folder: "USTC"
+
   - id: "UESTC"
     name: "电子科技大学"
     initial: "D"
     resource_folder: "UESTC"
+
+  - id: "GDOU"
+    name: "广东海洋大学"
+    initial: "G"
+    resource_folder: "GDOU"
