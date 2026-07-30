@@ -320,3 +320,6 @@ async function runImportFlow() {
     console.log("JS: 整个导入流程执行完毕并成功。");
     AndroidBridge.notifyTaskCompletion();
 }
+
+// 脚本执行入口
+runImportFlow();
