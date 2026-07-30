@@ -320,35 +320,3 @@ async function runImportFlow() {
     console.log("JS: 整个导入流程执行完毕并成功。");
     AndroidBridge.notifyTaskCompletion();
 }
-
-/**
- * 轮询等待宿主桥接对象就绪。
- * 脚本可能在宿主注入桥（AndroidBridge / AndroidBridgePromise）之前就被执行，
- * 若立即调用会导致 "Receiving end does not exist" 连接错误。此处等待桥挂载后再启动导入。
- */
-function waitForBridge(timeoutMs = 5000) {
-    return new Promise((resolve, reject) => {
-        const start = Date.now();
-        const timer = setInterval(() => {
-            if (window.AndroidBridgePromise && window.AndroidBridge) {
-                clearInterval(timer);
-                resolve(true);
-            } else if (Date.now() - start > timeoutMs) {
-                clearInterval(timer);
-                reject(new Error("宿主桥接对象未就绪"));
-            }
-        }, 100);
-    });
-}
-
-waitForBridge()
-    .then(() => runImportFlow())
-    .catch((e) => {
-        console.error("JS: 桥接未就绪，导入未启动:", e);
-        const tip = "导入失败：宿主桥接未连接。请在已登录的教务页面中，通过导入会话（app 内 webview 或测试插件）运行本脚本。";
-        if (window.AndroidBridge) {
-            AndroidBridge.showToast(tip);
-        } else {
-            alert(tip);
-        }
-    });
