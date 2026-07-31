@@ -662,3 +662,8 @@ schools:
     name: "广东海洋大学"
     initial: "G"
     resource_folder: "GDOU"
+
+  - id: "GUC"
+    name: "吉利学院"
+    initial: "J"
+    resource_folder: "GUC"
