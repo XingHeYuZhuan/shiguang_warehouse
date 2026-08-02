@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "niit.js"
     import_url: "https://jwxt.niit.edu.cn/"
     maintainer: "nifs1729"
-    description: "点击统一身份认证登录,\n由于存在作用域问题,登录后需要点击课程表跳转课表页面才能让一键导入课表使用,\n本校开发者适配如果有误建议提交issues"
+    description: "点击统一身份认证登录,登录后直接点击导入即可"
