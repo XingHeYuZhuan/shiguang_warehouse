@@ -667,3 +667,8 @@ schools:
     name: "吉利学院"
     initial: "J"
     resource_folder: "GUC"
+
+  - id: "NIIT"
+    name: "南京工业职业技术大学"
+    initial: "N"
+    resource_folder: "NIIT"
