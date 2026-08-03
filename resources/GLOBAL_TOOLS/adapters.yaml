@@ -21,7 +21,7 @@ adapters:
     category: "GENERAL_TOOL"
     asset_js_path: "wake_up.js"
     import_url: "https://api.wakeup.fun/"
-    maintainer: "星河欲转、Airline233"
+    maintainer: "Airline233、星河欲转"
     description: "从WakeUP获取分享口令后，进入适配直接点击\"执行导入\"，输入分享口令即可"
 
   - adapter_id: "StarLink"
