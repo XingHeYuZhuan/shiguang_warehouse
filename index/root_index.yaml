@@ -656,3 +656,8 @@ schools:
     name: "电子科技大学"
     initial: "D"
     resource_folder: "UESTC"
+
+  - id: "SDJTU"
+    name: "山东交通学院"
+    initial: "S"
+    resource_folder: "SDJTU"
