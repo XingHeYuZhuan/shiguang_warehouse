@@ -38,6 +38,11 @@ schools:
     initial: "C"
     resource_folder: "CQU"
 
+  - id: "CQEPC"
+    name: "重庆电力高等专科学校"
+    initial: "C"
+    resource_folder: "CQEPC"
+
   - id: "CQJTU"
     name: "重庆交通大学"
     initial: "C"

@@ -1,0 +1,9 @@
+# resources/CQEPC/adapters.yaml
+adapters:
+  - adapter_id: "CQEPC_01"
+    adapter_name: "重庆电力高等专科学校正方教务"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "cqepc.js"
+    import_url: "https://auth.cqepc.edu.cn/cas/login?service=http%3A%2F%2Fcas.cqepc.com.cn%2Fcas"
+    maintainer: "16Mu"
+    description: "重庆电力高等专科学校正方教务适配，登录后请进入学生课表页面再点击导入；适配由非本校开发者完成，如有问题请提交 Issue"
