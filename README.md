@@ -46,7 +46,7 @@ shiguang_warehouse/
 schools: #固定字段
   - id: "GLOBAL_TOOLS"
     name: "通用工具与服务"
-    initial: "G"
+    initial: "T"
     resource_folder: "GLOBAL_TOOLS"
 
   - id: "CUST"
