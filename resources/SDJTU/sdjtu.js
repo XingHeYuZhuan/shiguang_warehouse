@@ -72,7 +72,7 @@ function extractLines(element) {
 }
 
 /**
- * 从课表HTML中解析时间段信息
+ * 无法post到课表信息，故从课表HTML中解析时间段信息
  * 行头格式: "第一大节\n08:30-10:00"
  * 每个大节包含2个小节
  */
@@ -236,6 +236,48 @@ function getSemesterId(doc) {
 }
 
 /**
+ * 日期输入验证函数
+ */
+window.validateDateInput = function (input) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+        const d = new Date(input);
+        if (!isNaN(d.getTime())) return false; // 验证通过
+    }
+    return "请输入正确的日期格式，如 2026-02-23";
+};
+
+/**
+ * 根据学期ID推算默认开学日期
+ * 第一学期（秋季）默认9月1日，第二学期（春季）默认2月23日
+ */
+function getDefaultStartDate(semesterId) {
+    const match = semesterId.match(/^(\d{4})-(\d{4})-(\d)$/);
+    if (!match) return '';
+    const year = parseInt(match[1]);
+    const sem = parseInt(match[3]);
+    if (sem === 1) {
+        return `${year}-08-024`;
+    } else {
+        return `${parseInt(match[2])}-02-23`;
+    }
+}
+
+/**
+ * 获取用户输入的开学日期
+ * 本校寒暑假的开学时间都不固定，故采用此方案
+ */
+async function getSemesterStartDate(semesterId) {
+    const defaultDate = getDefaultStartDate(semesterId);
+    const dateInput = await window.AndroidBridgePromise.showPrompt(
+        "设置开学日期",
+        "请输入本学期开学日期（格式 YYYY-MM-DD，如 2026-02-23）：",
+        defaultDate,
+        "validateDateInput"
+    );
+    return dateInput; // 用户取消返回 null
+}
+
+/**
  * 主流程
  */
 async function runImportFlow() {
@@ -257,22 +299,39 @@ async function runImportFlow() {
 
         const semesterId = getSemesterId(doc);
 
-        // 3. 解析课程数据
+        // 3. 获取开学日期
+        const startDate = await getSemesterStartDate(semesterId);
+        if (startDate === null) {
+            AndroidBridge.showToast("已取消开学日期输入");
+            return;
+        }
+
+        // 4. 解析课程数据
         const courses = parseCourses(doc);
         if (courses.length === 0) {
             AndroidBridge.showToast("未获取到课程数据，该学期可能暂无课表");
             return;
         }
 
-        // 4. 解析时间段
+        // 5. 解析时间段
         const timeSlots = parseTimeSlots(doc);
 
-        // 5. 保存数据
+        // 6. 保存数据
         if (timeSlots.length > 0) {
             await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         }
 
         await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+
+        // 7. 保存课表配置（含开学日期）
+        const config = {
+            semesterStartDate: startDate,
+            semesterTotalWeeks: 20,
+            defaultClassDuration: 45,
+            defaultBreakDuration: 5,
+            firstDayOfWeek: 1
+        };
+        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
 
         AndroidBridge.showToast(`[${semesterId}] 成功导入 ${courses.length} 条课程记录！`);
         AndroidBridge.notifyTaskCompletion();
