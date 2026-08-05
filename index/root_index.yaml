@@ -658,6 +658,10 @@ schools:
     initial: "D"
     resource_folder: "UESTC"
 
+  - id: "SDJTU"
+    name: "山东交通学院"
+    initial: "S"
+    resource_folder: "SDJTU"
   - id: "GDOU"
     name: "广东海洋大学"
     initial: "G"
