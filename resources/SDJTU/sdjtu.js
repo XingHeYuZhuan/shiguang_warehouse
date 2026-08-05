@@ -256,7 +256,7 @@ function getDefaultStartDate(semesterId) {
     const year = parseInt(match[1]);
     const sem = parseInt(match[3]);
     if (sem === 1) {
-        return `${year}-08-024`;
+        return `${year}-08-24`;
     } else {
         return `${parseInt(match[2])}-02-23`;
     }
@@ -270,7 +270,7 @@ async function getSemesterStartDate(semesterId) {
     const defaultDate = getDefaultStartDate(semesterId);
     const dateInput = await window.AndroidBridgePromise.showPrompt(
         "设置开学日期",
-        "请输入本学期开学日期（格式 YYYY-MM-DD，如 2026-02-23）：",
+        "请输入本学期开学日期，一般为周一（格式 YYYY-MM-DD，如 2026-02-23）：",
         defaultDate,
         "validateDateInput"
     );
