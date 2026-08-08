@@ -240,7 +240,7 @@ async function applyTimeSlots() {
         { "number": 9, "startTime": "18:10", "endTime": "18:55" }, 
         { "number": 10, "startTime": "19:05", "endTime": "19:50" },
         { "number": 11, "startTime": "20:00", "endTime": "20:45" },
-        { "number": 11, "startTime": "20:55", "endTime": "21:40" },
+        { "number": 12, "startTime": "20:55", "endTime": "21:40" },
     ];
     return await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
 }
