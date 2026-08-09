@@ -682,3 +682,8 @@ schools:
     name: "怀化学院"
     initial: "H"
     resource_folder: "HHTC"
+
+  - id: "CWXU"
+    name: "无锡学院"
+    initial: "W"
+    resource_folder: "CWXU"
