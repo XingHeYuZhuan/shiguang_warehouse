@@ -1,27 +1,3 @@
-// ============================================================
-// 黑龙江大学研究生教务系统 - 拾光课程表适配器
-// ============================================================
-//
-// 当前版本策略：
-// 1. 使用当前已经打开的黑龙江大学“我的课程表”页面
-// 2. 从 Performance Resource Timing 中找到最近一次课表 API 请求
-// 3. 携带当前登录 Cookie 重新请求课表 JSON
-// 4. 解析课程信息
-// 5. 转换为拾光 CourseJsonModel
-// 6. 保存课程
-// 7. 通知拾光任务完成
-//
-// 注意：
-// - 用户需要先在教务系统中选择学期并点击“查询”
-// - 本适配器导入当前页面已经查询出来的课表
-// - 暂不写死学号、XH、Y-sign、Y-cft 等个人/动态参数
-// ============================================================
-
-
-// ------------------------------------------------------------
-// 1. 找到黑龙江大学最近一次课表请求
-// ------------------------------------------------------------
-
 function findHljuTimetableRequest() {
     const resources = performance.getEntriesByType("resource");
 
@@ -35,14 +11,9 @@ function findHljuTimetableRequest() {
         return null;
     }
 
-    // 当前页面最后一次请求通常就是用户刚刚查询的学期
     return matches[matches.length - 1];
 }
 
-
-// ------------------------------------------------------------
-// 2. 请求黑龙江大学课表
-// ------------------------------------------------------------
 
 async function fetchHljuTimetable() {
     const url = findHljuTimetableRequest();
@@ -84,14 +55,6 @@ async function fetchHljuTimetable() {
 }
 
 
-// ------------------------------------------------------------
-// 3. 解析节次
-//
-// 例如：
-// "1,2"  -> { start: 1, end: 2 }
-// "5,6"  -> { start: 5, end: 6 }
-// ------------------------------------------------------------
-
 function parseSections(sectionText) {
     if (!sectionText) {
         return null;
@@ -112,19 +75,6 @@ function parseSections(sectionText) {
 }
 
 
-// ------------------------------------------------------------
-// 4. 解析周次
-//
-// 当前教务系统示例：
-// "周次:3-10" -> [3,4,5,6,7,8,9,10]
-//
-// 同时兼容：
-// 3-10
-// 3~10
-// 3～10
-// 3至10
-// 3,5,7
-// ------------------------------------------------------------
 
 function parseWeeks(weekText) {
     if (!weekText) {
@@ -142,7 +92,7 @@ function parseWeeks(weekText) {
 
     const weeks = new Set();
 
-    // 先处理范围，例如 3-10、3~10、3至10
+
     const rangeRegex = /(\d+)\s*[-~～至]\s*(\d+)/g;
 
     let rangeMatch;
@@ -162,7 +112,6 @@ function parseWeeks(weekText) {
         }
     }
 
-    // 删除已经处理的范围，再寻找单独数字
     const remainingText = text.replace(
         /(\d+)\s*[-~～至]\s*(\d+)/g,
                                        ""
@@ -180,21 +129,6 @@ function parseWeeks(weekText) {
 }
 
 
-// ------------------------------------------------------------
-// 5. 解析课程块
-//
-// 黑龙江大学返回的数据类似：
-//
-// 新时代中国特色社会主义理论与实践/习近平新时代中国特色社会主义思想专题研究
-// 吕荣 硕士文科政治12班
-// 节次:5,6节
-// 周次:3-10
-// 地点:艺术楼424
-// 开课院系:马克思主义学院
-// 电话:
-//
-// ------------------------------------------------------------
-
 function parseCourseBlock(block, weekday, sections) {
     const lines = block
     .split(/\r?\n/)
@@ -205,20 +139,14 @@ function parseCourseBlock(block, weekday, sections) {
         return null;
     }
 
-    // 第一行：课程名称
+
     const name = lines[0];
 
     if (!name) {
         return null;
     }
 
-    // 第二行通常是：
-    // 教师 + 班级
-    //
-    // 例如：
-    // 吕荣 硕士文科政治12班
-    //
-    // CourseJsonModel 不要求班级，所以取第一段作为教师。
+
     const teacherLine = lines[1] || "";
 
     let teacher = teacherLine
@@ -249,8 +177,7 @@ function parseCourseBlock(block, weekday, sections) {
         }
     }
 
-    // 有些情况下课程文本自己带了节次。
-    // 优先使用课程块里的节次，如果没有则使用外层 JieCi。
+
     let courseSections = sections;
 
     for (const line of lines) {
@@ -288,26 +215,6 @@ function parseCourseBlock(block, weekday, sections) {
     };
 }
 
-
-// ------------------------------------------------------------
-// 6. 解析一个星期 + 一个节次格子里的课程
-//
-// 一个格子可能有多门不同周次的课程，例如：
-//
-// 课程A
-// 教师A
-// 节次:5,6
-// 周次:3-10
-// ...
-//
-// 课程B
-// 教师B
-// 节次:5,6
-// 周次:11-14
-// ...
-//
-// 所以需要按照空行拆成多个课程块。
-// ------------------------------------------------------------
 
 function parseCourseCell(content, weekday, sections) {
     if (
@@ -349,10 +256,6 @@ function parseCourseCell(content, weekday, sections) {
     return courses;
 }
 
-
-// ------------------------------------------------------------
-// 7. 解析整个黑龙江大学课表 JSON
-// ------------------------------------------------------------
 
 function parseHljuTimetable(data) {
     const weekdayFields = [
@@ -404,10 +307,6 @@ function parseHljuTimetable(data) {
     return courses;
 }
 
-
-// ------------------------------------------------------------
-// 8. 检查课程数据
-// ------------------------------------------------------------
 
 function validateCourses(courses) {
     if (!Array.isArray(courses)) {
@@ -465,10 +364,6 @@ function validateCourses(courses) {
 }
 
 
-// ------------------------------------------------------------
-// 9. 输出解析结果，方便 Alpha 阶段检查
-// ------------------------------------------------------------
-
 function printCourses(courses) {
     console.log(
         "========== 黑龙江大学解析后的拾光课程 =========="
@@ -497,9 +392,6 @@ function printCourses(courses) {
 }
 
 
-// ------------------------------------------------------------
-// 10. 保存课程到拾光
-// ------------------------------------------------------------
 
 async function saveHljuCourses(courses) {
     try {
@@ -529,9 +421,6 @@ async function saveHljuCourses(courses) {
 }
 
 
-// ------------------------------------------------------------
-// 11. 主导入流程
-// ------------------------------------------------------------
 
 async function runImportFlow() {
     try {
@@ -539,9 +428,6 @@ async function runImportFlow() {
             "正在获取黑龙江大学课表..."
         );
 
-        // ----------------------------------------------------
-        // 第一步：获取原始课表
-        // ----------------------------------------------------
 
         const timetable = await fetchHljuTimetable();
 
@@ -550,9 +436,6 @@ async function runImportFlow() {
             timetable
         );
 
-        // ----------------------------------------------------
-        // 第二步：解析
-        // ----------------------------------------------------
 
         const courses = parseHljuTimetable(
             timetable
@@ -560,9 +443,7 @@ async function runImportFlow() {
 
         validateCourses(courses);
 
-        // ----------------------------------------------------
-        // 第三步：输出解析结果
-        // ----------------------------------------------------
+
 
         printCourses(courses);
 
@@ -570,9 +451,7 @@ async function runImportFlow() {
             `解析成功，共 ${courses.length} 个课程时段`
         );
 
-        // ----------------------------------------------------
-        // 第四步：保存到拾光
-        // ----------------------------------------------------
+
 
         const saveSuccess = await saveHljuCourses(
             courses
@@ -582,9 +461,7 @@ async function runImportFlow() {
             return;
         }
 
-        // ----------------------------------------------------
-        // 第五步：全部成功
-        // ----------------------------------------------------
+
 
         AndroidBridge.showToast(
             "黑龙江大学课表导入成功！"
@@ -609,9 +486,5 @@ async function runImportFlow() {
     }
 }
 
-
-// ------------------------------------------------------------
-// 12. 启动
-// ------------------------------------------------------------
 
 runImportFlow();
