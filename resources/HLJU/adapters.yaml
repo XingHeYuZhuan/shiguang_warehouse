@@ -1,7 +1,7 @@
 adapters:
 
 - adapter_id: "HLJU"
-  adapter_name: "黑龙江大学研究生课表"
+  adapter_name: "黑龙江大学研究生教育综合管理系统"
   category: "POSTGRADUATE"
   asset_js_path: "hlju.js"
   import_url: "https://yjsglxt.hlju.edu.cn/"
