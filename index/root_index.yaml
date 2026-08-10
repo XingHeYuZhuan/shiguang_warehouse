@@ -687,3 +687,8 @@ schools:
     name: "无锡学院"
     initial: "W"
     resource_folder: "CWXU"
+
+  - id: "HLJU"
+    name: "黑龙江大学"
+    initial: "H"
+    resource_folder: "HLJU"
