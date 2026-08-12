@@ -66,7 +66,7 @@ function parseWeeksBitmap(bitmap) {
     const weeks = [];
     const value = String(bitmap || "");
     // 树维 EAMS 位图的下标就是周次，下标 0 是占位符；拾光使用 1 基周次。
-    for (let week = 1; week < value.length; week++) {
+    for (let week = 1; week < value.length && week <= MAX_SUPPORTED_WEEK; week++) {
         if (value[week] === "1") weeks.push(week);
     }
     return weeks;
@@ -180,32 +180,51 @@ function parseTaskActivities(html) {
 
     for (let i = 1; i < blocks.length; i++) {
         const block = blocks[i];
-        const activityMatch = block.match(/new\s+TaskActivity\(([\s\S]*?)\)\s*;/);
-        if (!activityMatch) continue;
-
-        const args = powerSplit(activityMatch[1]);
-        if (args.length < 7) continue;
-
-        const name = cleanCourseName(args[3]);
         const teacher = parseTeacherName(block);
-        const position = cleanPosition(args[5]);
-        const weeks = parseWeeksBitmap(args[6]);
-        if (weeks.length === 0) continue;
-
-        indexRegex.lastIndex = 0;
-        let indexMatch;
-        while ((indexMatch = indexRegex.exec(block)) !== null) {
-            const day = parseInt(indexMatch[1], 10) + 1;
-            const section = parseInt(indexMatch[2], 10) + 1;
-            rawResults.push({
-                name,
-                teacher,
-                position,
-                day,
-                startSection: section,
-                endSection: section,
-                weeks: [...weeks]
+        const activityRegex = /new\s+TaskActivity\(([\s\S]*?)\)\s*;/g;
+        const activities = [];
+        let activityMatch;
+        while ((activityMatch = activityRegex.exec(block)) !== null) {
+            activities.push({
+                argsRaw: activityMatch[1],
+                start: activityMatch.index,
+                end: activityRegex.lastIndex
             });
+        }
+
+        for (let activityIndex = 0; activityIndex < activities.length; activityIndex++) {
+            const activity = activities[activityIndex];
+            const args = powerSplit(activity.argsRaw);
+            if (args.length < 7) continue;
+
+            const name = cleanCourseName(args[3]);
+            const position = cleanPosition(args[5]);
+            const weeks = parseWeeksBitmap(args[6]);
+            if (weeks.length === 0) continue;
+
+            const nextActivityStart = activityIndex + 1 < activities.length
+                ? activities[activityIndex + 1].start
+                : block.length;
+            const activityScope = block.slice(activity.end, nextActivityStart);
+            indexRegex.lastIndex = 0;
+            let indexMatch;
+            while ((indexMatch = indexRegex.exec(activityScope)) !== null) {
+                const rawDay = parseInt(indexMatch[1], 10);
+                const rawSection = parseInt(indexMatch[2], 10);
+                if (rawDay < 0 || rawDay > 6 || rawSection < 0 || rawSection >= unitCount) continue;
+
+                const day = rawDay + 1;
+                const section = rawSection + 1;
+                rawResults.push({
+                    name,
+                    teacher,
+                    position,
+                    day,
+                    startSection: section,
+                    endSection: section,
+                    weeks: [...weeks]
+                });
+            }
         }
     }
 
@@ -287,7 +306,7 @@ function parseCalendarInfo(html) {
         .replace(/&nbsp;|&#160;|&#x0*A0;/gi, " ")
         .replace(/\u00a0/g, " ");
     const match = text.match(
-        /(\d{4})\s*-\s*(\d{1,2})\s*-\s*(\d{1,2})\s*~\s*(\d{4})\s*-\s*(\d{1,2})\s*-\s*(\d{1,2})\s*\(\s*(\d+)\s*\)/
+        /开始\s*\/\s*结束日期\s*[：:]?\s*(\d{4})\s*-\s*(\d{1,2})\s*-\s*(\d{1,2})\s*~\s*(\d{4})\s*-\s*(\d{1,2})\s*-\s*(\d{1,2})\s*\(\s*(\d+)\s*\)/
     );
     if (!match) return null;
 
@@ -389,12 +408,12 @@ async function fetchCalendarInfo(semesterId) {
 async function trySaveCalendarInfo(semesterId) {
     try {
         const calendarInfo = await fetchCalendarInfo(semesterId);
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+        const saveResult = await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
             semesterStartDate: calendarInfo.semesterStartDate,
             semesterTotalWeeks: calendarInfo.semesterTotalWeeks,
             firstDayOfWeek: calendarInfo.firstDayOfWeek
         }));
-        return true;
+        return saveResult === true;
     } catch (error) {
         console.warn(`[ZUA 学期信息设置失败] ${error.message}`);
         return false;
@@ -403,8 +422,8 @@ async function trySaveCalendarInfo(semesterId) {
 
 async function trySaveTimeSlots() {
     try {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(getZuaTimeSlots()));
-        return true;
+        const saveResult = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(getZuaTimeSlots()));
+        return saveResult === true;
     } catch (error) {
         console.warn(`[ZUA 作息时间设置失败] ${error.message}`);
         return false;

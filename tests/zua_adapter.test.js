@@ -90,13 +90,14 @@ async function run() {
     ]);
     assert.equal(parsedSemesters.currentSemesterId, "999");
 
-    assert.deepEqual(plain(context.parseCalendarInfo("2026-9-7~2027-2-21 (24)")), {
+    assert.deepEqual(plain(context.parseCalendarInfo("开始/结束日期：2026-9-7~2027-2-21 (24)")), {
         semesterStartDate: "2026-09-07",
         semesterEndDate: "2027-02-21",
         semesterTotalWeeks: 24,
         firstDayOfWeek: 1
     });
     assert.deepEqual(plain(context.parseCalendarInfo(`
+        <th>开始/结束日期：</th>
         <td>2026-10-12 &nbsp; ~ &nbsp; 2027-01-31&nbsp;(16)</td>
     `)), {
         semesterStartDate: "2026-10-12",
@@ -104,12 +105,26 @@ async function run() {
         semesterTotalWeeks: 16,
         firstDayOfWeek: 1
     });
-    assert.deepEqual(plain(context.parseCalendarInfo("2026 - 2 - 3~2026 - 6 - 28(21)")), {
+    assert.deepEqual(plain(context.parseCalendarInfo("开始/结束日期：2026 - 2 - 3~2026 - 6 - 28(21)")), {
         semesterStartDate: "2026-02-03",
         semesterEndDate: "2026-06-28",
         semesterTotalWeeks: 21,
         firstDayOfWeek: 1
     });
+    assert.deepEqual(plain(context.parseCalendarInfo(`
+        <div>页面生成日期：2025-01-01~2025-01-07 (1)</div>
+        <th>开始/结束日期：</th>
+        <td>2026-9-7~2027-2-21 (24)</td>
+    `)), {
+        semesterStartDate: "2026-09-07",
+        semesterEndDate: "2027-02-21",
+        semesterTotalWeeks: 24,
+        firstDayOfWeek: 1
+    });
+    assert.equal(context.parseCalendarInfo("开始/结束日期：2026-2-30~2026-7-1 (20)"), null);
+    assert.equal(context.parseCalendarInfo("开始/结束日期：2026-2-3~2026-6-28 (0)"), null);
+    assert.equal(context.parseCalendarInfo("开始/结束日期：2026-2-3~2026-6-28 (61)"), null);
+    assert.equal(context.parseCalendarInfo("2026-9-7~2027-2-21 (24)"), null);
     assert.equal(context.parseCalendarInfo("calendar unavailable"), null);
 
     const timeSlots = plain(context.getZuaTimeSlots());
@@ -184,6 +199,92 @@ ${activityBlock({
 
     assert.deepEqual(plain(context.parseWeeksBitmap(bitmap([1, 3, 5, 7]))), [1, 3, 5, 7]);
     assert.deepEqual(plain(context.parseWeeksBitmap(bitmap([2, 4, 6, 8]))), [2, 4, 6, 8]);
+    assert.deepEqual(
+        plain(context.parseWeeksBitmap(bitmap([0, 1, 1, 60, 61], 63))),
+        [1, 60],
+        "第 0 周是占位，第 61 周及以后必须被过滤"
+    );
+    assert.deepEqual(plain(context.parseWeeksBitmap("x1x")), [1], "异常字符不得生成非法周数");
+
+    const sharedTeacherHtml = `var unitCount = 10;
+var teachers = [{id:1,name:"共享教师"}];
+var actTeachers = [{id:1,name:"共享教师",lab:true}];
+activity = new TaskActivity(null, null, "A.001", "课程A(编号A)", "ROOM", "教室A", "${bitmap([1, 2])}", null, null, null, "", "");
+index = 0 * unitCount + 0;
+table0.activities[index][table0.activities[index].length]=activity;
+activity = new TaskActivity(null, null, "B.001", "课程B(编号B)", "ROOM", "教室B", "${bitmap([3, 4])}", null, null, null, "", "");
+index = 1 * unitCount + 2;
+table0.activities[index][table0.activities[index].length]=activity;`;
+    const sharedTeacherCourses = plain(context.parseTaskActivities(sharedTeacherHtml));
+    assert.deepEqual(sharedTeacherCourses, [
+        {
+            name: "课程A",
+            teacher: "共享教师",
+            position: "教室A",
+            day: 1,
+            startSection: 1,
+            endSection: 1,
+            weeks: [1, 2]
+        },
+        {
+            name: "课程B",
+            teacher: "共享教师",
+            position: "教室B",
+            day: 2,
+            startSection: 3,
+            endSection: 3,
+            weeks: [3, 4]
+        }
+    ], "同一 teachers block 内的多个活动必须各自拥有对应 index");
+
+    const sharedTeacherDifferentRoomsHtml = `var unitCount = 10;
+var teachers = [{id:1,name:"同一教师"}];
+var actTeachers = [{id:1,name:"同一教师",lab:true}];
+activity = new TaskActivity(null, null, "C.001", "实验课(编号C)", "ROOM", "实验室一", "${bitmap([1])}", null, null, null, "", "");
+index = 2 * unitCount + 0;
+table0.activities[index][table0.activities[index].length]=activity;
+activity = new TaskActivity(null, null, "C.002", "实验课(编号D)", "ROOM", "实验室二", "${bitmap([1])}", null, null, null, "", "");
+index = 2 * unitCount + 1;
+table0.activities[index][table0.activities[index].length]=activity;`;
+    const sharedTeacherDifferentRooms = plain(context.parseTaskActivities(sharedTeacherDifferentRoomsHtml));
+    assert.equal(sharedTeacherDifferentRooms.length, 2, "同教师同课程的不同教室不得错误合并");
+    assert.deepEqual(sharedTeacherDifferentRooms.map(course => course.position), ["实验室一", "实验室二"]);
+
+    const indexBoundaryHtml = `var unitCount = 10;
+${activityBlock({
+    teacher: "边界教师",
+    name: "非法星期(编号)",
+    position: "边界教室",
+    weeks: [1],
+    dayIndex: 7,
+    sections: [0]
+})}
+${activityBlock({
+    teacher: "边界教师",
+    name: "非法节次(编号)",
+    position: "边界教室",
+    weeks: [1],
+    dayIndex: 0,
+    sections: [10]
+})}
+${activityBlock({
+    teacher: "边界教师",
+    name: "合法边界(编号)",
+    position: "边界教室",
+    weeks: [1],
+    dayIndex: 6,
+    sections: [9]
+})}`;
+    const indexBoundaryCourses = plain(context.parseTaskActivities(indexBoundaryHtml));
+    assert.deepEqual(indexBoundaryCourses, [{
+        name: "合法边界",
+        teacher: "边界教师",
+        position: "边界教室",
+        day: 7,
+        startSection: 10,
+        endSection: 10,
+        weeks: [1]
+    }]);
 
     let selectionItems;
     let semesterRequest;
@@ -221,7 +322,7 @@ ${activityBlock({
     let calendarRequest;
     context.fetch = async (url, options) => {
         calendarRequest = { url, options };
-        return { ok: true, status: 200, text: async () => "2026-9-7~2027-2-21 (24)" };
+        return { ok: true, status: 200, text: async () => "开始/结束日期：2026-9-7~2027-2-21 (24)" };
     };
     assert.deepEqual(plain(await context.fetchCalendarInfo("999")), {
         semesterStartDate: "2026-09-07",
@@ -234,7 +335,12 @@ ${activityBlock({
     assert.match(calendarRequest.options.body, /semesterId=999/);
     assert.equal(calendarRequest.options.credentials, "include");
 
-    const runFlow = async ({ failCalendar = false, failTimeSlots = false }) => {
+    const runFlow = async ({
+        failCalendar = false,
+        failTimeSlots = false,
+        calendarSaveResult = true,
+        timeSlotSaveResult = true
+    }) => {
         const calls = [];
         const toasts = [];
         context.fetch = async (url, options) => {
@@ -250,18 +356,21 @@ ${activityBlock({
             if (url.endsWith("/eams/base/calendar-info.action")) {
                 return failCalendar
                     ? { ok: false, status: 503, text: async () => "" }
-                    : { ok: true, status: 200, text: async () => "2026-9-7~2027-2-21 (24)" };
+                    : { ok: true, status: 200, text: async () => "开始/结束日期：2026-9-7~2027-2-21 (24)" };
             }
             throw new Error(`unexpected request: ${url} ${options?.method || "GET"}`);
         };
         context.window.AndroidBridgePromise = {
             showSingleSelection: async () => 0,
             saveImportedCourses: async () => { calls.push("courses"); return true; },
-            saveCourseConfig: async value => { calls.push(["config", JSON.parse(value)]); return true; },
+            saveCourseConfig: async value => {
+                calls.push(["config", JSON.parse(value)]);
+                return calendarSaveResult;
+            },
             savePresetTimeSlots: async value => {
                 calls.push(["timeSlots", JSON.parse(value)]);
                 if (failTimeSlots) throw new Error("time slots unavailable");
-                return true;
+                return timeSlotSaveResult;
             }
         };
         context.AndroidBridge = {
@@ -294,6 +403,15 @@ ${activityBlock({
         "courses", "config", "timeSlots", "complete"
     ]);
     assert.equal(timeSlotFailureFlow.toasts.at(-1), "课表已导入，作息时间设置失败，请在设置中确认");
+
+    const resolvedFalseFlow = await runFlow({ calendarSaveResult: false, timeSlotSaveResult: false });
+    assert.deepEqual(resolvedFalseFlow.calls.map(call => Array.isArray(call) ? call[0] : call), [
+        "courses", "config", "timeSlots", "complete"
+    ]);
+    assert.equal(
+        resolvedFalseFlow.toasts.at(-1),
+        "课表已导入，学期日期和作息时间设置失败，请在设置中确认"
+    );
 
     assert.ok(!/addInput\([^\n]+["']ids["'][^\n]+["']\d{5,}["']/.test(originalSource));
     const forbiddenSecurityTerms = ["JSESSION" + "ID", "Author" + "ization", "pass" + "word"];
