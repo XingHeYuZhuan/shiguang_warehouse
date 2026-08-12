@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "zua.js"
     import_url: "http://jwglxt.zua.edu.cn/eams/loginExt.action"
     maintainer: "xBefore"
-    description: "郑州航空工业管理学院树维 EAMS 教务课表导入；暂不自动写入作息时间，请导入后按学校当前安排核对"
+    description: "郑州航空工业管理学院树维 EAMS 教务课表导入，支持自动同步学期日期与学校标准作息"

@@ -3,6 +3,18 @@
 
 const BASE_URL = "http://jwglxt.zua.edu.cn";
 const MAX_SUPPORTED_WEEK = 60;
+const ZUA_TIME_SLOTS = [
+    { number: 1, startTime: "08:00", endTime: "08:45" },
+    { number: 2, startTime: "08:55", endTime: "09:40" },
+    { number: 3, startTime: "10:00", endTime: "10:45" },
+    { number: 4, startTime: "10:55", endTime: "11:40" },
+    { number: 5, startTime: "14:30", endTime: "15:15" },
+    { number: 6, startTime: "15:25", endTime: "16:10" },
+    { number: 7, startTime: "16:30", endTime: "17:15" },
+    { number: 8, startTime: "17:25", endTime: "18:10" },
+    { number: 9, startTime: "19:30", endTime: "20:15" },
+    { number: 10, startTime: "20:25", endTime: "21:10" }
+];
 
 function powerSplit(paramsRaw) {
     const args = [];
@@ -249,6 +261,62 @@ function parseSemesterResponse(raw) {
     };
 }
 
+function normalizeNumericDate(year, month, day) {
+    const yearNumber = Number(year);
+    const monthNumber = Number(month);
+    const dayNumber = Number(day);
+    const date = new Date(Date.UTC(yearNumber, monthNumber - 1, dayNumber));
+    if (
+        date.getUTCFullYear() !== yearNumber ||
+        date.getUTCMonth() + 1 !== monthNumber ||
+        date.getUTCDate() !== dayNumber
+    ) {
+        return null;
+    }
+
+    return [
+        String(yearNumber).padStart(4, "0"),
+        String(monthNumber).padStart(2, "0"),
+        String(dayNumber).padStart(2, "0")
+    ].join("-");
+}
+
+function parseCalendarInfo(html) {
+    const text = String(html || "")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;|&#160;|&#x0*A0;/gi, " ")
+        .replace(/\u00a0/g, " ");
+    const match = text.match(
+        /(\d{4})\s*-\s*(\d{1,2})\s*-\s*(\d{1,2})\s*~\s*(\d{4})\s*-\s*(\d{1,2})\s*-\s*(\d{1,2})\s*\(\s*(\d+)\s*\)/
+    );
+    if (!match) return null;
+
+    const semesterStartDate = normalizeNumericDate(match[1], match[2], match[3]);
+    const semesterEndDate = normalizeNumericDate(match[4], match[5], match[6]);
+    const semesterTotalWeeks = Number(match[7]);
+    if (
+        !semesterStartDate ||
+        !semesterEndDate ||
+        semesterEndDate < semesterStartDate ||
+        !Number.isInteger(semesterTotalWeeks) ||
+        semesterTotalWeeks < 1 ||
+        semesterTotalWeeks > MAX_SUPPORTED_WEEK
+    ) {
+        return null;
+    }
+
+    return {
+        semesterStartDate,
+        semesterEndDate,
+        semesterTotalWeeks,
+        firstDayOfWeek: 1
+    };
+}
+
+function getZuaTimeSlots() {
+    return ZUA_TIME_SLOTS.map(slot => ({ ...slot }));
+}
+
 async function request(url, options = {}) {
     const response = await fetch(url, { credentials: "include", ...options });
     if (!response.ok) throw new Error(`网络请求失败: ${response.status}`);
@@ -303,6 +371,55 @@ async function fetchAndParseCourses(semesterId, ids) {
     return parseTaskActivities(html);
 }
 
+async function fetchCalendarInfo(semesterId) {
+    const form = new URLSearchParams();
+    form.set("version", "1");
+    form.set("semesterId", String(semesterId));
+
+    const html = await request(`${BASE_URL}/eams/base/calendar-info.action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+        body: form.toString()
+    });
+    const calendarInfo = parseCalendarInfo(html);
+    if (!calendarInfo) throw new Error("未能解析学期日历");
+    return calendarInfo;
+}
+
+async function trySaveCalendarInfo(semesterId) {
+    try {
+        const calendarInfo = await fetchCalendarInfo(semesterId);
+        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+            semesterStartDate: calendarInfo.semesterStartDate,
+            semesterTotalWeeks: calendarInfo.semesterTotalWeeks,
+            firstDayOfWeek: calendarInfo.firstDayOfWeek
+        }));
+        return true;
+    } catch (error) {
+        console.warn(`[ZUA 学期信息设置失败] ${error.message}`);
+        return false;
+    }
+}
+
+async function trySaveTimeSlots() {
+    try {
+        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(getZuaTimeSlots()));
+        return true;
+    } catch (error) {
+        console.warn(`[ZUA 作息时间设置失败] ${error.message}`);
+        return false;
+    }
+}
+
+function buildCompletionMessage(calendarSaved, timeSlotsSaved) {
+    if (calendarSaved && timeSlotsSaved) return "成功导入课表、学期信息和郑航作息";
+    if (!calendarSaved && !timeSlotsSaved) {
+        return "课表已导入，学期日期和作息时间设置失败，请在设置中确认";
+    }
+    if (!calendarSaved) return "课表已导入，学期日期获取失败，请在设置中确认";
+    return "课表已导入，作息时间设置失败，请在设置中确认";
+}
+
 async function runImportFlow() {
     try {
         AndroidBridge.showToast("开始探测郑航教务参数...");
@@ -317,10 +434,12 @@ async function runImportFlow() {
         if (!courses || courses.length === 0) throw new Error("未解析到课程数据");
 
         const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        if (saveResult) {
-            AndroidBridge.showToast(`成功导入 ${courses.length} 个课程条目，请按学校当前安排核对作息时间`);
-            AndroidBridge.notifyTaskCompletion();
-        }
+        if (!saveResult) throw new Error("课程保存失败");
+
+        const calendarSaved = await trySaveCalendarInfo(semester.id);
+        const timeSlotsSaved = await trySaveTimeSlots();
+        AndroidBridge.showToast(buildCompletionMessage(calendarSaved, timeSlotsSaved));
+        AndroidBridge.notifyTaskCompletion();
     } catch (error) {
         console.error(`[ZUA 课表导入异常] ${error.message}`);
         AndroidBridge.showToast(error.message);
