@@ -563,6 +563,11 @@ schools:
     initial: "H"
     resource_folder: "HFNU"
 
+  - id: "ZUA"
+    name: "郑州航空工业管理学院"
+    initial: "Z"
+    resource_folder: "ZUA"
+
   - id: "JHZYEDU"
     name: "江西航空职业技术学院"
     initial: "J"
