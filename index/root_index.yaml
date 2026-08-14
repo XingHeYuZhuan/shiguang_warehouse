@@ -697,3 +697,8 @@ schools:
     name: "黑龙江大学"
     initial: "H"
     resource_folder: "HLJU"
+
+  - id: "YZU"
+    name: "扬州大学"
+    initial: "Y"
+    resource_folder: "YZU"
