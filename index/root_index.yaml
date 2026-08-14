@@ -702,4 +702,8 @@ schools:
     name: "上海财经大学浙江学院"
     initial: "S"
     resource_folder: "SHUFEZJ"
-
+    
+  - id: "YZU"
+    name: "扬州大学"
+    initial: "Y"
+    resource_folder: "YZU"   
