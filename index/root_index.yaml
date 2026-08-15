@@ -707,3 +707,8 @@ schools:
     name: "扬州大学"
     initial: "Y"
     resource_folder: "YZU"   
+
+  - id: "XUST"
+    name: "西安科技大学"
+    initial: "X"
+    resource_folder: "XUST"       
