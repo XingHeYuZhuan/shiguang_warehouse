@@ -1,0 +1,9 @@
+# resources/SWJTU/adapters.yaml
+adapters:
+  - adapter_id: "SWJTU_01"
+    adapter_name: "西南交通大学VATUU为途教务系统"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "swjtu_vatuu.js"
+    import_url: "https://jwc.swjtu.edu.cn/service/login.jsp"
+    maintainer: "Weedy233"
+    description: "登录VATUU为途教务系统后，进入本学期选课/课表页面执行导入"
