@@ -592,3 +592,8 @@ schools:
     name: "浙江中医药大学"
     initial: "Z"
     resource_folder: "ZCMU"
+
+  - id: "XASY"
+    name: "西安石油大学"
+    initial: "X"
+    resource_folder: "XASY"

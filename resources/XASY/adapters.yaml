@@ -1,0 +1,8 @@
+adapters:
+  - adapter_id: "XASY_01"
+    adapter_name: "西安石油大学"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "XASY.js"
+    import_url: "https://jwxt.xsyu.edu.cn/eams/login.action"
+    maintainer: "biduoBD"
+    description: "西安石油大学青果教务适配，登录统一身份认证后跳转教务系统，选择学期自动导入课表"
