@@ -1,4 +1,12 @@
-# shiguang_warehouse
+# shiguang_warehouse  
+
+>[!WARNING]
+>本仓库将于2026/8/23将适配版本升级至v2版本，截止2026/8/23日期前允许提交v1版本的适配代码，不必担心升级问题，我们将通过迁移程序升级仓库里面的现有适配  
+>目前仓库索引还是保持在v1版本标识，支持v2适配版本的软件版本已经发布[v2.0.0](https://github.com/XingHeYuZhuan/shiguangschedule/releases/tag/v2.0.0) 请尽快升级保证兼容  
+>
+> 参考文档：[适配开发变化日志](https://github.com/XingHeYuZhuan/shiguangschedule/wiki/%E9%80%82%E9%85%8D%E6%9B%B4%E6%96%B0%E6%97%A5%E5%BF%97)  
+> 为了保障还未升级软件版本在2026/8/23前可以使用新增的适配代码，请开发者尽量使用v1版本接口提交  
+> 本条目将于升级结束后移除
 
 本仓库用于管理 [shiguangschedule](https://github.com/XingHeYuZhuan/shiguangschedule) 的适配脚本，供软件拉取和测试。
 
@@ -96,9 +104,6 @@ adapters: #固定字段
 Fork 本仓库 → 在 index/root_index.yaml 文件中登记 → 在 resources 目录创建学校文件夹 → 创建 adapters.yaml 和适配脚本 → 推送到自己仓库并充分测试 → 提交 PR 到上游 pending 分支等待合并
 ```
 
-### Fork 仓库
-本仓库带有 `lighthouse` 标签，已在开发者版 APP 中关闭检查逻辑，请开发者对使用的仓库链接负责。
-
 ### 添加适配代码
 > [!note]
 > 在**不更新索引**的情况下，修改任何 yaml 文件是没有作用的（任何对于 yaml 文件的修改都需要编译索引才能应用），所以才提供了 asset_js_path: `test.js` 占位，用于在不更新索引的情况下测试适配代码
@@ -121,7 +126,8 @@ Fork 本仓库 → 在 index/root_index.yaml 文件中登记 → 在 resources �
 > 如需更新索引，可自行了解仓库的 CI 配置（不建议测试适配时还更新索引）
 
 ### 软件测试
-开发者需要安装开发者版 APP（红色图标），在软件的“我的-更多-更新仓库”中选择**自定义仓库或私有仓库**，来拉取并更新自己的仓库代码进行实际测试，完成 Beta 阶段适配验证。
+开发者需要在"更多"页面点击图标5次打开开发者功能，在软件的“我的-更多-更新仓库”中选择**自定义仓库或私有仓库**，来拉取并更新自己的仓库代码进行实际测试，完成 Beta 阶段适配验证。  
+从2.x版本开始不在维护两个版本，开发者功能已合并至正式版本，在"更多"页面点击图标5次打开开发者功能
 
 ### 提交 PR
 测试通过后，提交 Pull Request，等待审核合并。
