@@ -1,7 +1,8 @@
 /**
- * 广东海洋大学教务适配
+ * 广东海洋大学阳江校区教务适配
  * @date 2026-7-30
- * @author Mccurtain
+ * @author Mccurtain (原始 GDOU 适配)
+ * @adapted-by Yihe-ng (阳江校区作息与适配)
  * @version 1.1
  */
 
@@ -76,6 +77,25 @@ function parseSectionRange(sectionStr) {
 }
 
 /**
+ * 阳江校区其他场地（非慎思楼）的作息。
+ * 只有第 3、4 节在校区作息表中是不同的连续时间块，使用自定义时间表示。
+ */
+const OTHER_VENUE_SECTION_3_4_TIME = { startTime: "10:10", endTime: "11:40" };
+
+function getOtherVenueCustomTime(position, startSection, endSection) {
+    const positionText = position == null ? '' : String(position);
+    if (!positionText || positionText.includes("慎思楼")) {
+        return null;
+    }
+
+    if (startSection !== 3 || endSection !== 4) {
+        return null;
+    }
+
+    return OTHER_VENUE_SECTION_3_4_TIME;
+}
+
+/**
  * 解析正方 v9 课表查询接口返回的 JSON 数据。
  */
 function parseJsonData(jsonData) {
@@ -131,6 +151,17 @@ function parseJsonData(jsonData) {
             weeks: weeksArray
         };
 
+        const customTime = getOtherVenueCustomTime(
+            course.position,
+            course.startSection,
+            course.endSection
+        );
+        if (customTime) {
+            course.isCustomTime = true;
+            course.customStartTime = customTime.startTime;
+            course.customEndTime = customTime.endTime;
+        }
+
         finalCourseList.push(course);
     }
 
@@ -171,8 +202,8 @@ function getDefaultAcademicYear(date = new Date()) {
 async function promptUserToStart() {
     console.log("JS: 流程开始：显示公告。");
     return await window.AndroidBridgePromise.showAlert(
-        "广东海洋大学教务系统课表导入",
-        "导入前请确保您已在浏览器中成功登录广东海洋大学教务系统（jw.gdou.edu.cn）。\n本脚本将通过接口直接获取课表，无需停留在特定页面。",
+        "广东海洋大学阳江校区教务系统课表导入",
+        "导入前请确保您已在浏览器中成功登录广东海洋大学教务系统（jw.gdou.edu.cn）。\n本脚本将通过接口直接获取阳江校区课表，无需停留在特定页面。",
         "好的，开始导入"
     );
 }
@@ -277,16 +308,16 @@ async function saveCourses(parsedCourses) {
     }
 }
 
-// 广东海洋大学通用上课时间
+// 阳江校区慎思楼上课时间（根据用户提供的校区作息表）
 const TimeSlots = [
     { number: 1, startTime: "08:10", endTime: "08:55" },
-    { number: 2, startTime: "09:00", endTime: "09:45" },
-    { number: 3, startTime: "10:15", endTime: "11:00" },
-    { number: 4, startTime: "11:05", endTime: "11:50" },
+    { number: 2, startTime: "09:05", endTime: "09:50" },
+    { number: 3, startTime: "10:20", endTime: "11:05" },
+    { number: 4, startTime: "11:15", endTime: "12:00" },
     { number: 5, startTime: "14:30", endTime: "15:15" },
     { number: 6, startTime: "15:20", endTime: "16:05" },
-    { number: 7, startTime: "16:30", endTime: "17:15" },
-    { number: 8, startTime: "17:20", endTime: "18:05" },
+    { number: 7, startTime: "16:20", endTime: "17:05" },
+    { number: 8, startTime: "17:10", endTime: "17:55" },
     { number: 9, startTime: "19:30", endTime: "20:15" },
     { number: 10, startTime: "20:25", endTime: "21:10" }
 ];
