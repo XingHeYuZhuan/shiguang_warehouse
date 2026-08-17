@@ -95,7 +95,7 @@ async function fetchCourseData(xnxqdm) {
     let total = 0;
 
     while (true) {
-        const res = await fetch("https://ejwc.glmu.edu.cn/xsgrkbcx!getDataList.action", {
+        const res = await fetch("https://ejwc.glmc.edu.cn/xsgrkbcx!getDataList.action", {
             headers: {
                 "accept": "application/json, text/javascript, */*; q=0.01",
                 "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
