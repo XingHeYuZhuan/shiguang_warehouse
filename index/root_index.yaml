@@ -716,4 +716,9 @@ schools:
   - id: "XUST"
     name: "西安科技大学"
     initial: "X"
-    resource_folder: "XUST"       
+    resource_folder: "XUST"
+
+  - id: "JSTC"
+    name: "江苏旅游职业学院"
+    initial: "J"
+    resource_folder: "JSTC"           
