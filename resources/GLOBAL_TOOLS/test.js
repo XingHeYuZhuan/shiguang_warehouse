@@ -160,6 +160,16 @@ async function selectSemester() {
     return semesterIndex; // 可能是 -1 或 null
 }
 
+async function selectArea() {
+    const semesters = ["东校区-西校区-北校区","白云校区","河源校区"];
+    console.log("JS: 提示用户选择校区。");
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择校区",
+        JSON.stringify(semesters),
+        0
+    );
+    return AreaIndex; 
+}
 // 新增：获取可选开始日期
 async function getSemesterStartDate() {
     console.log("JS: 提示用户输入学期开始日期（可留空跳过）。");
@@ -272,18 +282,47 @@ async function saveCourses(parsedCourses) {
     }
 }
 
-// 统一作息时间（需确认广师大实际时间）
-const TimeSlots = [
-    { number: 1, startTime: "08:30", endTime: "09:15" },
-    { number: 2, startTime: "09:20", endTime: "10:05" },
-    { number: 3, startTime: "10:25", endTime: "11:10" },
-    { number: 4, startTime: "11:15", endTime: "12:00" },
-    { number: 5, startTime: "14:40", endTime: "15:25" },
-    { number: 6, startTime: "15:30", endTime: "16:15" },
-    { number: 7, startTime: "16:30", endTime: "17:15" },
-    { number: 8, startTime: "17:20", endTime: "18:05" },
-    { number: 9, startTime: "19:30", endTime: "20:15" },
-    { number: 10, startTime: "20:20", endTime: "21:05" },
+// 统一作息时间（东校区
+const TimeSlots_one = [
+    { number: 1, startTime: "08:20", endTime: "09:00" },
+    { number: 2, startTime: "09:10", endTime: "09:50" },
+    { number: 3, startTime: "10:00", endTime: "10:40" },
+    { number: 4, startTime: "10:50", endTime: "11:30" },
+    { number: 5, startTime: "13:30", endTime: "14:10" },
+    { number: 6, startTime: "14:20", endTime: "15:00" },
+    { number: 7, startTime: "15:10", endTime: "15:50" },
+    { number: 8, startTime: "16:00", endTime: "16:40" },
+    { number: 9, startTime: "18:40", endTime: "19:20" },
+    { number: 10, startTime: "19:30", endTime: "20:10" },
+    { number: 11, startTime: "20:20", endTime: "21:00" },
+];
+//白云
+const TimeSlots_two = [
+    { number: 1, startTime: "08:30", endTime: "09:10" },
+    { number: 2, startTime: "09:15", endTime: "09:55" },
+    { number: 3, startTime: "10:05", endTime: "10:45" },
+    { number: 4, startTime: "10:50", endTime: "11:30" },
+    { number: 5, startTime: "13:30", endTime: "14:10" },
+    { number: 6, startTime: "14:15", endTime: "14:55" },
+    { number: 7, startTime: "15:05", endTime: "15:45" },
+    { number: 8, startTime: "15:50", endTime: "16:30" },
+    { number: 9, startTime: "18:40", endTime: "19:20" },
+    { number: 10, startTime: "19:25", endTime: "20:05" },
+    { number: 11, startTime: "20:10", endTime: "20:50" },
+];
+//河源
+const TimeSlots_three = [
+    { number: 1, startTime: "08:20", endTime: "09:00" },
+    { number: 2, startTime: "09:10", endTime: "09:50" },
+    { number: 3, startTime: "10:10", endTime: "10:50" },
+    { number: 4, startTime: "11:00", endTime: "11:40" },
+    { number: 5, startTime: "13:50", endTime: "14:30" },
+    { number: 6, startTime: "14:40", endTime: "15:20" },
+    { number: 7, startTime: "15:40", endTime: "16:20" },
+    { number: 8, startTime: "16:30", endTime: "17:10" },
+    { number: 9, startTime: "18:40", endTime: "19:20" },
+    { number: 10, startTime: "19:30", endTime: "20:10" },
+    { number: 11, startTime: "20:20", endTime: "21:00" },
 ];
 
 async function importPresetTimeSlots(timeSlots) {
