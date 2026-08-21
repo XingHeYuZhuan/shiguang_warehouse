@@ -2,8 +2,8 @@
 adapters:
   - adapter_id: "GPNU_01"
     adapter_name: "广师大教务"
-    category: ""
+    category: "GENERAL_TOOL"
     asset_js_path: "gpnu_01.js"
     import_url: "https://jwglxt.gpnu.edu.cn/sso/lyiotlogin"
-    maintainer: ""
+    maintainer: "moondish"
     description: "适配教务管理系统，登录后导入个人课表"
