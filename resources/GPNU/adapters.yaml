@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "gpnu_01.js"
     import_url: "https://jwglxt.gpnu.edu.cn/sso/lyiotlogin"
     maintainer: "moondish"
-    description: "适配教务管理系统，登录后导入个人课表"
+    description: "适配教务管理系统，登录后导入个人课表(可不打开相应页面)🤓如有bug请提交issues,泥雞又赢了🤣"
