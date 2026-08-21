@@ -8,14 +8,11 @@
 function parseWeeks(weekStr) {
     if (!weekStr || typeof weekStr !== 'string') return [];
 
-    // 去除 "周" 字和空格
     let cleanStr = weekStr.replace(/周/g, '').replace(/\s+/g, '');
 
-    // 检测单双周标记
     let oddOnly = false, evenOnly = false;
     if (/单/.test(cleanStr)) oddOnly = true;
     if (/双/.test(cleanStr)) evenOnly = true;
-    // 移除括号和单双字
     cleanStr = cleanStr.replace(/\(单\)|\(双\)|单|双/g, '');
 
     const weeks = new Set();
@@ -61,7 +58,6 @@ function parseJsonData(jsonData) {
     const finalCourseList = [];
 
     for (const rawCourse of rawCourseList) {
-        // 关键字段检查
         if (!rawCourse.kcmc || !rawCourse.xm || !rawCourse.cdmc ||
             !rawCourse.xqj || !rawCourse.jcs || !rawCourse.zcd) {
             continue;
@@ -72,12 +68,11 @@ function parseJsonData(jsonData) {
             continue;
         }
 
-        // 解析节次范围，例如 "1-2"
         const sectionParts = rawCourse.jcs.split('-');
         const startSection = Number(sectionParts[0]);
         const endSection = Number(sectionParts[sectionParts.length - 1]);
 
-        const day = Number(rawCourse.xqj); // 1=周一 ... 7=周日
+        const day = Number(rawCourse.xqj);
 
         if (isNaN(day) || isNaN(startSection) || isNaN(endSection) ||
             day < 1 || day > 7 || startSection > endSection) {
@@ -110,16 +105,15 @@ function parseJsonData(jsonData) {
 function validateYearInput(input) {
     console.log("JS: validateYearInput 被调用，输入: " + input);
     if (/^[0-9]{4}$/.test(input)) {
-        return false; // 验证通过
+        return false;
     } else {
-        return "请输入四位数字的学年！";
+        return "请输入四位数字的学年喵~";
     }
 }
 
-// 日期验证：允许空或 YYYY-MM-DD 格式
 function validateDateInput(input) {
     if (input.trim() === '') {
-        return false; // 空值允许
+        return false;
     }
     if (/^\d{4}-\d{2}-\d{2}$/.test(input.trim())) {
         return false;
@@ -142,7 +136,7 @@ async function getAcademicYear() {
     const currentYear = new Date().getFullYear().toString();
     console.log("JS: 提示用户输入学年。");
     return await window.shiguangBridgePromise.showPrompt(
-        "选择学年",
+        "选择学年喵~",
         "请输入要导入课程的起始学年（例如 2025-2026 应输入2025）:",
         currentYear,
         "validateYearInput"
@@ -153,24 +147,24 @@ async function selectSemester() {
     const semesters = ["第一学期", "第二学期"];
     console.log("JS: 提示用户选择学期。");
     const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
-        "选择学期",
+        "选择学期喵~",
         JSON.stringify(semesters),
         0
     );
-    return semesterIndex; // 可能是 -1 或 null
+    return semesterIndex;
 }
 
 async function selectArea() {
-    const semesters = ["东校区-西校区-北校区","白云校区","河源校区"];
+    const areas = ["东校区-西校区-北校区", "白云校区", "河源校区"];
     console.log("JS: 提示用户选择校区。");
-    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
-        "选择校区",
-        JSON.stringify(semesters),
+    const areaIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择校区喵~",
+        JSON.stringify(areas),
         0
     );
-    return AreaIndex; 
+    return areaIndex; 
 }
-// 新增：获取可选开始日期
+
 async function getSemesterStartDate() {
     console.log("JS: 提示用户输入学期开始日期（可留空跳过）。");
     const input = await window.shiguangBridgePromise.showPrompt(
@@ -179,23 +173,18 @@ async function getSemesterStartDate() {
         "",
         "validateDateInput"
     );
-    // 如果用户取消（返回 null），继续流程，开始日期为 null
     if (input === null) {
         console.log("JS: 用户取消了开始日期输入，继续流程。");
         return null;
     }
-    // 如果用户输入空字符串，也视为 null
     if (input.trim() === '') {
         return null;
     }
     return input.trim();
 }
 
-/**
- * 将选择索引转换为 API 所需的学期码。
- */
 function getSemesterCode(semesterIndex) {
-    // 3 表示第一学期，12 表示第二学期（广师大确认）
+    // 3 表示第一学期，12 表示第二学期
     return semesterIndex === 0 ? "3" : "12";
 }
 
@@ -229,12 +218,11 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
                 if (jsonData && jsonData.kbList) {
                     const parsedCourses = parseJsonData(jsonData);
                     if (parsedCourses.length > 0) {
-                        // 自动推断总周数
                         const totalWeeks = inferTotalWeeks(parsedCourses);
                         return {
                             courses: parsedCourses,
                             config: {
-                                semesterStartDate: null, // 稍后填充
+                                semesterStartDate: null,
                                 semesterTotalWeeks: totalWeeks
                             }
                         };
@@ -250,11 +238,6 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
     return null;
 }
 
-/**
- * 从课程周次中推断学期总周数（取最大周次）。
- * @param {Array} courses - 课程数组
- * @returns {number} 总周数
- */
 function inferTotalWeeks(courses) {
     let maxWeek = 0;
     for (const course of courses) {
@@ -263,7 +246,7 @@ function inferTotalWeeks(courses) {
             maxWeek = Math.max(maxWeek, ...weekNums);
         }
     }
-    return maxWeek || 20; // 若推断失败则默认20
+    return maxWeek || 20;
 }
 
 // ===================== 数据保存 =====================
@@ -282,7 +265,9 @@ async function saveCourses(parsedCourses) {
     }
 }
 
-// 统一作息时间（东校区
+// ===================== 三个校区的时间表 =====================
+
+// 东校区-西校区-北校区（统一）
 const TimeSlots_one = [
     { number: 1, startTime: "08:20", endTime: "09:00" },
     { number: 2, startTime: "09:10", endTime: "09:50" },
@@ -294,9 +279,10 @@ const TimeSlots_one = [
     { number: 8, startTime: "16:00", endTime: "16:40" },
     { number: 9, startTime: "18:40", endTime: "19:20" },
     { number: 10, startTime: "19:30", endTime: "20:10" },
-    { number: 11, startTime: "20:20", endTime: "21:00" },
+    { number: 11, startTime: "20:20", endTime: "21:00" }
 ];
-//白云
+
+// 白云校区
 const TimeSlots_two = [
     { number: 1, startTime: "08:30", endTime: "09:10" },
     { number: 2, startTime: "09:15", endTime: "09:55" },
@@ -308,9 +294,10 @@ const TimeSlots_two = [
     { number: 8, startTime: "15:50", endTime: "16:30" },
     { number: 9, startTime: "18:40", endTime: "19:20" },
     { number: 10, startTime: "19:25", endTime: "20:05" },
-    { number: 11, startTime: "20:10", endTime: "20:50" },
+    { number: 11, startTime: "20:10", endTime: "20:50" }
 ];
-//河源
+
+// 河源校区
 const TimeSlots_three = [
     { number: 1, startTime: "08:20", endTime: "09:00" },
     { number: 2, startTime: "09:10", endTime: "09:50" },
@@ -322,8 +309,17 @@ const TimeSlots_three = [
     { number: 8, startTime: "16:30", endTime: "17:10" },
     { number: 9, startTime: "18:40", endTime: "19:20" },
     { number: 10, startTime: "19:30", endTime: "20:10" },
-    { number: 11, startTime: "20:20", endTime: "21:00" },
+    { number: 11, startTime: "20:20", endTime: "21:00" }
 ];
+
+// 根据校区索引获取对应时间表
+function getTimeSlotsByAreaIndex(areaIndex) {
+    if (areaIndex === 0) return TimeSlots_one;
+    if (areaIndex === 1) return TimeSlots_two;
+    if (areaIndex === 2) return TimeSlots_three;
+    // 默认返回第一个
+    return TimeSlots_one;
+}
 
 async function importPresetTimeSlots(timeSlots) {
     console.log(`JS: 准备导入 ${timeSlots.length} 个预设时间段。`);
@@ -369,7 +365,14 @@ async function runImportFlow() {
     }
     console.log(`JS: 已选择学期索引: ${semesterIndex}`);
 
-    // 新增：获取可选开始日期
+    const areaIndex = await selectArea();
+    if (areaIndex === null || areaIndex === -1) {
+        window.shiguangBridge.showToast("导入已取消。");
+        console.log("JS: 选择校区失败/取消，流程终止。");
+        return;
+    }
+    console.log(`JS: 已选择校区索引: ${areaIndex}`);
+
     const startDate = await getSemesterStartDate();
     console.log(`JS: 学期开始日期输入结果: ${startDate}`);
 
@@ -379,7 +382,6 @@ async function runImportFlow() {
         return;
     }
 
-    // 将开始日期填入 config
     result.config.semesterStartDate = startDate;
     const { courses, config } = result;
 
@@ -397,7 +399,9 @@ async function runImportFlow() {
         console.error('JS: Save Config Error:', error);
     }
 
-    await importPresetTimeSlots(TimeSlots);
+    // 根据校区选择对应时间表并导入
+    const timeSlots = getTimeSlotsByAreaIndex(areaIndex);
+    await importPresetTimeSlots(timeSlots);
 
     window.shiguangBridge.showToast(`课程导入成功，共导入 ${courses.length} 门课程！`);
     console.log("JS: 整个导入流程执行完毕并成功。");
