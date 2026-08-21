@@ -135,8 +135,7 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
     // 定义可能的入口地址：1. WebVPN 穿透地址 2. 内网直连地址
     // 该学校反馈内网环境下 webvpn的入口会被跳转为内网地址 因此特别调整为存在多个链接获取，没有这个问题的适配参考可以简化逻辑
     const targetUrls = [
-        "https://webvpn.gdust.edu.cn/http/77726476706e69737468656265737421a1a013d2766626022b5cc7fd/kbcx/xskbcx_cxXsgrkb.html?vpn-12-o1-172.16.254.1&gnmkdm=N2151",
-        "http://172.16.254.1/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151"
+        "https://jwglxt.gpnu.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default"
     ];
 
     for (const url of targetUrls) {
