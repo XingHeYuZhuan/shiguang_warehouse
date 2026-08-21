@@ -9,18 +9,25 @@ function parseWeeks(weekStr) {
     if (!weekStr || typeof weekStr !== 'string') return [];
 
     let cleanStr = weekStr.replace(/周/g, '').replace(/\s+/g, '');
-
-    let oddOnly = false, evenOnly = false;
-    if (/单/.test(cleanStr)) oddOnly = true;
-    if (/双/.test(cleanStr)) evenOnly = true;
-    cleanStr = cleanStr.replace(/\(单\)|\(双\)|单|双/g, '');
-
     const weeks = new Set();
     const parts = cleanStr.split(',');
 
-    for (let part of parts) {
+    for (let rawPart of parts) {
+        if (!rawPart) continue; // 跳过空段，防止产生 0 周
+
+        let part = rawPart;
+        let oddOnly = false;
+        let evenOnly = false;
+
+        // 逐段检测单双周标记
+        if (/单/.test(part)) oddOnly = true;
+        if (/双/.test(part)) evenOnly = true;
+        part = part.replace(/\(单\)|\(双\)|单|双/g, '');
+
         if (part.includes('-')) {
-            const [start, end] = part.split('-').map(Number);
+            const [startStr, endStr] = part.split('-');
+            const start = Number(startStr);
+            const end = Number(endStr);
             if (!isNaN(start) && !isNaN(end) && start <= end) {
                 for (let w = start; w <= end; w++) {
                     if (oddOnly && w % 2 !== 1) continue;
@@ -68,7 +75,9 @@ function parseJsonData(jsonData) {
             continue;
         }
 
-        const sectionParts = rawCourse.jcs.split('-');
+        // 去除“节”字后再拆分，防止 "1-2节" 导致 NaN
+        const jcs = String(rawCourse.jcs).replace(/节/g, '');
+        const sectionParts = jcs.split('-');
         const startSection = Number(sectionParts[0]);
         const endSection = Number(sectionParts[sectionParts.length - 1]);
 
@@ -104,19 +113,22 @@ function parseJsonData(jsonData) {
 
 function validateYearInput(input) {
     console.log("JS: validateYearInput 被调用，输入: " + input);
+    if (input === null || input === undefined) {
+        return "请输入四位数字的学年喵~";
+    }
     if (/^[0-9]{4}$/.test(input)) {
-        return false;
+        return false; // 校验通过
     } else {
         return "请输入四位数字的学年喵~";
     }
 }
 
 function validateDateInput(input) {
-    if (input.trim() === '') {
-        return false;
+    if (input === null || input === undefined || input.trim() === '') {
+        return false; // 允许空值（留空跳过）
     }
     if (/^\d{4}-\d{2}-\d{2}$/.test(input.trim())) {
-        return false;
+        return false; // 校验通过
     }
     return "日期格式应为 YYYY-MM-DD，例如 2026-08-30";
 }
@@ -146,23 +158,25 @@ async function getAcademicYear() {
 async function selectSemester() {
     const semesters = ["第一学期", "第二学期"];
     console.log("JS: 提示用户选择学期。");
-    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
+    const rawIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期喵~",
         JSON.stringify(semesters),
         0
     );
-    return semesterIndex;
+    // 统一转换为数字，避免字符串索引导致判断错误
+    return Number(rawIndex);
 }
 
 async function selectArea() {
-    const areas = ["东校区-西校区-北校区", "白云校区", "河源校区"];
+    const areas = ["东/西/北校区", "白云校区", "河源校区"];
     console.log("JS: 提示用户选择校区。");
-    const areaIndex = await window.shiguangBridgePromise.showSingleSelection(
+    const rawIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择校区喵~",
         JSON.stringify(areas),
         0
     );
-    return areaIndex; 
+    // 统一转换为数字
+    return Number(rawIndex);
 }
 
 async function getSemesterStartDate() {
@@ -204,9 +218,8 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-                    "X-Requested-With": "XMLHttpRequest",
-                    "Referer": "https://jwglxt.gpnu.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default",
-                    "Origin": "https://jwglxt.gpnu.edu.cn"
+                    "X-Requested-With": "XMLHttpRequest"
+                    // 注意：浏览器禁止手动设置 Origin 和 Referer，已移除。
                 },
                 body: requestBody,
                 credentials: "include"
@@ -230,7 +243,7 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
                 }
             }
         } catch (e) {
-            console.error(`Entry failed: ${url}`);
+            console.error(`Entry failed: ${url}`, e);
         }
     }
 
@@ -358,7 +371,7 @@ async function runImportFlow() {
     console.log(`JS: 已选择学年: ${academicYear}`);
 
     const semesterIndex = await selectSemester();
-    if (semesterIndex === null || semesterIndex === -1) {
+    if (semesterIndex === null || isNaN(semesterIndex) || semesterIndex < 0) {
         window.shiguangBridge.showToast("导入已取消。");
         console.log("JS: 选择学期失败/取消，流程终止。");
         return;
@@ -366,7 +379,7 @@ async function runImportFlow() {
     console.log(`JS: 已选择学期索引: ${semesterIndex}`);
 
     const areaIndex = await selectArea();
-    if (areaIndex === null || areaIndex === -1) {
+    if (areaIndex === null || isNaN(areaIndex) || areaIndex < 0) {
         window.shiguangBridge.showToast("导入已取消。");
         console.log("JS: 选择校区失败/取消，流程终止。");
         return;
@@ -408,5 +421,12 @@ async function runImportFlow() {
     window.shiguangBridge.notifyTaskCompletion();
 }
 
-// 启动导入流程
-runImportFlow();
+// 启动导入流程，并添加全局异常捕获
+runImportFlow().catch(e => {
+    console.error('JS: 导入流程异常：', e);
+    try {
+        window.shiguangBridge.showToast('导入失败：' + (e && e.message ? e.message : e));
+    } catch (_) {
+        // 忽略
+    }
+});
