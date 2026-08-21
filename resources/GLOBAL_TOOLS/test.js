@@ -131,35 +131,36 @@ function getSemesterCode(semesterIndex) {
 async function fetchAndParseCourses(academicYear, semesterIndex) {
     const semesterCode = getSemesterCode(semesterIndex);
     const requestBody = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=`;
-    
-    // 定义可能的入口地址：1. WebVPN 穿透地址 2. 内网直连地址
-    // 该学校反馈内网环境下 webvpn的入口会被跳转为内网地址 因此特别调整为存在多个链接获取，没有这个问题的适配参考可以简化逻辑
+
     const targetUrls = [
-        "https://jwglxt.gpnu.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default"
+        "https://jwglxt.gpnu.edu.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151"
     ];
 
     for (const url of targetUrls) {
         try {
             const response = await fetch(url, {
                 method: "POST",
-                headers: { 
-                    "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" 
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+                    "X-Requested-With": "XMLHttpRequest",          // 抓包显示必须有
+                    "Referer": "https://jwglxt.gpnu.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default", // 建议添加
+                    "Origin": "https://jwglxt.gpnu.edu.cn"           // 同源请求可加可不加，加上更保险
                 },
                 body: requestBody,
-                credentials: "include"
+                credentials: "include"                              // 携带 Cookie，保持登录状态
             });
 
             if (response.ok) {
                 const jsonText = await response.text();
                 const jsonData = JSON.parse(jsonText);
-                if (jsonData && jsonData.kbList) {
+                if (jsonData && jsonData.kbList) {                 // ⚠️ 如果实际字段不是 kbList，请修改
                     const parsedCourses = parseJsonData(jsonData);
                     if (parsedCourses.length > 0) {
                         return {
                             courses: parsedCourses,
                             config: {
                                 semesterStartDate: null,
-                                semesterTotalWeeks: 20
+                                semesterTotalWeeks: 20             // 可根据实际学期周数调整
                             }
                         };
                     }
