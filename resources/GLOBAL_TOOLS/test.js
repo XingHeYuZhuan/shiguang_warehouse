@@ -130,7 +130,7 @@ function getSemesterCode(semesterIndex) {
  */
 async function fetchAndParseCourses(academicYear, semesterIndex) {
     const semesterCode = getSemesterCode(semesterIndex);
-    const requestBody = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=`;
+    const requestBody = `gnmkdm=N2151&xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=&kclxdm=`;
 
     const targetUrls = [
         "https://jwglxt.gpnu.edu.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151"
