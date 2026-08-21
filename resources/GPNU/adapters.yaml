@@ -1,0 +1,9 @@
+# resources/BUPT/adapters.yaml
+adapters:
+  - adapter_id: "GPNU_01"
+    adapter_name: "广师大教务"
+    category: ""
+    asset_js_path: "gpnu_01.js"
+    import_url: "https://jwglxt.gpnu.edu.cn/sso/lyiotlogin"
+    maintainer: ""
+    description: "适配教务管理系统，登录后导入个人课表"
