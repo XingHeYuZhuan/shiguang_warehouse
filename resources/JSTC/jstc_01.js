@@ -2,7 +2,10 @@
 // 非该大学开发者适配,开发者无法及时发现问题
 // 出现问题请提issues或者提交pr更改,这更加快速
 
-const presetTimeSlots = [
+
+
+// 不确定是否还有效的数据 仅保留代码内部不做调用
+const presetTimeSlots_oldFunction = [
     { number: 1, startTime: "08:00", endTime: "08:45" },
     { number: 2, startTime: "08:50", endTime: "09:35" },
     { number: 3, startTime: "09:55", endTime: "10:40" },
@@ -15,6 +18,24 @@ const presetTimeSlots = [
     { number: 10, startTime: "19:00", endTime: "19:45" },
     { number: 11, startTime: "19:50", endTime: "20:35" }
 ];
+
+
+
+
+const presetTimeSlots = [
+    { number: 1, startTime: "08:00", endTime: "08:40" },
+    { number: 2, startTime: "08:50", endTime: "09:30" },
+    { number: 3, startTime: "09:50", endTime: "10:30" },
+    { number: 4, startTime: "10:40", endTime: "11:20" },
+    { number: 5, startTime: "11:30", endTime: "12:10" },
+    { number: 6, startTime: "14:00", endTime: "14:40" },
+    { number: 7, startTime: "14:50", endTime: "15:30" },
+    { number: 8, startTime: "15:50", endTime: "16:30" },
+    { number: 9, startTime: "16:40", endTime: "17:20" },
+    { number: 10, startTime: "19:00", endTime: "19:40" },
+    { number: 11, startTime: "19:50", endTime: "20:30" }
+];
+
 
 /**
  * 获取学期下拉列表选项
