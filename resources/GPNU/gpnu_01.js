@@ -184,7 +184,7 @@ async function getSemesterStartDate() {
     const input = await window.shiguangBridgePromise.showPrompt(
         "学期开始日期（可选）",
         "请输入学期第一天的日期喵~（YYYY-MM-DD），留空则自动留空：",
-        "如2026-03-01",
+        "2026-09-07",
         "validateDateInput"
     );
     if (input === null) {
