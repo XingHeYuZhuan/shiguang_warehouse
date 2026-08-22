@@ -727,3 +727,8 @@ schools:
     name: "广东技术师范大学"
     initial: "G"
     resource_folder: "GPNU"
+
+  - id: "SYIST"
+    name: "沈阳科技学院"
+    initial: "S"
+    resource_folder: "SYIST"
