@@ -721,4 +721,9 @@ schools:
   - id: "JSTC"
     name: "江苏旅游职业学院"
     initial: "J"
-    resource_folder: "JSTC"           
+    resource_folder: "JSTC"         
+
+  - id: "GPNU"
+    name: "广东技术师范大学"
+    initial: "G"
+    resource_folder: "GPNU"
