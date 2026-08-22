@@ -68,6 +68,11 @@ schools:
     initial: "C"
     resource_folder: "CUIT"
 
+  - id: "CDUTCM"
+    name: "成都中医药大学"
+    initial: "C"
+    resource_folder: "CDUTCM"
+
   - id: "SHZQ"
     name: "上海中侨职业技术大学"
     initial: "S"
