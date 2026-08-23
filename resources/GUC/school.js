@@ -2,11 +2,18 @@
 // YETHAN以专教学信息服务平台
 // 该教务系统带图片验证码，需用户在页面内手动登录，脚本基于已登录会话(Cookie)拉取课表
 // 非该大学学生适配可能无法登录,出现问题请通过issues提交反馈
+// 桥接 API 使用 v2：window.shiguangBridge(同步) / window.shiguangBridgePromise(异步)
 
 // ==================== 常量 ====================
 
 // 课表页面地址（selectTableType: ThisTerm=本学期, NextTerm=下学期）
 const COURSE_TABLE_URL = "https://jw.guc.edu.cn/yethan/CourseAction?setAction=userCourseScheduleTable&viewType=studentCourseTableWeek&selectTableType=";
+
+// 默认导入本学期；如需导入下学期请改为 "NextTerm"
+const SELECT_TABLE_TYPE = "ThisTerm";
+
+// 拉取课表请求超时时间（毫秒）
+const FETCH_TIMEOUT_MS = 15000;
 
 // 吉利学院作息时间（第1节~第11节）
 const TIME_SLOTS = [
@@ -32,8 +39,8 @@ const TIME_SLOTS = [
 function parseWeeks(weekStr) {
     const weeks = [];
     if (!weekStr) return weeks;
-    // 去掉"周"及可能存在的(单)/(双)等标记
-    const pureWeekData = weekStr.replace(/周/g, "").split("(")[0];
+    // 去掉"周"及可能存在的(单)/(双)等标记（兼容全角/半角括号）
+    const pureWeekData = weekStr.replace(/周/g, "").replace(/[（(].*$/, "");
     pureWeekData.split(",").forEach(seg => {
         seg = seg.trim();
         if (!seg) return;
@@ -132,20 +139,20 @@ function parseTimetableToCourses(html) {
             const raw = (clone.textContent || "").replace(/\u00A0/g, " ");
             const segments = raw.split("\n").map(s => s.trim()).filter(s => s.length > 0);
 
-            // 课程块成对出现：[课程行, 周次地点行], [课程行, 周次地点行], ...
-            for (let j = 0; j + 1 < segments.length; j += 2) {
+            // 课程块形如 [课程行, 周次地点行] 成对出现。
+            // 逐段消费：仅当"本段是课程行且下一段形如 '…周 …' 的周次地点行"才配对，
+            // 避免教务改版导致段落错位时漏课或串位
+            for (let j = 0; j < segments.length; j++) {
                 const courseInfo = parseCourseLine(segments[j]);
                 if (!courseInfo) continue;
+                if (j + 1 >= segments.length) continue;
 
                 // 周次地点行，形如 "1-5,7-9,11-16周 L255极简型智慧教室"
                 const timePlace = segments[j + 1];
                 const match = timePlace.match(/^(.+?)周\s*(.*)$/);
-                let weeks = [];
-                let position = timePlace;
-                if (match) {
-                    weeks = parseWeeks(match[1]);
-                    position = (match[2] || "").trim();
-                }
+                if (!match) continue;
+                const weeks = parseWeeks(match[1]);
+                const position = (match[2] || "").trim();
                 if (weeks.length === 0) continue;
 
                 results.push({
@@ -157,6 +164,7 @@ function parseTimetableToCourses(html) {
                     endSection: section,
                     weeks: weeks
                 });
+                j++; // 已消费周次地点行
             }
         }
     }
@@ -167,121 +175,108 @@ function parseTimetableToCourses(html) {
 // ==================== 网络请求 ====================
 
 /**
- * 检测是否已登录：未登录时接口会返回登录页（含验证码输入框）。
+ * 拉取本学期课表页面并检测登录状态（一次请求完成）。
+ * 返回 { loggedIn, html }：
+ *   - loggedIn=false：未登录（页面含验证码输入框/登录表单）
+ *   - html 为 null：请求失败、超时或页面无课表
  */
-async function isLoggedIn() {
+async function fetchTimetableOnce() {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-        const resp = await fetch(COURSE_TABLE_URL + "ThisTerm&queryType=student", { credentials: "include" });
+        const resp = await fetch(COURSE_TABLE_URL + SELECT_TABLE_TYPE + "&queryType=student", {
+            credentials: "include",
+            signal: controller.signal
+        });
+        if (!resp.ok) return { loggedIn: false, html: null };
         const html = await resp.text();
-        if (html.includes('id="ranstring"') || html.includes("LoginForm")) return false;
-        return html.includes("table_border");
-    } catch (e) {
-        console.error("登录检测失败:", e);
-        return false;
-    }
-}
-
-/**
- * 拉取课表页面 HTML。
- */
-async function fetchTimetable(selectTableType) {
-    try {
-        const resp = await fetch(COURSE_TABLE_URL + selectTableType + "&queryType=student", { credentials: "include" });
-        if (!resp.ok) return null;
-        const html = await resp.text();
-        if (!html.includes("table_border")) return null;
-        return html;
+        const loggedIn = !(html.includes('id="ranstring"') || html.includes("LoginForm"));
+        if (!loggedIn || !html.includes("table_border")) return { loggedIn, html: null };
+        return { loggedIn: true, html };
     } catch (e) {
         console.error("获取课表失败:", e);
-        return null;
+        return { loggedIn: false, html: null };
+    } finally {
+        clearTimeout(timer);
     }
 }
 
 // ==================== 主流程 ====================
 
 async function runImportFlow() {
-    window.shiguangBridge.showToast("正在初始化吉利学院课表导入...");
+    const BRIDGE = window.shiguangBridge;
+    const BRIDGE_P = window.shiguangBridgePromise;
+    if (!BRIDGE || !BRIDGE_P) {
+        console.error("桥接 API 不可用（缺少 window.shiguangBridge / window.shiguangBridgePromise）");
+        return;
+    }
+
+    BRIDGE.showToast("正在初始化吉利学院课表导入...");
 
     // 1. 前置提示
-    const confirmed = await window.shiguangBridgePromise.showAlert(
+    const confirmed = await BRIDGE_P.showAlert(
         "教务系统课表导入",
         "请确认已在当前页面成功登录教务系统（输入学号、密码及验证码）。\n登录成功后点击“好的，开始导入”。",
         "好的，开始导入"
     );
     if (!confirmed) {
-        window.shiguangBridge.showToast("已取消导入");
+        BRIDGE.showToast("已取消导入");
         return;
     }
 
-    // 2. 检测登录状态
-    window.shiguangBridge.showToast("正在检测登录状态...");
-    if (!(await isLoggedIn())) {
-        await window.shiguangBridgePromise.showAlert(
+    // 2. 拉取本学期课表并检测登录状态
+    BRIDGE.showToast("正在获取课表数据...");
+    const { loggedIn, html } = await fetchTimetableOnce();
+    if (!loggedIn) {
+        await BRIDGE_P.showAlert(
             "未检测到登录状态",
             "当前会话未登录，请先在页面中完成登录，之后重新发起导入。",
             "知道了"
         );
-        window.shiguangBridge.showToast("未登录，导入中止");
+        BRIDGE.showToast("未登录，导入中止");
         return;
     }
-
-    // 3. 选择学期
-    const semesters = ["本学期", "下学期"];
-    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
-        "选择学期",
-        JSON.stringify(semesters),
-        0
-    );
-    if (semesterIndex === null || semesterIndex === -1) {
-        window.shiguangBridge.showToast("已取消学期选择");
-        return;
-    }
-    const selectTableType = semesterIndex === 0 ? "ThisTerm" : "NextTerm";
-
-    // 4. 拉取课表页面
-    window.shiguangBridge.showToast("正在获取课表数据...");
-    const html = await fetchTimetable(selectTableType);
     if (!html) {
-        window.shiguangBridge.showToast("获取课表失败，请确认登录状态后重试");
+        BRIDGE.showToast("获取课表失败，请确认登录状态后重试");
         return;
     }
 
-    // 5. 解析课程
+    // 3. 解析课程（默认本学期）
     const courses = parseTimetableToCourses(html);
     if (courses.length === 0) {
-        window.shiguangBridge.showToast("未解析到课程数据，请确认当前学期是否有课程");
+        BRIDGE.showToast("未解析到课程数据，请确认本学期是否有课程");
         return;
     }
     console.log("解析到课程记录数:", courses.length, courses);
 
-    // 6. 保存课程
+    // 4. 保存课程
     try {
-        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        window.shiguangBridge.showToast(`成功保存 ${courses.length} 条课程记录`);
+        await BRIDGE_P.saveImportedCourses(JSON.stringify(courses));
+        BRIDGE.showToast(`成功保存 ${courses.length} 条课程记录`);
     } catch (e) {
-        window.shiguangBridge.showToast("课程保存失败: " + e.message);
+        BRIDGE.showToast("课程保存失败: " + e.message);
         return;
     }
 
-    // 7. 保存作息时间
+    // 5. 保存作息时间
     try {
-        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
-        window.shiguangBridge.showToast("作息时间保存成功");
+        await BRIDGE_P.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+        BRIDGE.showToast("作息时间保存成功");
     } catch (e) {
-        window.shiguangBridge.showToast("作息时间保存失败: " + e.message);
+        BRIDGE.showToast("作息时间保存失败: " + e.message);
     }
 
-    // 8. 保存课表配置（按课程数据中的最大周数设置学期总周数）
+    // 6. 保存课表配置（按课程数据中的最大周数设置学期总周数）
     try {
         const maxWeek = courses.reduce((max, c) => Math.max(max, Math.max(...c.weeks)), 0);
-        const config = { semesterStartDate: null, semesterTotalWeeks: Math.max(maxWeek, 1) };
-        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+        const config = { semesterTotalWeeks: Math.max(maxWeek, 1) };
+        await BRIDGE_P.saveCourseConfig(JSON.stringify(config));
     } catch (e) {
-        window.shiguangBridge.showToast("课表配置保存失败: " + e.message);
+        BRIDGE.showToast("课表配置保存失败: " + e.message);
     }
 
-    window.shiguangBridge.showToast(`课表导入完成，共 ${courses.length} 条记录`);
-    window.shiguangBridge.notifyTaskCompletion();
+    BRIDGE.showToast(`课表导入完成，共 ${courses.length} 条记录`);
+    BRIDGE.notifyTaskCompletion();
 }
 
 // 启动导入流程
