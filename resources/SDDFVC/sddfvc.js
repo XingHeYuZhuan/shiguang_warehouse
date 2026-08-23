@@ -85,7 +85,7 @@ async function saveAppConfig() {
         "defaultBreakDuration": 15,
         "firstDayOfWeek": 1
     };
-    return await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+    return await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 }
 
 /**
@@ -100,7 +100,7 @@ async function saveAppTimeSlots() {
         { "number": 5, "startTime": "19:00", "endTime": "19:30" },
         { "number": 6, "startTime": "20:00", "endTime": "20:45" }
     ];
-    return await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+    return await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
 }
 
 /**
@@ -115,7 +115,7 @@ async function getSelectedSemesterId(apiToken) {
     const xqNames = xqList.map(item => item.xqmc);
     const defaultIdx = xqList.findIndex(item => item.id === currentXq.id);
 
-    const selectedIdx = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIdx = await window.shiguangBridgePromise.showSingleSelection(
         "请确认导入学期",
         JSON.stringify(xqNames),
         defaultIdx !== -1 ? defaultIdx : xqNames.length - 1
@@ -156,7 +156,7 @@ async function fetchFullSemesterData(apiToken, semesterId) {
     const totalWeeks = 22;
 
     for (let w = 1; w <= totalWeeks; w++) {
-        AndroidBridge.showToast(`正在获取第 ${w}/${totalWeeks} 周...`);
+        window.shiguangBridge.showToast(`正在获取第 ${w}/${totalWeeks} 周...`);
         try {
             const res = await fetch(`http://jwxt.sddfvc.edu.cn/mobile/student/mobile_kcb?api_token=${apiToken}&xq=${semesterId}&week=${w}`);
             const json = await res.json();
@@ -181,35 +181,35 @@ async function runImportFlow() {
         const apiToken = urlParams.get('api_token');
         if (!apiToken) {
             console.error("当前 URL 中未找到 api_token 参数:", window.location.href);
-            AndroidBridge.showToast("未检测到登录 Token，请确保在课表页面运行");
+            window.shiguangBridge.showToast("未检测到登录 Token，请确保在课表页面运行");
             return;
         }
         const semesterId = await getSelectedSemesterId(apiToken);
         if (!semesterId) {
-            AndroidBridge.showToast("导入已取消");
+            window.shiguangBridge.showToast("导入已取消");
             return;
         }
 
         // 直接进入周遍历模式
-        AndroidBridge.showToast("开始抓取周课表数据...");
+        window.shiguangBridge.showToast("开始抓取周课表数据...");
         const finalCourses = await fetchFullSemesterData(apiToken, semesterId);
 
         if (finalCourses.length === 0) {
-            AndroidBridge.showToast("未发现任何课程数据");
+            window.shiguangBridge.showToast("未发现任何课程数据");
             return;
         }
 
         // 保存逻辑
-        AndroidBridge.showToast("正在保存配置...");
+        window.shiguangBridge.showToast("正在保存配置...");
         await saveAppConfig();
         await saveAppTimeSlots();
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
         
-        AndroidBridge.showToast(`成功导入 ${finalCourses.length} 门课程`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${finalCourses.length} 门课程`);
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (error) {
-        AndroidBridge.showToast("异常: " + error.message);
+        window.shiguangBridge.showToast("异常: " + error.message);
     }
 }
 

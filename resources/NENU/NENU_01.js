@@ -14,8 +14,8 @@ function parseWeeks(weekStr) {
 
 async function runImportFlow() {
     try {
-        if (typeof window.AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast("正在获取作息时间与学期列表...");
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast("正在获取作息时间与学期列表...");
         } else {
             console.log("【1/4】正在请求 week.page 获取学期和作息时间...");
         }
@@ -63,12 +63,12 @@ async function runImportFlow() {
 
         // 2. 选择学期
         let selectedIdx = defaultIndex;
-        if (typeof window.AndroidBridgePromise !== 'undefined') {
-            let userChoice = await window.AndroidBridgePromise.showSingleSelection(
+        if (typeof window.shiguangBridgePromise !== 'undefined') {
+            let userChoice = await window.shiguangBridgePromise.showSingleSelection(
                 "请选择要导入的学期", JSON.stringify(semesters), defaultIndex
             );
             if (userChoice === null) {
-                AndroidBridge.showToast("已取消导入");
+                window.shiguangBridge.showToast("已取消导入");
                 return;
             }
             selectedIdx = userChoice;
@@ -82,8 +82,8 @@ async function runImportFlow() {
         }
 
         const targetXnxqdm = semesterValues[selectedIdx];
-        if (typeof window.AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast(`正在获取 [${semesters[selectedIdx]}] 数据...`);
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast(`正在获取 [${semesters[selectedIdx]}] 数据...`);
         }
 
         // 3. 请求课表接口
@@ -107,8 +107,8 @@ async function runImportFlow() {
         
         if (apiJson.data.length === 0) {
             const errMsg = "该学期暂无排课数据。";
-            if (typeof window.AndroidBridgePromise !== 'undefined') {
-                await window.AndroidBridgePromise.showAlert("提示", errMsg, "好的");
+            if (typeof window.shiguangBridgePromise !== 'undefined') {
+                await window.shiguangBridgePromise.showAlert("提示", errMsg, "好的");
             } else alert(errMsg);
             return;
         }
@@ -160,7 +160,7 @@ async function runImportFlow() {
         const config = { "defaultClassDuration": 45, "defaultBreakDuration": 10 };
 
         // 浏览器测试输出
-        if (typeof window.AndroidBridgePromise === 'undefined') {
+        if (typeof window.shiguangBridgePromise === 'undefined') {
             console.log("【修正后的正常网格时间】", standardTimeSlots);
             console.log(`【提取的课程 (${uniqueCourses.length}门)】\n`, JSON.stringify(uniqueCourses, null, 2));
             alert("解析成功！已将中午课程转为无缝自定义时间。请看F12。");
@@ -168,20 +168,20 @@ async function runImportFlow() {
         }
 
         // 5. 保存到APP
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(standardTimeSlots));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(standardTimeSlots));
         
-        const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(uniqueCourses));
+        const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(uniqueCourses));
         if (!saveResult) {
-            AndroidBridge.showToast("保存失败，请重试！");
+            window.shiguangBridge.showToast("保存失败，请重试！");
             return;
         }
 
-        AndroidBridge.showToast(`成功导入 ${uniqueCourses.length} 节课程！`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${uniqueCourses.length} 节课程！`);
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (error) {
-        if (typeof window.AndroidBridge !== 'undefined') AndroidBridge.showToast("异常: " + error.message);
+        if (typeof window.shiguangBridge !== 'undefined') window.shiguangBridge.showToast("异常: " + error.message);
         else alert("异常: " + error.message);
     }
 }

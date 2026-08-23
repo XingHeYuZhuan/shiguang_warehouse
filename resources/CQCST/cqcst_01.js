@@ -1,7 +1,7 @@
 async function runImportFlow() {
     // 兼容电脑端测试
-    if (typeof window.AndroidBridgePromise === 'undefined') {
-        window.AndroidBridgePromise = {
+    if (typeof window.shiguangBridgePromise === 'undefined') {
+        window.shiguangBridgePromise = {
             showAlert: async () => true,
             saveImportedCourses: async (json) => {
                 console.log("===============================");
@@ -12,21 +12,21 @@ async function runImportFlow() {
                 return true;
             }
         };
-        window.AndroidBridge = {
+        window.shiguangBridge = {
             showToast: (msg) => console.log("[系统提示] " + msg),
             notifyTaskCompletion: () => console.log("[流程结束] 任务已完成并通知APP")
         };
     }
 
-    AndroidBridge.showToast("开始提取课表数据...");
+    window.shiguangBridge.showToast("开始提取课表数据...");
 
     const table = document.getElementById('kbtable') || document.querySelector('.table_border') || document.querySelector('table');
     if (!table || !table.innerText.includes('星期')) {
-        AndroidBridge.showToast("没找到课表！请确保您当前在“学期理论课表”页面。");
+        window.shiguangBridge.showToast("没找到课表！请确保您当前在“学期理论课表”页面。");
         return;
     }
 
-    const alertConfirmed = await window.AndroidBridgePromise.showAlert(
+    const alertConfirmed = await window.shiguangBridgePromise.showAlert(
         "强智教务解析",
         "已检测到课表页面，是否提取数据并导入？",
         "确认导入"
@@ -115,22 +115,22 @@ async function runImportFlow() {
         }
 
         if (courses.length === 0) {
-            AndroidBridge.showToast("没有抓取到数据，可能当前表格为空。");
+            window.shiguangBridge.showToast("没有抓取到数据，可能当前表格为空。");
             return;
         }
 
-        AndroidBridge.showToast(`提取成功，共发现 ${courses.length} 门课程，正在保存...`);
+        window.shiguangBridge.showToast(`提取成功，共发现 ${courses.length} 门课程，正在保存...`);
         
-        const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         
         if (saveResult) {
-            AndroidBridge.showToast("导入大功告成！");
-            AndroidBridge.notifyTaskCompletion(); 
+            window.shiguangBridge.showToast("导入大功告成！");
+            window.shiguangBridge.notifyTaskCompletion(); 
         }
 
     } catch (error) {
         console.error("解析过程中发生错误:", error);
-        AndroidBridge.showToast("解析出错啦: " + error.message);
+        window.shiguangBridge.showToast("解析出错啦: " + error.message);
     }
 }
 

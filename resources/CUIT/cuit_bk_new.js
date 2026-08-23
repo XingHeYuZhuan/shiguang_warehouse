@@ -6,16 +6,16 @@
   "use strict";
 
   function showToast(msg) {
-    if (typeof AndroidBridge !== "undefined" && AndroidBridge.showToast) {
-      AndroidBridge.showToast(msg);
+    if (typeof window.shiguangBridge !== "undefined" && window.shiguangBridge.showToast) {
+      window.shiguangBridge.showToast(msg);
     } else {
       console.log("[Toast]", msg);
     }
   }
 
   async function showAlert(title, content, confirmText = "确定") {
-    if (typeof window.AndroidBridgePromise !== "undefined") {
-      return await window.AndroidBridgePromise.showAlert(
+    if (typeof window.shiguangBridgePromise !== "undefined") {
+      return await window.shiguangBridgePromise.showAlert(
         title,
         content,
         confirmText,
@@ -181,7 +181,7 @@
       { number: 11, startTime: "20:25", endTime: "21:10" },
       { number: 12, startTime: "21:20", endTime: "22:05" },
     ];
-    await window.AndroidBridgePromise.savePresetTimeSlots(
+    await window.shiguangBridgePromise.savePresetTimeSlots(
       JSON.stringify(timeSlots),
     );
   }
@@ -199,7 +199,7 @@
       defaultBreakDuration: 10,
       firstDayOfWeek: 1,
     };
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
   }
 
   // ---------- 主流程 ----------
@@ -220,7 +220,7 @@
       if (courses.length === 0) throw new Error("未解析到任何课程");
 
       showToast(`解析到 ${courses.length} 门课程，正在保存...`);
-      await window.AndroidBridgePromise.saveImportedCourses(
+      await window.shiguangBridgePromise.saveImportedCourses(
         JSON.stringify(courses),
       );
 
@@ -229,10 +229,10 @@
 
       showToast(`导入完成！共 ${courses.length} 门课程`);
       if (
-        typeof AndroidBridge !== "undefined" &&
-        AndroidBridge.notifyTaskCompletion
+        typeof window.shiguangBridge !== "undefined" &&
+        window.shiguangBridge.notifyTaskCompletion
       ) {
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.notifyTaskCompletion();
       }
     } catch (error) {
       console.error(error);

@@ -551,7 +551,7 @@ function validateDateFormat(dateString) {
 
 // 弹出日期确认对话框
 async function setStartDate(suggestedDate) {
-    const dateSelection = await window.AndroidBridgePromise.showPrompt(
+    const dateSelection = await window.shiguangBridgePromise.showPrompt(
         "请确认学期起始日期",
         `此日期来自您此学期第一节课日期，如有误，请修改（格式：YYYY-MM-DD）：`,
         suggestedDate || "",
@@ -572,7 +572,7 @@ function validateYearInput(input) {
 
 // 选择学年
 async function getAcademicYear(currentYear) {
-    const yearSelection = await window.AndroidBridgePromise.showPrompt(
+    const yearSelection = await window.shiguangBridgePromise.showPrompt(
         "选择学年", 
         "请输入要导入课程的起始学年（例如 2025-2026 应输入2025）:",
         parseInt(currentYear) + 1980, 
@@ -585,7 +585,7 @@ async function getAcademicYear(currentYear) {
 // 选择学期
 async function selectTerms() {
     const terms = ["春（第二学期）", "夏", "秋（第一学期）"];
-    const termIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const termIndex = await window.shiguangBridgePromise.showSingleSelection(
         "请选择学期",
         JSON.stringify(terms),
         -1
@@ -597,13 +597,13 @@ async function selectTerms() {
 
 // 弹出修改学年和学期对话框
 async function setYearAndTerm(currentYear, currentTerm) {
-    const confirmed = await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
         "请确认学年和学期",
         `当前学年为 ${parseInt(currentYear) + 1980} 年，学期为 ${currentTerm === '3' ? '秋（第一学期）' : currentTerm === '1' ? '春（第二学期）' : '夏'}。是否需要修改？`,
         "我要修改"
     );
     if (!confirmed) {
-        AndroidBridge.showToast("使用默认学年和学期进行导入。");
+        window.shiguangBridge.showToast("使用默认学年和学期进行导入。");
         return false;
     }
     return true;
@@ -613,12 +613,12 @@ async function setYearAndTerm(currentYear, currentTerm) {
 
 async function runImportFlow() {
 
-    AndroidBridge.showToast("即将开始导入课表，请稍候...");
+    window.shiguangBridge.showToast("即将开始导入课表，请稍候...");
 
     // 获取学年学期信息
     const semesterInfo = await getSemesterInfo("http://jw.imut.edu.cn/academic/student/currcourse/currcourse.jsdo");
     if (!semesterInfo) {
-        AndroidBridge.showToast("获取学生信息失败，请重试！");
+        window.shiguangBridge.showToast("获取学生信息失败，请重试！");
         return;
     }
     currentYear = semesterInfo.year; // 当前年份 - 1980
@@ -629,13 +629,13 @@ async function runImportFlow() {
     if (needModify) {
         currentYear = await getAcademicYear(currentYear);
         currentTerm = await selectTerms();
-        AndroidBridge.showToast(`当前年份与学期已修改为：${parseInt(currentYear) + 1980} 年，学期 ${currentTerm === 2 ? '夏' : currentTerm === 1 ? '春（第二学期）' : '秋（第一学期）'}`);
+        window.shiguangBridge.showToast(`当前年份与学期已修改为：${parseInt(currentYear) + 1980} 年，学期 ${currentTerm === 2 ? '夏' : currentTerm === 1 ? '春（第二学期）' : '秋（第一学期）'}`);
     }
 
     // 设置当前学年和学期
     const setResult = await setCurrentYearAndTerm(currentYear, currentTerm);
     if (!setResult) {
-        AndroidBridge.showToast("设置学年和学期失败！");
+        window.shiguangBridge.showToast("设置学年和学期失败！");
         return;
     }
 
@@ -645,13 +645,13 @@ async function runImportFlow() {
     // 获取时段数据
     const timeSlots = await getTimeSlotsArray(timetableUrl);
     if (!timeSlots || timeSlots.length === 0) {
-        AndroidBridge.showToast("获取时间段信息失败，使用默认时间段！");
+        window.shiguangBridge.showToast("获取时间段信息失败，使用默认时间段！");
     }
 
     // 获取并转换课程表数据
     let courses = await convertToTargetFormat(timetableUrl);
     if (courses.length === 0) {
-        AndroidBridge.showToast("获取课程表数据失败，请重试！");
+        window.shiguangBridge.showToast("获取课程表数据失败，请重试！");
         return;
     }
 
@@ -671,7 +671,7 @@ async function runImportFlow() {
         firstCourseDate = await setStartDate(firstCourseDate);
     } catch (err) {
         console.error("用户取消了日期输入:", err);
-        AndroidBridge.showToast("未输入起始日期。");
+        window.shiguangBridge.showToast("未输入起始日期。");
     }
 
     // 获取最大周数
@@ -692,38 +692,38 @@ async function runImportFlow() {
 
     // 提交课程数据
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         const coursesCount = courses.length;
-        AndroidBridge.showToast(`课程导入成功，共导入 ${coursesCount} 门课程！`);
+        window.shiguangBridge.showToast(`课程导入成功，共导入 ${coursesCount} 门课程！`);
     } catch (err) {
         console.error("课程导入失败:", err);
-        AndroidBridge.showToast("课程导入失败：" + err.message);
+        window.shiguangBridge.showToast("课程导入失败：" + err.message);
         return;
     }
 
     // 提交时间段数据
     try {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-        AndroidBridge.showToast("时间段导入成功！");
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        window.shiguangBridge.showToast("时间段导入成功！");
     } catch (err) {
         console.error("时间段导入失败:", err);
-        AndroidBridge.showToast("时间段导入失败：" + err.message);
+        window.shiguangBridge.showToast("时间段导入失败：" + err.message);
         return;
     }
 
     // 提交课表配置
     try {
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(coursesConfig));
-        AndroidBridge.showToast("课表配置保存成功！");
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(coursesConfig));
+        window.shiguangBridge.showToast("课表配置保存成功！");
     } catch (err) {
         console.error("课表配置保存失败:", err);
-        AndroidBridge.showToast("课表配置保存失败：" + err.message);
+        window.shiguangBridge.showToast("课表配置保存失败：" + err.message);
         return;
     }
 
     // 通知任务完成
     console.log("JS：整个导入流程执行完毕并成功。");
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 
 }
 

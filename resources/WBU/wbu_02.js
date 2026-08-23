@@ -17,8 +17,8 @@
 
 (function () {
     function toast(message) {
-        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
-            window.AndroidBridge.showToast(message);
+        if (window.shiguangBridge && typeof window.shiguangBridge.showToast === "function") {
+            window.shiguangBridge.showToast(message);
         }
     }
 
@@ -32,8 +32,8 @@
     // 桥接端是否支持单选弹窗
     function canShowSingleSelection() {
         return !!(
-            window.AndroidBridgePromise &&
-            typeof window.AndroidBridgePromise.showSingleSelection === "function"
+            window.shiguangBridgePromise &&
+            typeof window.shiguangBridgePromise.showSingleSelection === "function"
         );
     }
 
@@ -412,7 +412,7 @@
 
         console.log(`检测到 ${withId.length} 门课的教师姓名带工号，即将弹出询问...`);
         try {
-            const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+            const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
                 `教师姓名带工号（共 ${withId.length} 门课）`,
                 JSON.stringify(options),
                 0
@@ -509,7 +509,7 @@
             "即将弹出询问..."
         );
         try {
-            const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+            const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
                 title,
                 JSON.stringify(options),
                 0
@@ -633,7 +633,7 @@
             );
             let selectedIndex;
             try {
-                selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+                selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
                     pageIndex === 0
                         ? "请选择要导出的学年学期"
                         : "更多学期（第 " + (pageIndex + 1) + " 页 / 共 " + pages.length + " 页）",
@@ -924,7 +924,7 @@
         const defaultIndex = Math.max(0, campuses.findIndex((c) => c.id === defaultId));
         let selectedIndex;
         try {
-            selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+            selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
                 "检测到多个校区且作息不同，请选择要导出的校区",
                 JSON.stringify(labels),
                 defaultIndex
@@ -1056,21 +1056,21 @@
         }
 
         try {
-            const result = await window.AndroidBridgePromise.saveImportedCourses(
+            const result = await window.shiguangBridgePromise.saveImportedCourses(
                 JSON.stringify(courses)
             );
             if (result === true) {
                 if (timeSlots.length) {
-                    await window.AndroidBridgePromise.savePresetTimeSlots(
+                    await window.shiguangBridgePromise.savePresetTimeSlots(
                         JSON.stringify(timeSlots)
                     );
                 }
                 if (
                     semesterConfig &&
-                    window.AndroidBridgePromise &&
-                    typeof window.AndroidBridgePromise.saveCourseConfig === "function"
+                    window.shiguangBridgePromise &&
+                    typeof window.shiguangBridgePromise.saveCourseConfig === "function"
                 ) {
-                    await window.AndroidBridgePromise.saveCourseConfig(
+                    await window.shiguangBridgePromise.saveCourseConfig(
                         JSON.stringify({
                             semesterStartDate: semesterConfig.semesterStartDate,
                             semesterTotalWeeks: semesterConfig.semesterTotalWeeks,
@@ -1078,7 +1078,7 @@
                     );
                 }
                 toast("课表导出成功");
-                window.AndroidBridge.notifyTaskCompletion();
+                window.shiguangBridge.notifyTaskCompletion();
             } else {
                 toast("课表导出失败，请查看控制台日志");
             }

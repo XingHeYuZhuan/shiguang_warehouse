@@ -277,12 +277,12 @@ async function getCourseConfig() {
  * 在浏览器调试环境中仅打印结果，不调用 AndroidBridge。
  */
 async function runImportFlow() {
-    const isApp = typeof window.AndroidBridgePromise !== 'undefined';
-    const hasToast = typeof window.AndroidBridge !== 'undefined';
+    const isApp = typeof window.shiguangBridgePromise !== 'undefined';
+    const hasToast = typeof window.shiguangBridge !== 'undefined';
 
     try {
         if (hasToast) {
-            AndroidBridge.showToast("正在拉取课表，请稍候...");
+            window.shiguangBridge.showToast("正在拉取课表，请稍候...");
         } else {
             console.log("[HUSE] 开始请求课表页面...");
         }
@@ -314,7 +314,7 @@ async function runImportFlow() {
             const msg = "未解析到任何课程，当前学期可能暂无排课。";
             console.warn("[HUSE] " + msg);
             if (isApp) {
-                await window.AndroidBridgePromise.showAlert("提示", msg, "好的");
+                await window.shiguangBridgePromise.showAlert("提示", msg, "好的");
             } else {
                 alert(msg);
             }
@@ -336,30 +336,30 @@ async function runImportFlow() {
         }
 
         // APP 环境：保存课表配置与作息时间
-        const configSaved = await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
-        const slotsSaved = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        const configSaved = await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+        const slotsSaved = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         if (!configSaved || !slotsSaved) {
             // 时间配置保存失败不强制中断，继续尝试导入课程
             console.warn("[HUSE] 课表时间配置保存失败，将继续尝试导入课程。");
-            AndroidBridge.showToast("时间配置保存失败，继续导入课程...");
+            window.shiguangBridge.showToast("时间配置保存失败，继续导入课程...");
         }
 
         // APP 环境：保存课程数据
-        const courseSaved = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        const courseSaved = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (!courseSaved) {
             console.error("[HUSE] 课程数据保存失败。");
-            AndroidBridge.showToast("课程保存失败，请重试！");
+            window.shiguangBridge.showToast("课程保存失败，请重试！");
             return;
         }
 
         console.log(`[HUSE] 导入完成，共写入 ${courses.length} 门课程。`);
-        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程及作息时间！`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程及作息时间！`);
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (err) {
         console.error("[HUSE] 导入流程发生异常：", err);
         if (hasToast) {
-            AndroidBridge.showToast("导入失败：" + err.message);
+            window.shiguangBridge.showToast("导入失败：" + err.message);
         } else {
             alert("导入失败：" + err.message);
         }

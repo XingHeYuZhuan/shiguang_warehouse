@@ -39,7 +39,7 @@ async function selectTerm() {
         term.semester === defaultTerm.semester
     ));
 
-    const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(terms.map((term) => term.label)),
         defaultIndex
@@ -150,37 +150,37 @@ async function fetchCourses(term) {
 }
 
 async function saveCourses(courses) {
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 
     const semesterTotalWeeks = courses.reduce((maximum, course) => {  
         const courseMaximum = course.weeks.length > 0 ? Math.max(...course.weeks) : 0;  
         return Math.max(maximum, courseMaximum);  
     }, HUST_DEFAULT_SEMESTER_WEEKS);  
 
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({ semesterTotalWeeks }));  
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({ semesterTotalWeeks }));  
 }
 
 async function runImportFlow() {
     try {
         const term = await selectTerm();
         if (term === null) {
-            AndroidBridge.showToast("已取消导入");
+            window.shiguangBridge.showToast("已取消导入");
             return;
         }
 
-        AndroidBridge.showToast(`正在获取 ${term.label} 课表...`);
+        window.shiguangBridge.showToast(`正在获取 ${term.label} 课表...`);
         const courses = await fetchCourses(term);
         if (courses.length === 0) {
-            AndroidBridge.showToast("该学期未查询到有效课程，请检查学期或登录状态");
+            window.shiguangBridge.showToast("该学期未查询到有效课程，请检查学期或登录状态");
             return;
         }
 
         await saveCourses(courses);
-        AndroidBridge.showToast(`成功导入 ${courses.length} 个课程时段，请按校历设置开学日期`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 个课程时段，请按校历设置开学日期`);
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
         console.error("课表导入失败:", error);
-        AndroidBridge.showToast(`导入失败：${error?.message ?? error}`);
+        window.shiguangBridge.showToast(`导入失败：${error?.message ?? error}`);
     }
 }
 

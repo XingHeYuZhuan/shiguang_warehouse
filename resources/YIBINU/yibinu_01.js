@@ -201,7 +201,7 @@ async function fetchExperimentCourses(studentId,yearterm,authorization) {
         
         if (!authorization) {
             console.error('未找到 authorization');
-            AndroidBridge.showToast("未找到登录凭证，请重新登录");
+            window.shiguangBridge.showToast("未找到登录凭证，请重新登录");
             return [];
         }
         const res = await fetch(url, {
@@ -226,7 +226,7 @@ async function fetchExperimentCourses(studentId,yearterm,authorization) {
         if (!res.ok) {
             const errorData = await res.json();
             console.error("错误响应:", errorData);
-            AndroidBridge.showToast(`实验课错误：${errorData.msg || res.status}`);
+            window.shiguangBridge.showToast(`实验课错误：${errorData.msg || res.status}`);
             return {};
         }
 
@@ -235,7 +235,7 @@ async function fetchExperimentCourses(studentId,yearterm,authorization) {
         return data;
     } catch (e) {
         console.error(e);
-        AndroidBridge.showToast("实验课获取失败: " + e.message);
+        window.shiguangBridge.showToast("实验课获取失败: " + e.message);
         return {};
     }
 }
@@ -243,7 +243,7 @@ async function fetchExperimentCourses(studentId,yearterm,authorization) {
 function parseExperimentCoursesData(jsonData) {
     console.log("JS: 解析实验课数据...");
     if (!jsonData || jsonData.code !== 200 || !jsonData.result?.list) {
-        AndroidBridge.showToast("未获取到实验课数据！");
+        window.shiguangBridge.showToast("未获取到实验课数据！");
         return [];
     }
     const rawList = jsonData.result.list;
@@ -299,7 +299,7 @@ async function establishSession() {
 
     } catch (e) {
         console.error("错误：", e);
-        AndroidBridge.showToast("会话连接建立失败，请重试！");
+        window.shiguangBridge.showToast("会话连接建立失败，请重试！");
     }
 }
 
@@ -323,7 +323,7 @@ async function fetchTheoryCourses(yearTerm, studentId) {
         return data;
     } catch (e) {
         console.error("错误：", e);
-        AndroidBridge.showToast("获取课表失败：" + e.message);
+        window.shiguangBridge.showToast("获取课表失败：" + e.message);
         return [];
     }
 }
@@ -348,7 +348,7 @@ async function fetchTermInfo(academicYear,term) {
         return data;
     } catch (e) {
         console.error("错误：", e);
-        AndroidBridge.showToast("学期信息获取失败" );
+        window.shiguangBridge.showToast("学期信息获取失败" );
         return {};
     }
 }
@@ -361,7 +361,7 @@ function parseYearTermJson(jsonData){
         return {};
     }
     if(jsonData.datas?.cxjcs?.rows.length===0){
-        AndroidBridge.showToast("所查询的学期信息为空");
+        window.shiguangBridge.showToast("所查询的学期信息为空");
         return {};
     }
 
@@ -380,7 +380,7 @@ function parseTheoryJson(jsonData) {
         return [];
     }
     if(jsonData.datas?.xskcb?.extParams?.code!==1){
-        AndroidBridge.showToast(jsonData.datas?.xskcb?.extParams?.msg);
+        window.shiguangBridge.showToast(jsonData.datas?.xskcb?.extParams?.msg);
         return [];
     }
 
@@ -418,11 +418,11 @@ function parseTheoryJson(jsonData) {
 //保存课表信息配置
 async function saveAllCourses(courses) {
     try { 
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses, null, 2)); 
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses, null, 2)); 
         return true; 
     }
     catch (e) { 
-        AndroidBridge.showToast("课程保存失败"); 
+        window.shiguangBridge.showToast("课程保存失败"); 
         return false; 
     }
 }
@@ -435,7 +435,7 @@ async function saveConfig(semesterTotalWeeks,semesterStartDate) {
         defaultBreakDuration: 5,
         firstDayOfWeek: 1
     };
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 }
 //保存节次信息配置
 function getTimeSlots(){
@@ -457,7 +457,7 @@ function getTimeSlots(){
 }
 async function importTimeSlots() {
     try { 
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(getTimeSlots())); 
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(getTimeSlots())); 
 
     } catch (e) {}
 }
@@ -465,7 +465,7 @@ async function importTimeSlots() {
 // ==================== 用户交互 ====================
 //智慧校园大厅首次执行提示
 async function promptUserToStart() {
-    return await window.AndroidBridgePromise.showAlert(
+    return await window.shiguangBridgePromise.showAlert(
         "宜宾学院课表导入",
         "导入流程:1.在智慧校园内执行脚本→2.在实验教学系统再次执行脚本→3.等待执行完成。\n所有数据采用请求方式，可以不在课表页面执行，如果您担心，也可以在课表页面确认后再执行脚本；执行中途取消后可以再次点击执行",
         "开始导入",
@@ -474,7 +474,7 @@ async function promptUserToStart() {
 //理论课及学期信息保存后提示
 async function askImportExperiment(theoryNum,startDate) {
     const options = ["继续导入实验课", "仅保存理论课"];
-    return await window.AndroidBridgePromise.showSingleSelection(
+    return await window.shiguangBridgePromise.showSingleSelection(
         `获取进度:理论课${theoryNum}门,开学日期${startDate!==undefined?startDate:"未知"}`,
         JSON.stringify(options),
         0
@@ -483,7 +483,7 @@ async function askImportExperiment(theoryNum,startDate) {
 //让用户输入学年
 async function getAcademicYear() {
     const startYear = new Date().getFullYear().toString();
-    return await window.AndroidBridgePromise.showPrompt(
+    return await window.shiguangBridgePromise.showPrompt(
         "选择学年",
         "请输入起始学年（如2025-2026填2025）:",
         startYear,
@@ -496,7 +496,7 @@ function validateYearInput(input) {
 //让用户选择学期
 async function selectSemester() {
     const semesters = ["第一学期", "第二学期"];
-    return await window.AndroidBridgePromise.showSingleSelection(
+    return await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(semesters), 
         0
@@ -504,7 +504,7 @@ async function selectSemester() {
 }
 //准备跳转实验页面的操作提醒
 async function reminderMotion() {
-    return await window.AndroidBridgePromise.showAlert(
+    return await window.shiguangBridgePromise.showAlert(
         "操作提醒(请认真理解！)",
         "在跳转页面后就可以再次点击底部的|执行导入|，不需要登录；\n当然，你也可以登录后去确认你的实验课表，然后再执行导入；\n一句话：跳转页面后一定！一定！一定！要再次点击执行导入！",
         "我已了解下一步操作"
@@ -524,13 +524,13 @@ function isExpLoginPage() {
 // ==================== 1. 理论课流程 ====================
 async function runImportFlow() {
     if (isTheoryLoginPage()) { 
-        AndroidBridge.showToast("请先登录智慧校园！"); 
+        window.shiguangBridge.showToast("请先登录智慧校园！"); 
         return; 
     }
 
     const studentId = localStorage.getItem('ampUserId');
     if (!studentId) {
-        AndroidBridge.showToast("请确保已登录智慧校园！");
+        window.shiguangBridge.showToast("请确保已登录智慧校园！");
         return;
     }
 
@@ -545,7 +545,7 @@ async function runImportFlow() {
     const academicYear = `${startYear}-${Number(startYear)+1}`
     const yearTerm = `${academicYear}-${term}`;
 
-    AndroidBridge.showToast("稍等一下哦,信息获取中");
+    window.shiguangBridge.showToast("稍等一下哦,信息获取中");
     await establishSession();
     const [theoryRes, termInfoRes] = await Promise.all([
         fetchTheoryCourses(yearTerm, studentId),
@@ -577,8 +577,8 @@ async function runImportFlow() {
     await saveConfig(semesterTotalWeeks,semesterStartDate); 
     await importTimeSlots(); 
     await saveAllCourses(theoryCourses);
-    AndroidBridge.showToast(`导入成功！共 ${theoryNum} 门理论课`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`导入成功！共 ${theoryNum} 门理论课`);
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 // ==================== 2. 实验课流程 ====================
@@ -587,12 +587,12 @@ async function runExpAutoMerge() {
         const decodeData = JSON.parse(window.name);
         console.log("数据："+window.name)
         if (!decodeData) {
-            AndroidBridge.showToast("未检测到理论课参数，请重新从理论课流程开始！");
+            window.shiguangBridge.showToast("未检测到理论课参数，请重新从理论课流程开始！");
             return;
         }
         const { theoryCourses, yearTerm, studentId,semesterTotalWeeks,semesterStartDate } = decodeData;
         if (!theoryCourses || !yearTerm || !studentId) {
-            AndroidBridge.showToast("参数不完整，请重新导入理论课！");
+            window.shiguangBridge.showToast("参数不完整，请重新导入理论课！");
             return;
         }
         
@@ -608,11 +608,11 @@ async function runExpAutoMerge() {
         const theoryNum = getCourseNum(theoryCourses);
         const expNum = getCourseNum(expCourses);
         
-        AndroidBridge.showToast(`导入成功！理论课${theoryNum}门 + 实验课${expNum}门`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`导入成功！理论课${theoryNum}门 + 实验课${expNum}门`);
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (err) {
         console.error(err);
-        AndroidBridge.showToast("自动导入失败！请退出重新开始流程");
+        window.shiguangBridge.showToast("自动导入失败！请退出重新开始流程");
     }
 }
 

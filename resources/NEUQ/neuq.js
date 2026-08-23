@@ -275,7 +275,7 @@
 
     async function runImportFlow() {
         // 确保桥接可用
-        if (!window.AndroidBridgePromise) {
+        if (!window.shiguangBridgePromise) {
             throw new Error("AndroidBridgePromise 不可用，无法进行导入交互。");
         }
 
@@ -287,7 +287,7 @@
         });
         const params = parseEntryParams(entryHtml);
         if (!params.studentId || !params.tagId) {
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "参数探测失败",
                 "未能识别学生 ID 或学期组件 tagId，请确认已登录后重试。",
                 "确定"
@@ -306,17 +306,17 @@
             throw new Error("学期列表为空，无法继续导入。");
         }
         const recentSemesters = allSemesters;
-        const selectIndex = await window.AndroidBridgePromise.showSingleSelection(
+        const selectIndex = await window.shiguangBridgePromise.showSingleSelection(
             "请选择导入学期",
             JSON.stringify(recentSemesters.map((s) => s.name || s.id)),
             -1
         );
         if (selectIndex === null) {
-            AndroidBridge.showToast("已取消导入");
+            window.shiguangBridge.showToast("已取消导入");
             return;
         }
         const selectedSemester = recentSemesters[selectIndex];
-        AndroidBridge.showToast("正在获取课表数据...");
+        window.shiguangBridge.showToast("正在获取课表数据...");
 
         // 3. 拉取并解析课表
         const courseHtml = await requestText(`${BASE}/eams/courseTableForStd!courseTable.action?sf_request_type=ajax`, {
@@ -334,7 +334,7 @@
         const courses = parseCoursesFromTaskActivityScript(courseHtml);
         if (courses.length === 0) {
             const debugInfo = extractCourseHtmlDebugInfo(courseHtml);
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "解析失败",
                 `未能从课表响应中识别到课程。\n响应长度: ${debugInfo.responseLength}\n包含 TaskActivity: ${debugInfo.hasTaskActivity}`,
                 "确定"
@@ -343,11 +343,11 @@
         }
 
         // 4. 保存结果
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(getPresetTimeSlots()));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(getPresetTimeSlots()));
 
-        AndroidBridge.showToast(`导入成功，共 ${courses.length} 条课程`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`导入成功，共 ${courses.length} 条课程`);
+        window.shiguangBridge.notifyTaskCompletion();
     }
 
     (async function bootstrap() {
@@ -355,7 +355,7 @@
             await runImportFlow();
         } catch (error) {
             console.error("导入流程失败:", error);
-            AndroidBridge.showToast("自动探测失败，请检查教务连接");
+            window.shiguangBridge.showToast("自动探测失败，请检查教务连接");
         }
     })();
 })();

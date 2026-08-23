@@ -4,7 +4,7 @@
 const PAGE_URL = window.location.href;
 const VPN_BASE = (PAGE_URL.match(/^(https?:\/\/[^/]+\/http[^/]*\/[^/]+)/) || [])[1];
 if (!VPN_BASE) {
-    AndroidBridge.showToast("请通过扬州大学 WebVPN 进入教务系统后使用");
+    window.shiguangBridge.showToast("请通过扬州大学 WebVPN 进入教务系统后使用");
     throw new Error("无法定位 WebVPN 基址");
 }
 
@@ -92,7 +92,7 @@ const FALLBACK_TIME_SLOTS = [
 
 async function runImportFlow() {
     try {
-        const confirmed = await window.AndroidBridgePromise.showAlert(
+        const confirmed = await window.shiguangBridgePromise.showAlert(
             "扬州大学课表导入",
             "请确认：\n1. 已登录扬州大学 WebVPN(webvpn.yzu.edu.cn)\n2. 已进入教务「我的课表」页面（能看到学期下拉框）\n未在课表页会导致获取失败。",
             "好的，开始导入"
@@ -101,7 +101,7 @@ async function runImportFlow() {
 
         const select = document.getElementById("planCode");
         if (!select || select.options.length === 0) {
-            AndroidBridge.showToast("未找到学期选择框，请先进入课表页面");
+            window.shiguangBridge.showToast("未找到学期选择框，请先进入课表页面");
             return;
         }
         const texts = [];
@@ -111,17 +111,17 @@ async function runImportFlow() {
             values.push(select.options[i].value);
         }
         const defaultIndex = select.selectedIndex >= 0 ? select.selectedIndex : 0;
-        const idx = await window.AndroidBridgePromise.showSingleSelection(
+        const idx = await window.shiguangBridgePromise.showSingleSelection(
             "选择学期",
             JSON.stringify(texts),
             defaultIndex
         );
         if (idx === null || idx < 0) {
-            AndroidBridge.showToast("导入已取消");
+            window.shiguangBridge.showToast("导入已取消");
             return;
         }
 
-        AndroidBridge.showToast("正在获取教务数据...");
+        window.shiguangBridge.showToast("正在获取教务数据...");
         const res = await fetch(VPN_BASE + API_PATH, {
             "headers": {
                 "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -137,24 +137,24 @@ async function runImportFlow() {
         const data = await res.json();
         const courses = parseCourses(data);
         if (courses.length === 0) {
-            AndroidBridge.showToast("未解析到课程数据，请确认所选学期有课");
+            window.shiguangBridge.showToast("未解析到课程数据，请确认所选学期有课");
             return;
         }
 
         const timeSlots = parseTimeSlots(data);
-        const ok = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        const ok = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (!ok) {
-            AndroidBridge.showToast("课程保存失败");
+            window.shiguangBridge.showToast("课程保存失败");
             return;
         }
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots.length ? timeSlots : FALLBACK_TIME_SLOTS));
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({ semesterTotalWeeks: 20 }));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots.length ? timeSlots : FALLBACK_TIME_SLOTS));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({ semesterTotalWeeks: 20 }));
 
-        AndroidBridge.showToast("成功导入 " + courses.length + " 个课程时段");
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast("成功导入 " + courses.length + " 个课程时段");
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (e) {
         console.error("导入异常:", e);
-        AndroidBridge.showToast("导入失败: " + e.message);
+        window.shiguangBridge.showToast("导入失败: " + e.message);
     }
 }
 

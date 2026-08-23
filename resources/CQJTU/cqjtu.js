@@ -136,7 +136,7 @@ function parseSchedule() {
   let table = findElementInFrames("#timetable");
 
   if (!table) {
-    AndroidBridge.showToast("请去往学期理论课表界面");
+    window.shiguangBridge.showToast("请去往学期理论课表界面");
     return [];
   }
 
@@ -148,7 +148,7 @@ function parseSchedule() {
     if (rows.length > 0) {
       return parseRowsDirectly(rows);
     }
-    AndroidBridge.showToast("课表结构异常");
+    window.shiguangBridge.showToast("课表结构异常");
     return [];
   }
 
@@ -357,33 +357,33 @@ function parseRowsDirectly(rows) {
 // ===== 保存函数 =====
 
 async function saveCourses(courses) {
-  await window.AndroidBridgePromise.saveImportedCourses(
+  await window.shiguangBridgePromise.saveImportedCourses(
     JSON.stringify(courses),
   );
 }
 
 async function saveTimeSlots(timeSlots) {
-  await window.AndroidBridgePromise.savePresetTimeSlots(
+  await window.shiguangBridgePromise.savePresetTimeSlots(
     JSON.stringify(timeSlots),
   );
 }
 
 async function saveConfig(config) {
-  await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+  await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 }
 
 // ===== 主流程 =====
 
 (async () => {
   if (!checkLogin()) {
-    AndroidBridge.showToast("尚未登录，请先登录！");
+    window.shiguangBridge.showToast("尚未登录，请先登录！");
     return;
   }
 
   const { courses, timeSlots } = parseSchedule();
 
   if (courses.length === 0) {
-    AndroidBridge.showToast("未解析到任何课程");
+    window.shiguangBridge.showToast("未解析到任何课程");
     return;
   }
 
@@ -405,6 +405,6 @@ async function saveConfig(config) {
   await saveTimeSlots(timeSlots);
   await saveConfig(courseConfigData);
 
-  AndroidBridge.showToast(`导入成功！${courses.length}门课程`);
-  AndroidBridge.notifyTaskCompletion();
+  window.shiguangBridge.showToast(`导入成功！${courses.length}门课程`);
+  window.shiguangBridge.notifyTaskCompletion();
 })();

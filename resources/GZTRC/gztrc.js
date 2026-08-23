@@ -187,7 +187,7 @@ async function fetchCourseSchedule(semester, studentId) {
  */
 async function runImportFlow() {
     try {
-        AndroidBridge.showToast("开始导入课表...");
+        window.shiguangBridge.showToast("开始导入课表...");
         
         // 1. 解析用户信息
         const userInfo = parseUserFromCookie();
@@ -197,7 +197,7 @@ async function runImportFlow() {
         const studentId = userInfo.userName;
         
         // 2. 获取学期列表
-        AndroidBridge.showToast("正在获取学期列表...");
+        window.shiguangBridge.showToast("正在获取学期列表...");
         const semesters = await fetchSemesterList();
         if (!semesters || semesters.length === 0) {
             throw new Error("未能获取学期列表，请确认已登录教务系统。");
@@ -212,19 +212,19 @@ async function runImportFlow() {
         }
         
         // 4. 让用户选择学期
-        const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+        const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
             "选择学期",
             JSON.stringify(semesters),
             defaultIndex
         );
         if (semesterIndex === null) {
-            AndroidBridge.showToast("导入已取消。");
+            window.shiguangBridge.showToast("导入已取消。");
             return;
         }
         const selectedSemester = semesters[semesterIndex];
         
         // 5. 获取课表数据
-        AndroidBridge.showToast("正在获取课表数据...");
+        window.shiguangBridge.showToast("正在获取课表数据...");
         const courseData = await fetchCourseSchedule(selectedSemester, studentId);
         
         // 6. 解析课程数据
@@ -241,7 +241,7 @@ async function runImportFlow() {
                     defaultClassDuration: 50,
                     defaultBreakDuration: 10
                 };
-                await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+                await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
             } catch (e) {
                 // 忽略配置保存失败
             }
@@ -250,21 +250,21 @@ async function runImportFlow() {
         // 8. 保存预设时间段
         const timeSlots = getTimeSlots();
         try {
-            await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+            await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         } catch (e) {
-            AndroidBridge.showToast("时间段导入失败，但课程将继续导入。");
+            window.shiguangBridge.showToast("时间段导入失败，但课程将继续导入。");
         }
         
         // 9. 保存课程数据
-        const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (saveResult) {
-            AndroidBridge.showToast("成功导入 " + courses.length + " 条课程记录！");
-            AndroidBridge.notifyTaskCompletion();
+            window.shiguangBridge.showToast("成功导入 " + courses.length + " 条课程记录！");
+            window.shiguangBridge.notifyTaskCompletion();
         }
         
     } catch (e) {
         console.error("[适配脚本错误] " + e.message);
-        AndroidBridge.showToast("导入失败: " + e.message);
+        window.shiguangBridge.showToast("导入失败: " + e.message);
     }
 }
 

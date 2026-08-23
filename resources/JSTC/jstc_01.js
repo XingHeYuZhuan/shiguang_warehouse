@@ -148,38 +148,38 @@ async function fetchAndParseCourses(semesterId) {
  * 流程控制
  */
 async function runImportFlow() {
-    AndroidBridge.showToast("开始拉取学期列表...");
+    window.shiguangBridge.showToast("开始拉取学期列表...");
 
     // 获取学期列表
     const semesters = await fetchSemesters();
     if (!semesters || semesters.length === 0) {
-        AndroidBridge.showToast("获取学期列表失败，请检查登录状态或网络");
+        window.shiguangBridge.showToast("获取学期列表失败，请检查登录状态或网络");
         return;
     }
 
     const labels = semesters.map(s => s.label);
-    const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(labels),
         -1
     );
 
     if (selectedIndex === null || selectedIndex < 0) {
-        AndroidBridge.showToast("操作已取消");
+        window.shiguangBridge.showToast("操作已取消");
         return;
     }
 
     const selectedSemester = semesters[selectedIndex];
 
     // 并行获取元数据与课程表
-    AndroidBridge.showToast("正在拉取课表数据...");
+    window.shiguangBridge.showToast("正在拉取课表数据...");
     const [startDate, courses] = await Promise.all([
         fetchSemesterMetadata(selectedSemester.value),
         fetchAndParseCourses(selectedSemester.value)
     ]);
 
     if (!courses || courses.length === 0) {
-        AndroidBridge.showToast("未查询到有效课程数据");
+        window.shiguangBridge.showToast("未查询到有效课程数据");
         return;
     }
 
@@ -190,31 +190,31 @@ async function runImportFlow() {
     };
 
     try {
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(configData));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(configData));
     } catch (e) {
-        AndroidBridge.showToast("配置保存异常: " + e.message);
+        window.shiguangBridge.showToast("配置保存异常: " + e.message);
         return;
     }
 
     // 保存课程列表
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
     } catch (e) {
-        AndroidBridge.showToast("课程保存异常: " + e.message);
+        window.shiguangBridge.showToast("课程保存异常: " + e.message);
         return;
     }
 
     // 保存预设作息时间
     try {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
     } catch (e) {
-        AndroidBridge.showToast("作息时间保存异常: " + e.message);
+        window.shiguangBridge.showToast("作息时间保存异常: " + e.message);
     }
 
-    AndroidBridge.showToast(`成功导入 ${courses.length} 门课程及作息时间！`);
+    window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程及作息时间！`);
 
     // 任务完成通知
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runImportFlow();
