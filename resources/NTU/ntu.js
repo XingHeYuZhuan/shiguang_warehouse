@@ -227,7 +227,7 @@ async function runImport() {
             const startMonth = Number(semesterStartDate.slice(5, 7));
             if (!Number.isInteger(startMonth) || startMonth < 1 || startMonth > 12) throw new Error(`开学日期格式无效：${semesterStartDate}`);
             const timeSlots = startMonth <= 6 ? WINTER_TIME_SLOTS : SUMMER_TIME_SLOTS;
-            const courseConfig = { semesterTotalWeeks: Math.max(20, ...pageWeeks), firstDayOfWeek: 1 };
+            const courseConfig = { semesterTotalWeeks: Math.max(19, ...pageWeeks), defaultClassDuration: 40, firstDayOfWeek: 1 };
             courseConfig.semesterStartDate = semesterStartDate;
             await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(courseConfig));
             await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
