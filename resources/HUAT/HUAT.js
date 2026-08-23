@@ -495,7 +495,7 @@ function getSeasonTimeSlots(season) {
 // ==================== 弹窗和导入函数 ====================
 async function demoAlert() {
     try {
-        const confirmed = await window.AndroidBridgePromise.showAlert(
+        const confirmed = await window.shiguangBridgePromise.showAlert(
             "📚 湖北汽车工业学院课表导入",
             "将提取当前页面的课表数据并导入到App\n\n" +
             "📌 请确认已在课表页面\n" +
@@ -512,7 +512,7 @@ async function demoAlert() {
 async function demoPrompt() {
     try {
         const semesterInfo = extractSemesterInfo();
-        const semesterStart = await window.AndroidBridgePromise.showPrompt(
+        const semesterStart = await window.shiguangBridgePromise.showPrompt(
             "📅 设置开学日期",
             "请输入本学期开学日期",
             semesterInfo.semesterStartDate,
@@ -535,8 +535,8 @@ async function importPresetTimeSlots() {
     // 修复：使用showConfirmDialog而不是showAlert来确保两个按钮都显示
     try {
         // 尝试使用showConfirmDialog（如果有的话）
-        if (window.AndroidBridgePromise && typeof window.AndroidBridgePromise.showConfirmDialog === 'function') {
-            const seasonChoice = await window.AndroidBridgePromise.showConfirmDialog(
+        if (window.shiguangBridgePromise && typeof window.shiguangBridgePromise.showConfirmDialog === 'function') {
+            const seasonChoice = await window.shiguangBridgePromise.showConfirmDialog(
                 "⏰ 选择作息时间",
                 "请根据当前学期选择作息时间：\n\n🌞 夏季（5月1日-9月30日）\n🍂 秋季（10月1日-次年4月30日）",
                 "夏季",
@@ -551,14 +551,14 @@ async function importPresetTimeSlots() {
             console.log(`选择的季节: ${season}，时间段:`, presetTimeSlots);
             
             // 导入时间段
-            const result = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+            const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
             if (result === true) {
                 console.log("预设时间段导入成功！");
-                window.AndroidBridge.showToast(`✅ ${season === 'summer' ? '夏季' : '秋季'}时间段导入成功！`);
+                window.shiguangBridge.showToast(`✅ ${season === 'summer' ? '夏季' : '秋季'}时间段导入成功！`);
                 return true;
             } else {
                 console.log("预设时间段导入未成功，结果：" + result);
-                window.AndroidBridge.showToast("❌ 时间段导入失败，请查看日志。");
+                window.shiguangBridge.showToast("❌ 时间段导入失败，请查看日志。");
                 return false;
             }
         } 
@@ -567,7 +567,7 @@ async function importPresetTimeSlots() {
             // 方法1：尝试使用showAlert两个按钮 - 修复按钮显示问题
             // 注意：有些AndroidBridge实现中，showAlert的第三个参数是左侧按钮，第四个参数是右侧按钮
             // 确保两个按钮文本都不为空
-            const seasonChoice = await window.AndroidBridgePromise.showAlert(
+            const seasonChoice = await window.shiguangBridgePromise.showAlert(
                 "⏰ 选择作息时间",
                 "请根据当前学期选择作息时间：\n\n🌞 夏季（5月1日-9月30日）\n🍂 秋季（10月1日-次年4月30日）",
                 "夏季",  // 左侧按钮
@@ -599,14 +599,14 @@ async function importPresetTimeSlots() {
             console.log(`选择的季节: ${season}，时间段:`, presetTimeSlots);
             
             // 导入时间段
-            const result = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+            const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
             if (result === true) {
                 console.log("预设时间段导入成功！");
-                window.AndroidBridge.showToast(`✅ ${season === 'summer' ? '夏季' : '秋季'}时间段导入成功！`);
+                window.shiguangBridge.showToast(`✅ ${season === 'summer' ? '夏季' : '秋季'}时间段导入成功！`);
                 return true;
             } else {
                 console.log("预设时间段导入未成功，结果：" + result);
-                window.AndroidBridge.showToast("❌ 时间段导入失败，请查看日志。");
+                window.shiguangBridge.showToast("❌ 时间段导入失败，请查看日志。");
                 return false;
             }
         }
@@ -616,7 +616,7 @@ async function importPresetTimeSlots() {
         // 方法2：如果两个按钮的方法失败，尝试使用showPrompt让用户输入
         try {
             console.log("尝试使用备用方法选择季节...");
-            const seasonInput = await window.AndroidBridgePromise.showPrompt(
+            const seasonInput = await window.shiguangBridgePromise.showPrompt(
                 "⏰ 选择作息时间",
                 "请输入季节（输入 1 选择夏季，输入 2 选择秋季）：\n\n1 - 夏季 (5月1日-9月30日)\n2 - 秋季 (10月1日-次年4月30日)",
                 "1"
@@ -628,20 +628,20 @@ async function importPresetTimeSlots() {
             }
             
             const presetTimeSlots = getSeasonTimeSlots(season);
-            const result = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+            const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
             
             if (result === true) {
-                window.AndroidBridge.showToast(`✅ ${season === 'summer' ? '夏季' : '秋季'}时间段导入成功！`);
+                window.shiguangBridge.showToast(`✅ ${season === 'summer' ? '夏季' : '秋季'}时间段导入成功！`);
                 return true;
             }
         } catch (secondError) {
             console.error("备用方法也失败:", secondError);
-            window.AndroidBridge.showToast("导入时间段失败，使用默认夏季时间");
+            window.shiguangBridge.showToast("导入时间段失败，使用默认夏季时间");
             
             // 方法3：使用默认夏季
             const defaultTimeSlots = getSeasonTimeSlots('summer');
-            await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(defaultTimeSlots));
-            window.AndroidBridge.showToast("✅ 默认夏季时间段导入成功");
+            await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(defaultTimeSlots));
+            window.shiguangBridge.showToast("✅ 默认夏季时间段导入成功");
             return true;
         }
     }
@@ -649,12 +649,12 @@ async function importPresetTimeSlots() {
 
 async function importSchedule() {
     try {
-        AndroidBridge.showToast("正在提取课表数据...");
+        window.shiguangBridge.showToast("正在提取课表数据...");
         
         const courses = extractCourseData();
         
         if (courses.length === 0) {
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "⚠️ 提取失败",
                 "未找到课表数据，请确认已在课表页面",
                 "知道了"
@@ -663,7 +663,7 @@ async function importSchedule() {
         }
         
         // 预览
-        const preview = await window.AndroidBridgePromise.showAlert(
+        const preview = await window.shiguangBridgePromise.showAlert(
             "📊 数据预览",
             `共找到 ${courses.length} 门课程\n\n` +
             `示例:\n${courses.slice(0, 5).map(c => 
@@ -678,12 +678,12 @@ async function importSchedule() {
         }
         
         // 导入课程
-        AndroidBridge.showToast("正在导入课程...");
-        const result = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        window.shiguangBridge.showToast("正在导入课程...");
+        const result = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         
         if (result === true) {
             const semesterDate = await demoPrompt();
-            const configResult = await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+            const configResult = await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
                 semesterStartDate: semesterDate,
                 semesterTotalWeeks: 20,
                 defaultClassDuration: 45,
@@ -692,27 +692,27 @@ async function importSchedule() {
             }));
             
             if (configResult === true) {
-                AndroidBridge.showToast(`✅ 导入成功！共${courses.length}门课程`);
+                window.shiguangBridge.showToast(`✅ 导入成功！共${courses.length}门课程`);
                 return true;
             }
         }
         
-        AndroidBridge.showToast("❌ 导入失败");
+        window.shiguangBridge.showToast("❌ 导入失败");
         return false;
         
     } catch (error) {
         console.error("导入错误:", error);
-        AndroidBridge.showToast("导入出错: " + error.message);
+        window.shiguangBridge.showToast("导入出错: " + error.message);
         return false;
     }
 }
 
 async function runAllDemosSequentially() {
-    AndroidBridge.showToast("🚀 课表导入助手启动...");
+    window.shiguangBridge.showToast("🚀 课表导入助手启动...");
     
     // 检查页面
     if (!window.location.href.includes('studentHome/expectCourseTable')) {
-        const goToPage = await window.AndroidBridgePromise.showAlert(
+        const goToPage = await window.shiguangBridgePromise.showAlert(
             "页面提示",
             "当前不在课表页面，是否跳转？",
             "跳转",
@@ -726,7 +726,7 @@ async function runAllDemosSequentially() {
     
     const start = await demoAlert();
     if (!start) {
-        AndroidBridge.showToast("已取消");
+        window.shiguangBridge.showToast("已取消");
         return;
     }
     
@@ -736,7 +736,7 @@ async function runAllDemosSequentially() {
     // 导入课表
     await importSchedule();
     
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 导出函数

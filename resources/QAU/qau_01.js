@@ -239,7 +239,7 @@ function getCourseConfig() {
 
 async function runImportFlow() {
     try {
-        AndroidBridge.showToast("正在获取课表数据，请稍候...");
+        window.shiguangBridge.showToast("正在获取课表数据，请稍候...");
 
         const response = await fetch('/jsxsd/xskb/xskb_list.do', { method: 'GET' });
         const htmlText = await response.text();
@@ -265,19 +265,19 @@ async function runImportFlow() {
 
         // 选择学期
         if (semesters.length > 0) {
-            let selectedIdx = await window.AndroidBridgePromise.showSingleSelection(
+            let selectedIdx = await window.shiguangBridgePromise.showSingleSelection(
                 "请选择要导入的学期",
                 JSON.stringify(semesters),
                 defaultIndex
             );
 
             if (selectedIdx === null) {
-                AndroidBridge.showToast("已取消导入");
+                window.shiguangBridge.showToast("已取消导入");
                 return;
             }
 
             if (selectedIdx !== defaultIndex) {
-                AndroidBridge.showToast(`正在获取 [${semesters[selectedIdx]}] 课表...`);
+                window.shiguangBridge.showToast(`正在获取 [${semesters[selectedIdx]}] 课表...`);
                 let formData = new URLSearchParams();
                 formData.append('xnxq01id', semesterValues[selectedIdx]);
 
@@ -293,14 +293,14 @@ async function runImportFlow() {
 
         // 选择校区
         const campusNames = Object.keys(CAMPUS_TIME_SLOTS);
-        const campusIdx = await window.AndroidBridgePromise.showSingleSelection(
+        const campusIdx = await window.shiguangBridgePromise.showSingleSelection(
             "请选择您所在的校区",
             JSON.stringify(campusNames),
             0
         );
 
         if (campusIdx === null) {
-            AndroidBridge.showToast("已取消导入");
+            window.shiguangBridge.showToast("已取消导入");
             return;
         }
 
@@ -311,7 +311,7 @@ async function runImportFlow() {
         const courses = extractCoursesFromDoc(doc);
 
         if (courses.length === 0) {
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "提示",
                 "未能解析到任何课程，请检查当前学期是否有排课，或尝试切换学期。",
                 "好的"
@@ -320,20 +320,20 @@ async function runImportFlow() {
         }
 
         // 保存
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(getCourseConfig()));
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(getCourseConfig()));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
 
-        const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (!saveResult) {
-            AndroidBridge.showToast("课程保存失败，请重试！");
+            window.shiguangBridge.showToast("课程保存失败，请重试！");
             return;
         }
 
-        AndroidBridge.showToast(`成功导入 ${courses.length} 节课程（${selectedCampus}作息）！`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 节课程（${selectedCampus}作息）！`);
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (error) {
-        AndroidBridge.showToast("导入发生异常: " + error.message);
+        window.shiguangBridge.showToast("导入发生异常: " + error.message);
     }
 }
 

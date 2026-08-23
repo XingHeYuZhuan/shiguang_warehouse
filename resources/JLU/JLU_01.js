@@ -8,7 +8,7 @@
 const PAGE_URL = window.location.href;
 const _idx = PAGE_URL.indexOf("/jwapp/sys/");
 if (_idx < 0) {
-    AndroidBridge.showToast("请先进入(新)教务的「我的课表」页面再导入");
+    window.shiguangBridge.showToast("请先进入(新)教务的「我的课表」页面再导入");
     throw new Error("未在课表页运行，无法定位 VPN 基址");
 }
 const VPN_BASE = PAGE_URL.substring(0, _idx);            // https://vpn.jlu.edu.cn/https/<会话hex>
@@ -98,13 +98,13 @@ function parseSemesterCalendar(rows) {
 
 // ========== UI：开始提示 ==========
 async function promptUserToStart() {
-    const confirmed = await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
         "吉林大学课表导入",
         "请确保您已登录吉大 VPN（vpn.jlu.edu.cn），并已进入(新)教务管理系统的「我的课表」页面。\n未停留在课表页可能导致会话失效，无法获取数据。",
         "开始导入"
     );
     if (!confirmed) {
-        AndroidBridge.showToast("已取消导入");
+        window.shiguangBridge.showToast("已取消导入");
         return false;
     }
     return true;
@@ -123,7 +123,7 @@ async function selectSemester() {
 
     if (current) {
         // 2. 问用户：导入当前学期 / 选择其他
-        const choice = await window.AndroidBridgePromise.showSingleSelection(
+        const choice = await window.shiguangBridgePromise.showSingleSelection(
             "选择学期",
             JSON.stringify([
                 `导入当前学期：${current.mc}`,
@@ -132,7 +132,7 @@ async function selectSemester() {
             0
         );
         if (choice === null) {
-            AndroidBridge.showToast("已取消导入");
+            window.shiguangBridge.showToast("已取消导入");
             return null;
         }
         if (choice === 0) return current;
@@ -144,22 +144,22 @@ async function selectSemester() {
     try {
         rows = await fetchSemesterList();
     } catch (e) {
-        AndroidBridge.showToast("学期列表获取失败，请检查登录状态");
+        window.shiguangBridge.showToast("学期列表获取失败，请检查登录状态");
         console.error("学期列表获取失败:", e);
         return null;
     }
     if (rows.length === 0) {
-        AndroidBridge.showToast("未获取到学期列表");
+        window.shiguangBridge.showToast("未获取到学期列表");
         return null;
     }
     const labels = rows.map(r => r.MC || r.DM);
-    const idx = await window.AndroidBridgePromise.showSingleSelection(
+    const idx = await window.shiguangBridgePromise.showSingleSelection(
         "选择其他学期",
         JSON.stringify(labels),
         0
     );
     if (idx === null) {
-        AndroidBridge.showToast("已取消导入");
+        window.shiguangBridge.showToast("已取消导入");
         return null;
     }
     return parseSemesterRow(rows[idx]);
@@ -285,23 +285,23 @@ async function saveAll(courses, timeSlots, startDate, totalWeeks) {
         semesterStartDate: startDate,        // "2026-03-09" 或 null
         semesterTotalWeeks: totalWeeks       // 18
     };
-    const cfgOk = await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+    const cfgOk = await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
     if (!cfgOk) {
-        AndroidBridge.showToast("课表配置保存失败");
+        window.shiguangBridge.showToast("课表配置保存失败");
         return false;
     }
 
     // 2. 节次时间
-    const slotOk = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+    const slotOk = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
     if (!slotOk) {
-        AndroidBridge.showToast("节次时间保存失败");
+        window.shiguangBridge.showToast("节次时间保存失败");
         return false;
     }
 
     // 3. 课程
-    const courseOk = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    const courseOk = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
     if (!courseOk) {
-        AndroidBridge.showToast("课程数据保存失败");
+        window.shiguangBridge.showToast("课程数据保存失败");
         return false;
     }
     return true;
@@ -309,7 +309,7 @@ async function saveAll(courses, timeSlots, startDate, totalWeeks) {
 
 // ========== 主流程 ==========
 async function runImportFlow() {
-    AndroidBridge.showToast("吉林大学课表导入启动...");
+    window.shiguangBridge.showToast("吉林大学课表导入启动...");
     try {
         if (!(await promptUserToStart())) return;
 
@@ -328,7 +328,7 @@ async function runImportFlow() {
         // 4. 课程数据
         const courses = await fetchCourses(sem.xnxqdm);
         if (courses.length === 0) {
-            AndroidBridge.showToast("该学期未查询到课程数据");
+            window.shiguangBridge.showToast("该学期未查询到课程数据");
             return;
         }
 
@@ -346,7 +346,7 @@ async function runImportFlow() {
                     changeNote = `已应用${result.appliedCount}条调课`;
                 } else {
                     // 调课存在但未能自动应用：阻塞提醒用户手动核对
-                    await window.AndroidBridgePromise.showAlert(
+                    await window.shiguangBridgePromise.showAlert(
                         "调课提示",
                         `检测到 ${changes.length} 条调课记录但未能自动应用。已导入原始课表，请对照教务页"调课信息"手动核对，如有出入请联系开发者。`,
                         "知道了"
@@ -368,7 +368,7 @@ async function runImportFlow() {
         }
 
         // 5. 保存
-        AndroidBridge.showToast(`当前学期：${sem.mc}，${finalCourses.length} 条课程${changeNote ? "（" + changeNote + "）" : ""}，正在导入...`);
+        window.shiguangBridge.showToast(`当前学期：${sem.mc}，${finalCourses.length} 条课程${changeNote ? "（" + changeNote + "）" : ""}，正在导入...`);
         const ok = await saveAll(finalCourses, timeSlots, startDate, totalWeeks);
         if (!ok) return;
 
@@ -376,22 +376,22 @@ async function runImportFlow() {
         if (undetermined.length > 0) {
             try {
                 const names = [...new Set(undetermined.map(c => c.KCM).filter(Boolean))].join("、");
-                await window.AndroidBridgePromise.showAlert(
+                await window.shiguangBridgePromise.showAlert(
                     "导入完成",
                     `已导入 ${finalCourses.length} 条课程。\n另有 ${undetermined.length} 门课程上课时间暂未确定，未导入：${names}。\n请关注教务通知，时间确定后重新导入。`,
                     "知道了"
                 );
             } catch (e) {
                 console.warn("未定课程提醒失败:", e);
-                AndroidBridge.showToast(`导入成功！共 ${finalCourses.length} 条课程。`);
+                window.shiguangBridge.showToast(`导入成功！共 ${finalCourses.length} 条课程。`);
             }
         } else {
-            AndroidBridge.showToast(`导入成功！共 ${finalCourses.length} 条课程。`);
+            window.shiguangBridge.showToast(`导入成功！共 ${finalCourses.length} 条课程。`);
         }
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
         console.error("主流程异常:", error);
-        AndroidBridge.showToast("意外错误: " + error.message);
+        window.shiguangBridge.showToast("意外错误: " + error.message);
     }
 }
 

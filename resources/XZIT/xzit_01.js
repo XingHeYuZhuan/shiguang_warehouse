@@ -168,33 +168,33 @@ function buildCourseConfig(courses) {
 }
 
 async function scrapeAndParseCourses() {
-    AndroidBridge.showToast("正在检查页面并抓取课程数据...");
+    window.shiguangBridge.showToast("正在检查页面并抓取课程数据...");
     const tips = "1. 登录徐州工程学院教务系统\n2. 进入学生个人课表页面\n3. 选择正确学年、学期并点击【查询】\n4. 确认页面已显示课表\n5. 点击下方【一键导入】";
 
     try {
         const response = await fetch(window.location.href);
         const text = await response.text();
         if (!text.includes("课表查询")) {
-            await window.AndroidBridgePromise.showAlert("导入失败", `当前页面似乎不是学生课表查询页面。请检查：\n${tips}`, "确定");
+            await window.shiguangBridgePromise.showAlert("导入失败", `当前页面似乎不是学生课表查询页面。请检查：\n${tips}`, "确定");
             return null;
         }
 
         const typeElement = document.querySelector("#shcPDF");
         if (!typeElement) {
-            await window.AndroidBridgePromise.showAlert("导入失败", "未能识别课表视图类型，请确认您已点击查询且课表已加载完毕。", "确定");
+            await window.shiguangBridgePromise.showAlert("导入失败", "未能识别课表视图类型，请确认您已点击查询且课表已加载完毕。", "确定");
             return null;
         }
 
         const type = typeElement.dataset.type;
         const tableElement = document.querySelector(type === "list" ? "#kblist_table" : "#kbgrid_table_0");
         if (!tableElement) {
-            await window.AndroidBridgePromise.showAlert("导入失败", `未能找到课表主体（${type} 视图），请确认您已点击查询且课表已加载完毕。`, "确定");
+            await window.shiguangBridgePromise.showAlert("导入失败", `未能找到课表主体（${type} 视图），请确认您已点击查询且课表已加载完毕。`, "确定");
             return null;
         }
 
         const courses = type === "list" ? parseList() : parseTable();
         if (!courses.length) {
-            AndroidBridge.showToast("未找到任何课程数据，请检查学年学期是否正确或本学期无课。");
+            window.shiguangBridge.showToast("未找到任何课程数据，请检查学年学期是否正确或本学期无课。");
             return null;
         }
 
@@ -203,20 +203,20 @@ async function scrapeAndParseCourses() {
             config: buildCourseConfig(courses)
         };
     } catch (error) {
-        AndroidBridge.showToast(`抓取或解析失败: ${error.message}`);
+        window.shiguangBridge.showToast(`抓取或解析失败: ${error.message}`);
         console.error("JS: Scrape/Parse Error:", error);
-        await window.AndroidBridgePromise.showAlert("抓取或解析失败", `发生错误：${error.message}`, "确定");
+        await window.shiguangBridgePromise.showAlert("抓取或解析失败", `发生错误：${error.message}`, "确定");
         return null;
     }
 }
 
 async function saveCourses(parsedCourses) {
-    AndroidBridge.showToast(`正在保存 ${parsedCourses.length} 门课程...`);
+    window.shiguangBridge.showToast(`正在保存 ${parsedCourses.length} 门课程...`);
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses, null, 2));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses, null, 2));
         return true;
     } catch (error) {
-        AndroidBridge.showToast(`课程保存失败: ${error.message}`);
+        window.shiguangBridge.showToast(`课程保存失败: ${error.message}`);
         console.error("JS: Save Courses Error:", error);
         return false;
     }
@@ -224,38 +224,38 @@ async function saveCourses(parsedCourses) {
 
 async function saveCourseConfig(config) {
     try {
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
     } catch (error) {
-        AndroidBridge.showToast(`课表配置保存失败: ${error.message}`);
+        window.shiguangBridge.showToast(`课表配置保存失败: ${error.message}`);
         console.error("JS: Save Config Error:", error);
     }
 }
 
 async function importPresetTimeSlots() {
     try {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
-        AndroidBridge.showToast("预设时间段导入成功！");
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+        window.shiguangBridge.showToast("预设时间段导入成功！");
     } catch (error) {
-        AndroidBridge.showToast(`导入时间段失败: ${error.message}`);
+        window.shiguangBridge.showToast(`导入时间段失败: ${error.message}`);
         console.error("JS: Save Time Slots Error:", error);
     }
 }
 
 async function runImportFlow() {
-    const alertConfirmed = await window.AndroidBridgePromise.showAlert(
+    const alertConfirmed = await window.shiguangBridgePromise.showAlert(
         "徐州工程学院课表导入",
         "导入前请确保您已在浏览器中成功登录教务系统，并处于课表查询页面且已点击查询。",
         "好的，开始导入"
     );
     if (!alertConfirmed) {
-        AndroidBridge.showToast("用户取消了导入。");
+        window.shiguangBridge.showToast("用户取消了导入。");
         return;
     }
 
     if (typeof window.jQuery === "undefined" && typeof $ === "undefined") {
         const errorMsg = "当前教务系统页面似乎没有加载 jQuery 库。本脚本依赖 jQuery 进行 DOM 解析。";
-        AndroidBridge.showToast(errorMsg);
-        await window.AndroidBridgePromise.showAlert("导入失败", `${errorMsg}\n请尝试刷新页面后重试。`, "确定");
+        window.shiguangBridge.showToast(errorMsg);
+        await window.shiguangBridgePromise.showAlert("导入失败", `${errorMsg}\n请尝试刷新页面后重试。`, "确定");
         return;
     }
 
@@ -272,8 +272,8 @@ async function runImportFlow() {
 
     await saveCourseConfig(config);
     await importPresetTimeSlots();
-    AndroidBridge.showToast(`课程导入成功，共导入 ${courses.length} 门课程！`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`课程导入成功，共导入 ${courses.length} 门课程！`);
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runImportFlow();

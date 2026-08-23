@@ -91,7 +91,7 @@ function parseSections(sectionStr) {
  * @returns {Document | null} 解析后的 Document 对象或 null
  */
 async function fetchTimetable(xnxqid) {
-    AndroidBridge.showToast("正在请求课表数据...");
+    window.shiguangBridge.showToast("正在请求课表数据...");
     
     // 完整的 URL 路径
     const url = `http://jwxt.hnvcc.edu.cn/jsxsd/framework/mainV_index_loadkb.htmlx?rq=all&xnxqid=${xnxqid}&xswk=false`;
@@ -104,12 +104,12 @@ async function fetchTimetable(xnxqid) {
         });
 
         if (!response.ok) {
-            AndroidBridge.showToast(`网络响应错误，状态码: ${response.status}。请检查登录状态。`);
+            window.shiguangBridge.showToast(`网络响应错误，状态码: ${response.status}。请检查登录状态。`);
             return null;
         }
 
         const htmlData = await response.text();
-        AndroidBridge.showToast("数据获取成功，开始解析 HTML...");
+        window.shiguangBridge.showToast("数据获取成功，开始解析 HTML...");
         
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlData, "text/html");
@@ -117,7 +117,7 @@ async function fetchTimetable(xnxqid) {
         return doc;
 
     } catch (error) {
-        AndroidBridge.showToast(`请求过程中发生错误: ${error.message}`);
+        window.shiguangBridge.showToast(`请求过程中发生错误: ${error.message}`);
         return null;
     }
 }
@@ -134,7 +134,7 @@ function parseTimetable(doc) {
     const timetable = doc.getElementById('timetable');
     
     if (!timetable) {
-        AndroidBridge.showToast("HTML 中未找到课表表格 #timetable。");
+        window.shiguangBridge.showToast("HTML 中未找到课表表格 #timetable。");
         return null;
     }
 
@@ -361,32 +361,32 @@ function generateWinterTimeSlots() {
 async function runImportFlow() {
     const currentTitle = document.title || '';
     if (currentTitle.includes('登录') || currentTitle.includes('Login')) {
-        AndroidBridge.showToast("请先登录教务系统");
+        window.shiguangBridge.showToast("请先登录教务系统");
         return;
     }
 
     // 获取用户输入：学年
     let currentYear = new Date().getFullYear();
-    const academicYear = await window.AndroidBridgePromise.showPrompt(
+    const academicYear = await window.shiguangBridgePromise.showPrompt(
         "选择学年", 
         "请输入要导入课程的起始学年（例如 2025-2026 应输入2025）:",
         String(currentYear),
         "validateYearInput"
     );
     if (academicYear === null) {
-        AndroidBridge.showToast("导入已取消。");
+        window.shiguangBridge.showToast("导入已取消。");
         return;
     }
 
     // 获取用户输入：学期
     const semesters = ["1（第一学期）", "2（第二学期）"];
-    const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期", 
         JSON.stringify(semesters),
         -1 
     );
     if (semesterIndex === null) {
-        AndroidBridge.showToast("导入已取消。");
+        window.shiguangBridge.showToast("导入已取消。");
         return;
     }
     const semesterNumber = semesterIndex + 1;
@@ -394,22 +394,22 @@ async function runImportFlow() {
     // 构造学年学期 ID (xnxqid)
     const nextYear = parseInt(academicYear) + 1;
     const xnxqid = `${academicYear}-${nextYear}-${semesterNumber}`;
-    AndroidBridge.showToast(`准备获取 ${academicYear} 学年第 ${semesterNumber} 学期数据...`);
+    window.shiguangBridge.showToast(`准备获取 ${academicYear} 学年第 ${semesterNumber} 学期数据...`);
     
     // 获取用户输入：作息季节
     const seasons = ["夏季作息", "冬季作息"];
-    const seasonIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const seasonIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择作息季节", 
         JSON.stringify(seasons),
         -1
     );
     if (seasonIndex === null) {
-        AndroidBridge.showToast("导入已取消。");
+        window.shiguangBridge.showToast("导入已取消。");
         return;
     }
     const selectedSeason = seasonIndex === 0 ? 'summer' : 'winter';
     const seasonText = seasonIndex === 0 ? '夏季作息' : '冬季作息';
-    AndroidBridge.showToast(`已选择：${seasonText}。`);
+    window.shiguangBridge.showToast(`已选择：${seasonText}。`);
 
     // 异步获取和解析 HTML 数据
     const doc = await fetchTimetable(xnxqid);
@@ -420,7 +420,7 @@ async function runImportFlow() {
     const parsedData = parseTimetable(doc);
     
     if (!parsedData || parsedData.courses.length === 0) {
-        AndroidBridge.showToast("课表解析失败或未解析到课程。请检查登录状态、学期选择或课表数据是否为空。");
+        window.shiguangBridge.showToast("课表解析失败或未解析到课程。请检查登录状态、学期选择或课表数据是否为空。");
         return;
     }
 
@@ -432,20 +432,20 @@ async function runImportFlow() {
     
     // 提交课程数据
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         const mergedCount = originalCourseCount - courses.length;
-        AndroidBridge.showToast(`课程导入成功！原始 ${originalCourseCount} 门，合并 ${mergedCount} 门，最终导入 ${courses.length} 门。`);
+        window.shiguangBridge.showToast(`课程导入成功！原始 ${originalCourseCount} 门，合并 ${mergedCount} 门，最终导入 ${courses.length} 门。`);
     } catch (error) {
-        AndroidBridge.showToast(`课程数据保存失败: ${error.message}`);
+        window.shiguangBridge.showToast(`课程数据保存失败: ${error.message}`);
         return;
     }
 
     // 提交课表配置数据 
     try {
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
-        AndroidBridge.showToast(`课表配置更新成功！总周数：${config.semesterTotalWeeks}周。`);
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+        window.shiguangBridge.showToast(`课表配置更新成功！总周数：${config.semesterTotalWeeks}周。`);
     } catch (error) {
-        AndroidBridge.showToast(`课表配置保存失败: ${error.message}`);
+        window.shiguangBridge.showToast(`课表配置保存失败: ${error.message}`);
     }
 
     // 提交预设时间段数据
@@ -457,14 +457,14 @@ async function runImportFlow() {
             timeSlots = generateWinterTimeSlots();
         }
 
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-        AndroidBridge.showToast(`预设时间段导入成功！已使用${seasonText}。请在设置中校对具体时间。`);
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        window.shiguangBridge.showToast(`预设时间段导入成功！已使用${seasonText}。请在设置中校对具体时间。`);
     } catch (error) {
-        AndroidBridge.showToast(`导入时间段失败: ${error.message}`);
+        window.shiguangBridge.showToast(`导入时间段失败: ${error.message}`);
     }
 
-    AndroidBridge.showToast("所有任务已完成！");
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast("所有任务已完成！");
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 启动导入流程

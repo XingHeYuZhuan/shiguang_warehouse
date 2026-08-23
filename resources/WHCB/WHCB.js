@@ -197,57 +197,57 @@ async function login(){
     const wspc = "authserver.wspc.edu.cn";
     const timeTable = "jw.wspc.edu.cn";
     const currentHost = window.location.host;
-    const confirmed = await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
     "使用前请注意",
     promptMessage,
     "好的"
     );
     if (confirmed) {
         if (currentHost == wspc) {
-        AndroidBridge.showToast("请先登录");
+        window.shiguangBridge.showToast("请先登录");
         return false;
         }
         else if (currentHost ==timeTable) {
             return true;
         }
         else
-            AndroidBridge.showToast("请在学校的网站内导入");
+            window.shiguangBridge.showToast("请在学校的网站内导入");
         }
     else {
-        AndroidBridge.showToast("取消导入操作");
+        window.shiguangBridge.showToast("取消导入操作");
         return false;
     }
 }
 
 async function saveCourses(parsedCourses) {
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses));
-        AndroidBridge.showToast(`成功导入 ${parsedCourses.length} 门课程！`);
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses));
+        window.shiguangBridge.showToast(`成功导入 ${parsedCourses.length} 门课程！`);
         return true;
     } catch (error) {
-        AndroidBridge.showToast(`保存失败: ${error.message}`);
+        window.shiguangBridge.showToast(`保存失败: ${error.message}`);
         return false;
     }
 }
 
 async function importPresetTimeSlots(timeSlots) {
     try {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-        AndroidBridge.showToast("预设时间段导入成功！");
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        window.shiguangBridge.showToast("预设时间段导入成功！");
         return true; // 添加返回值
     } catch (error) {
-        AndroidBridge.showToast("导入时间段失败: " + error.message);
+        window.shiguangBridge.showToast("导入时间段失败: " + error.message);
         return false; // 添加返回值
     }
 }
 
 async function saveConfig(config) {
     try {
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
-        AndroidBridge.showToast("课表配置更新成功！");
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+        window.shiguangBridge.showToast("课表配置更新成功！");
         return true;
     } catch (error) {
-        AndroidBridge.showToast("保存配置失败: " + error.message);
+        window.shiguangBridge.showToast("保存配置失败: " + error.message);
         return false;
     }
 }
@@ -260,23 +260,23 @@ async function runImportFlow() {
     // 提取课程数据
     const rawCourses = extractCourses();
     if(rawCourses.length === 0){
-        AndroidBridge.showToast("未找到任何课程! 请确认已登录并进入课表页面。");
+        window.shiguangBridge.showToast("未找到任何课程! 请确认已登录并进入课表页面。");
         return;
     }
     const mergedCourses = mergeCourses(rawCourses);
     if(mergedCourses.length === 0){
-        AndroidBridge.showToast("课程合并失败，未生成任何课程数据！");
+        window.shiguangBridge.showToast("课程合并失败，未生成任何课程数据！");
         return;
     }
     const finalCourses = sortCourses(mergedCourses);
     if(finalCourses.length === 0){
-        AndroidBridge.showToast("课程排序失败，未生成任何课程数据！");
+        window.shiguangBridge.showToast("课程排序失败，未生成任何课程数据！");
         return;
     } 
     // 生成时间段数据
     const timeSlots = generateTimeSlots();
     if(timeSlots.length === 0){
-        AndroidBridge.showToast("时间段生成失败，未生成任何时间段数据！");
+        window.shiguangBridge.showToast("时间段生成失败，未生成任何时间段数据！");
         return;
     }
     // 生成配置数据
@@ -296,8 +296,8 @@ async function runImportFlow() {
     if(!configResult){
         return;
     }
-    AndroidBridge.showToast("成功导入课表！请前往设置调整开学时间等信息！");
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast("成功导入课表！请前往设置调整开学时间等信息！");
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 执行

@@ -118,17 +118,17 @@ function parseSchedule(doc) {
 
 async function runImportFlow() {
     try {
-        const confirmed = await window.AndroidBridgePromise.showAlert("提示", "请确保已成功登录教务系统。是否开始导入？", "开始");
+        const confirmed = await window.shiguangBridgePromise.showAlert("提示", "请确保已成功登录教务系统。是否开始导入？", "开始");
         if (!confirmed) return;
 
-        const year = await window.AndroidBridgePromise.showPrompt("选择学年", "请输入要导入的起始学年（例如 2025-2026 应输入2025）:", "", "validateYearInput");
+        const year = await window.shiguangBridgePromise.showPrompt("选择学年", "请输入要导入的起始学年（例如 2025-2026 应输入2025）:", "", "validateYearInput");
         if (!year) return;
 
-        const semesterIdx = await window.AndroidBridgePromise.showSingleSelection("选择学期", JSON.stringify(["第一学期", "第二学期"]), -1);
+        const semesterIdx = await window.shiguangBridgePromise.showSingleSelection("选择学期", JSON.stringify(["第一学期", "第二学期"]), -1);
         if (semesterIdx === null) return;
 
         const semId = `${year}-${parseInt(year) + 1}-${semesterIdx + 1}`;
-        AndroidBridge.showToast("正在获取课表数据...");
+        window.shiguangBridge.showToast("正在获取课表数据...");
 
         const url = "https://http-jwgl-csuft-edu-cn-80.webvpn.csuft.edu.cn/jsxsd/xskb/xskb_list.do";
         const resp = await fetch(url, {
@@ -142,18 +142,18 @@ async function runImportFlow() {
         const courses = parseSchedule(new DOMParser().parseFromString(html, "text/html"));
 
         if (courses.length === 0) {
-            AndroidBridge.showToast("未找到课程，请检查学年学期选择或登录状态。");
+            window.shiguangBridge.showToast("未找到课程，请检查学年学期选择或登录状态。");
             return;
         }
 
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({ semesterTotalWeeks: 20, firstDayOfWeek: 1 }));
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({ semesterTotalWeeks: 20, firstDayOfWeek: 1 }));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 
-        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程`);
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (err) {
-        AndroidBridge.showToast("错误: " + err.message);
+        window.shiguangBridge.showToast("错误: " + err.message);
     }
 }
 

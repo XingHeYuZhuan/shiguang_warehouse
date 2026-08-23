@@ -77,7 +77,7 @@ function validateDateInput(input) {
 // 1. 显示一个公告信息弹窗
 async function promptUserToStart() {
     console.log("即将显示公告弹窗...");
-    const confirmed = await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
         "重要通知",
         "导入前请确保您已成功登录教务系统，并选定正确的学期。",
         "好的，开始"
@@ -90,7 +90,7 @@ async function selectCampus() {
     // 从配置中提取用于展示的名称数组
     const campusLabels = CAMPUS_OPTIONS.map(opt => opt.label);
     
-    const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择所在校区", 
         JSON.stringify(campusLabels), 
         0 
@@ -141,7 +141,7 @@ async function getTermCode() {
         }
     });
 
-    const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择导入学期", 
         JSON.stringify(semesterTexts), 
         defaultSelectedIndex
@@ -292,7 +292,7 @@ async function parseCourses(py_kbcx_ew, isKaramayCampus) {   
         return c;
     });
 
-    const result = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
+    const result = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
     if (result !== true) {
         throw new Error("课程导入失败，请查看日志。");
     }
@@ -352,7 +352,7 @@ async function importPresetTimeSlots(campusId) {   
         }
     });
 
-    const result = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(generatedSlots));
+    const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(generatedSlots));
     if (result !== true) {
         throw new Error("时间段导入失败，请查看日志。");
     }
@@ -361,7 +361,7 @@ async function importPresetTimeSlots(campusId) {   
 
 // 7. 导入课表配置
 async function saveConfig() {
-    let startDate = await window.AndroidBridgePromise.showPrompt(
+    let startDate = await window.shiguangBridgePromise.showPrompt(
         "输入开学日期", 
         "请输入本学期开学日期 (格式: YYYY-MM-DD):",
         "2025-09-01",          
@@ -383,7 +383,7 @@ async function saveConfig() {
     };
 
     const configJsonString = JSON.stringify(courseConfigData);
-    const result = await window.AndroidBridgePromise.saveCourseConfig(configJsonString);
+    const result = await window.shiguangBridgePromise.saveCourseConfig(configJsonString);
     if (result !== true) {
         throw new Error("导入配置失败，请查看日志。");
     }
@@ -428,11 +428,11 @@ async function runImportFlow() {
         await saveConfig();
 
         // 8. 流程**完全成功**，发送结束信号。
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
         const message = error && error.message ? error.message : "导入流程执行失败。";
-        if (typeof AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast(message);
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast(message);
         }
         console.error("runImportFlow error:", error);
     }

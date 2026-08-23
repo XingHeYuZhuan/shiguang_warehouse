@@ -68,8 +68,8 @@ const DAY_FIELD_MAP = {
 };
 
 function showToast(message) {
-    if (typeof AndroidBridge !== "undefined" && AndroidBridge.showToast) {
-        AndroidBridge.showToast(message);
+    if (typeof window.shiguangBridge !== "undefined" && window.shiguangBridge.showToast) {
+        window.shiguangBridge.showToast(message);
     } else {
         console.log(message);
     }
@@ -367,11 +367,11 @@ async function selectTerm(terms) {
     });
     const defaultIndex = getDefaultTermIndex(terms);
 
-    if (typeof window.AndroidBridgePromise === "undefined") {
+    if (typeof window.shiguangBridgePromise === "undefined") {
         return terms[defaultIndex];
     }
 
-    const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择要导入的学期",
         JSON.stringify(items),
         defaultIndex
@@ -444,15 +444,15 @@ async function saveConfig(term) {
         firstDayOfWeek: 1
     };
 
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 }
 
 async function saveTimeSlots() {
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(PRIMARY_TIME_SLOTS));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(PRIMARY_TIME_SLOTS));
 }
 
 async function saveCourses(courses) {
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 }
 
 async function runImportFlow() {
@@ -474,7 +474,7 @@ async function runImportFlow() {
             throw new Error("未解析到课程，请确认当前账号已在教务系统中可查看课表。");
         }
 
-        if (typeof window.AndroidBridgePromise === "undefined") {
+        if (typeof window.shiguangBridgePromise === "undefined") {
             console.log("Selected term:", selectedTerm);
             console.log("Courses:", courses);
             console.log("Time slots:", PRIMARY_TIME_SLOTS);
@@ -487,8 +487,8 @@ async function runImportFlow() {
         await saveCourses(courses);
 
         showToast(`导入完成，共 ${courses.length} 门课程`);
-        if (typeof AndroidBridge !== "undefined" && AndroidBridge.notifyTaskCompletion) {
-            AndroidBridge.notifyTaskCompletion();
+        if (typeof window.shiguangBridge !== "undefined" && window.shiguangBridge.notifyTaskCompletion) {
+            window.shiguangBridge.notifyTaskCompletion();
         }
     } catch (error) {
         console.error(error);

@@ -69,7 +69,7 @@ async function runImportFlow() {
     
     // 强拦截：由于正方系统的 gnmkdm 模块会话校验，必须要求用户在课表页面才能请求 API
     if (!$ || !$('#xnm').length || !$('#xqm').length) {
-        await window.AndroidBridgePromise.showAlert(
+        await window.shiguangBridgePromise.showAlert(
             "导入提示", 
             "正方教务系统限制：请务必先点击进入【正方教务管理系统】->【个人课表查询】页面后，再点击一键导入！", 
             "我知道了"
@@ -77,7 +77,7 @@ async function runImportFlow() {
         return;
     }
 
-    AndroidBridge.showToast("正在获取当前页面课表数据...");
+    window.shiguangBridge.showToast("正在获取当前页面课表数据...");
     
     // 直接静默提取页面上已经选好的学年和学期
     const xnm = $('#xnm').val();
@@ -97,17 +97,17 @@ async function runImportFlow() {
         const courses = parseJsonData(json);
 
         if (courses.length === 0) {
-            await window.AndroidBridgePromise.showAlert("导入失败", "该学年学期未找到课程数据，请确认页面上显示的课表是否为空。", "确定");
+            await window.shiguangBridgePromise.showAlert("导入失败", "该学年学期未找到课程数据，请确认页面上显示的课表是否为空。", "确定");
             return;
         }
 
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TimeSlots));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TimeSlots));
 
-        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程！`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程！`);
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (e) {
-        await window.AndroidBridgePromise.showAlert("导入失败", "接口请求异常，请确认教务系统网络通畅。", "确定");
+        await window.shiguangBridgePromise.showAlert("导入失败", "接口请求异常，请确认教务系统网络通畅。", "确定");
         console.error(e);
     }
 }

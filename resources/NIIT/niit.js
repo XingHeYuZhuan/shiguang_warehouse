@@ -76,7 +76,7 @@ function parseCourse(r) {
 
 // 主流程
 (async function () {
-    if (!(window.AndroidBridgePromise && window.AndroidBridgePromise.saveImportedCourses)) return;
+    if (!(window.shiguangBridgePromise && window.shiguangBridgePromise.saveImportedCourses)) return;
 
     var datas = await fetchCourseRows();
     var rows = pluckRows(datas);
@@ -100,8 +100,8 @@ function parseCourse(r) {
     var totalWeeks = 0;
     for (var j = 0; j < rows.length; j++) totalWeeks = Math.max(totalWeeks, String(rows[j].SKZC || "").length);
 
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(PRESET_TIME_SLOTS));
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({ semesterStartDate: null, semesterTotalWeeks: totalWeeks || 20, firstDayOfWeek: 1 }));
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-    try { window.AndroidBridge.notifyTaskCompletion(); } catch (e) { }
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(PRESET_TIME_SLOTS));
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({ semesterStartDate: null, semesterTotalWeeks: totalWeeks || 20, firstDayOfWeek: 1 }));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    try { window.shiguangBridge.notifyTaskCompletion(); } catch (e) { }
 })();

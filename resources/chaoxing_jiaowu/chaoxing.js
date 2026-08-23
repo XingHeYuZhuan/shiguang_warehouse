@@ -251,7 +251,7 @@ async function selectAcademicYearAndSemester(xnxqSelectHtml) {
     }
     const { labels, values, defaultIndex } = options;
     
-    const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学年学期",
         JSON.stringify(labels),
         defaultIndex
@@ -313,7 +313,7 @@ async function fetchCampusList() {
         console.log(`JS: 校区列表获取成功，共 ${campusList.length} 个校区。`);
         return campusList;
     } catch (error) {
-        AndroidBridge.showToast(`获取校区列表失败: ${error.message}`);
+        window.shiguangBridge.showToast(`获取校区列表失败: ${error.message}`);
         console.error('JS: fetchCampusList Error:', error);
         return null;
     }
@@ -328,7 +328,7 @@ async function selectCampus(defaultXqdm) {
     const campusList = await fetchCampusList();
     if (!campusList) {
         console.warn(`JS: 获取校区列表失败，使用页面参数 xqdm=${defaultXqdm} 继续导入。`);
-        AndroidBridge.showToast("获取校区列表失败，使用默认校区继续导入。");
+        window.shiguangBridge.showToast("获取校区列表失败，使用默认校区继续导入。");
         return {
             xqdm: defaultXqdm,
             xqmc: ""
@@ -341,7 +341,7 @@ async function selectCampus(defaultXqdm) {
         0
     );
 
-    const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择校区",
         JSON.stringify(labels),
         defaultIndex
@@ -452,7 +452,7 @@ async function extractPageParams() {
  */
 async function fetchTimeAndWeekData(xnxq, xqdm) {
     console.log(`JS: 正在请求节次时间和周次数据...`);
-    AndroidBridge.showToast("正在获取课表配置信息...");
+    window.shiguangBridge.showToast("正在获取课表配置信息...");
     
     const url = `/admin/api/getZclistByXnxq?xnxq=${xnxq}&xqid=${xqdm}`;
     
@@ -494,7 +494,7 @@ async function fetchTimeAndWeekData(xnxq, xqdm) {
         return { timeSlots, semesterStartDate };
 
     } catch (error) {
-        AndroidBridge.showToast(`获取配置信息失败，将继续导入课程: ${error.message}`);
+        window.shiguangBridge.showToast(`获取配置信息失败，将继续导入课程: ${error.message}`);
         console.error('JS: fetchTimeAndWeekData Error:', error);
         return {
             timeSlots: null,
@@ -512,7 +512,7 @@ async function fetchTimeAndWeekData(xnxq, xqdm) {
  */
 async function fetchCourseData(xnxq, xhid, xqdm) {
     console.log(`JS: 正在请求课程数据...`);
-    AndroidBridge.showToast(`正在获取 ${xnxq} 的课程数据...`);
+    window.shiguangBridge.showToast(`正在获取 ${xnxq} 的课程数据...`);
     
     const url = `/admin/xsd/pkgl/xskb/sdpkkbList?xnxq=${xnxq}&xhid=${xhid}&xqdm=${xqdm}&xskbxslx=0`;
     
@@ -541,7 +541,7 @@ async function fetchCourseData(xnxq, xhid, xqdm) {
         const courses = parseCourseData(jsonData);
 
         if (courses.length === 0) {
-            AndroidBridge.showToast("未找到任何课程数据，本学期可能无课。");
+            window.shiguangBridge.showToast("未找到任何课程数据，本学期可能无课。");
             return null;
         }
 
@@ -549,7 +549,7 @@ async function fetchCourseData(xnxq, xhid, xqdm) {
         return courses;
 
     } catch (error) {
-        AndroidBridge.showToast(`获取课程数据失败: ${error.message}`);
+        window.shiguangBridge.showToast(`获取课程数据失败: ${error.message}`);
         console.error('JS: fetchCourseData Error:', error);
         return null;
     }
@@ -562,14 +562,14 @@ async function fetchCourseData(xnxq, xhid, xqdm) {
  */
 async function saveCourses(courses) {
     console.log(`JS: 正在保存 ${courses.length} 门课程...`);
-    AndroidBridge.showToast(`正在保存 ${courses.length} 门课程...`);
+    window.shiguangBridge.showToast(`正在保存 ${courses.length} 门课程...`);
     
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses, null, 2));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses, null, 2));
         console.log("JS: 课程保存成功。");
         return true;
     } catch (error) {
-        AndroidBridge.showToast(`课程保存失败: ${error.message}`);
+        window.shiguangBridge.showToast(`课程保存失败: ${error.message}`);
         console.error('JS: saveCourses Error:', error);
         return false;
     }
@@ -582,14 +582,14 @@ async function saveCourses(courses) {
  */
 async function importPresetTimeSlots(timeSlots) {
     console.log(`JS: 正在导入 ${timeSlots.length} 个预设时间段...`);
-    AndroidBridge.showToast(`正在导入作息时间...`);
+    window.shiguangBridge.showToast(`正在导入作息时间...`);
     
     try {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         console.log("JS: 预设时间段导入成功。");
         return true;
     } catch (error) {
-        AndroidBridge.showToast("导入时间段失败: " + error.message);
+        window.shiguangBridge.showToast("导入时间段失败: " + error.message);
         console.error('JS: importPresetTimeSlots Error:', error);
         return false;
     }
@@ -613,11 +613,11 @@ async function saveCourseConfig(semesterStartDate) {
     };
     
     try {
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
         console.log("JS: 课表配置保存成功。");
         return true;
     } catch (error) {
-        AndroidBridge.showToast("保存课表配置失败: " + error.message);
+        window.shiguangBridge.showToast("保存课表配置失败: " + error.message);
         console.error('JS: saveCourseConfig Error:', error);
         return false;
     }
@@ -637,7 +637,7 @@ function isLoginPage() {
  * @returns {Promise<boolean>} - 用户是否确认
  */
 async function promptUserToStart() {
-    return await window.AndroidBridgePromise.showAlert(
+    return await window.shiguangBridgePromise.showAlert(
         "超星教务系统课表导入",
         "导入前请确保您已在成功登录教务系统，并打开课表页面。\n\n本脚本将自动获取作息时间、开学日期和课程数据。",
         "开始导入"
@@ -652,21 +652,21 @@ async function runImportFlow() {
     
     // 1. 检查是否在登录页面
     if (isLoginPage()) {
-        AndroidBridge.showToast("导入失败：请先登录教务系统！");
+        window.shiguangBridge.showToast("导入失败：请先登录教务系统！");
         return;
     }
 
     // 2. 提示用户确认开始导入
     const alertConfirmed = await promptUserToStart();
     if (!alertConfirmed) {
-        AndroidBridge.showToast("用户取消了导入。");
+        window.shiguangBridge.showToast("用户取消了导入。");
         return;
     }
     
     // 3. 提取页面参数
     const params = await extractPageParams();
     if (!params) {
-        AndroidBridge.showToast("无法从页面获取必要参数，请确保在正确的页面执行脚本。");
+        window.shiguangBridge.showToast("无法从页面获取必要参数，请确保在正确的页面执行脚本。");
         return;
     }
     
@@ -675,14 +675,14 @@ async function runImportFlow() {
     // 4. 让用户选择学年学期
     const xnxq = await selectAcademicYearAndSemester(xnxqSelectHtml);
     if (xnxq === null) {
-        AndroidBridge.showToast("导入已取消，未选择学年学期。");
+        window.shiguangBridge.showToast("导入已取消，未选择学年学期。");
         return;
     }
 
     // 5. 让用户选择校区（默认使用页面参数中的 xqdm，若校区接口失败则自动回退使用页面 xqdm）
     const selectedCampus = await selectCampus(pageXqdm);
     if (!selectedCampus) {
-        AndroidBridge.showToast("导入已取消，未选择校区。");
+        window.shiguangBridge.showToast("导入已取消，未选择校区。");
         return;
     }
     const { xqdm } = selectedCampus;
@@ -718,8 +718,8 @@ async function runImportFlow() {
     }
 
     // 11. 完成
-    AndroidBridge.showToast(`导入成功！共导入 ${courses.length} 门课程。`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`导入成功！共导入 ${courses.length} 门课程。`);
+    window.shiguangBridge.notifyTaskCompletion();
     console.log("JS: 超星教务系统课表导入流程完成。");
 }
 

@@ -14,8 +14,8 @@
     };
 
     function showToast(message) {
-        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === 'function') {
-            window.AndroidBridge.showToast(message);
+        if (window.shiguangBridge && typeof window.shiguangBridge.showToast === 'function') {
+            window.shiguangBridge.showToast(message);
         } else {
             console.log('[Toast]', message);
         }
@@ -191,13 +191,13 @@
     }
 
     async function saveImportedData(courses) {
-        const courseResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        const courseResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (courseResult !== true) {
             throw new Error('课程保存失败：' + courseResult);
         }
 
-        if (typeof window.AndroidBridgePromise.saveCourseConfig === 'function') {
-            const configResult = await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+        if (typeof window.shiguangBridgePromise.saveCourseConfig === 'function') {
+            const configResult = await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
                 semesterTotalWeeks: getMaxWeek(courses),
                 defaultClassDuration: 45,
                 defaultBreakDuration: 10,
@@ -210,11 +210,11 @@
     }
 
     async function promptUserToStart() {
-        if (!window.AndroidBridgePromise || typeof window.AndroidBridgePromise.showAlert !== 'function') {
+        if (!window.shiguangBridgePromise || typeof window.shiguangBridgePromise.showAlert !== 'function') {
             return true;
         }
 
-        return await window.AndroidBridgePromise.showAlert(
+        return await window.shiguangBridgePromise.showAlert(
             '山东轻工职业学院课表导入',
             '请确认已登录并进入“学期课表”页面。脚本将读取当前学期课表并导入拾光课程表。',
             '开始导入'
@@ -237,7 +237,7 @@
 
             await saveImportedData(courses);
             showToast('成功导入 ' + courses.length + ' 条课程');
-            window.AndroidBridge.notifyTaskCompletion();
+            window.shiguangBridge.notifyTaskCompletion();
         } catch (error) {
             console.error('山东轻工职业学院课表导入失败', error);
             showToast('课表导入失败：' + error.message);

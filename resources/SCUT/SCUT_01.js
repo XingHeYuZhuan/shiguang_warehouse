@@ -85,8 +85,8 @@ function extractOptionsByRegex(html, selectId) {
  */
 async function runImportFlow() {
     try {
-        if (typeof window.AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast("正在通过 WebVPN 通道读取数据...");
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast("正在通过 WebVPN 通道读取数据...");
         } else {
             console.log("【1/4】正在获取学期选项...");
         }
@@ -121,14 +121,14 @@ async function runImportFlow() {
 
         // 2. 弹出选择框
         let selectedIdx = defaultIndex;
-        if (typeof window.AndroidBridgePromise !== 'undefined') {
-            let userChoice = await window.AndroidBridgePromise.showSingleSelection(
+        if (typeof window.shiguangBridgePromise !== 'undefined') {
+            let userChoice = await window.shiguangBridgePromise.showSingleSelection(
                 "请选择要导入的学期", 
                 JSON.stringify(semesters), 
                 defaultIndex
             );
             if (userChoice === null) {
-                AndroidBridge.showToast("已取消导入");
+                window.shiguangBridge.showToast("已取消导入");
                 return;
             }
             selectedIdx = userChoice;
@@ -148,8 +148,8 @@ async function runImportFlow() {
         }
 
         const targetData = semesterValues[selectedIdx];
-        if (typeof window.AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast(`正在获取 [${semesters[selectedIdx]}] 数据...`);
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast(`正在获取 [${semesters[selectedIdx]}] 数据...`);
         } else {
             console.log(`【2/4】正在向服务器请求 [${semesters[selectedIdx]}] 的 JSON 数据...`);
         }
@@ -207,8 +207,8 @@ async function runImportFlow() {
 
         if (parsedCourses.length === 0) {
             const errMsg = "该学期暂无排课数据。";
-            if (typeof window.AndroidBridgePromise !== 'undefined') {
-                await window.AndroidBridgePromise.showAlert("提示", errMsg, "好的");
+            if (typeof window.shiguangBridgePromise !== 'undefined') {
+                await window.shiguangBridgePromise.showAlert("提示", errMsg, "好的");
             } else alert(errMsg);
             return;
         }
@@ -230,30 +230,30 @@ async function runImportFlow() {
         };
 
         // 7. 打印并保存
-        if (typeof window.AndroidBridgePromise === 'undefined') {
+        if (typeof window.shiguangBridgePromise === 'undefined') {
             console.log("【测试成功】被 21:35 规则过滤后的作息时间表：\n", timeSlots);
             console.log(`【测试成功】共获取到 ${uniqueCourses.length} 门课程：\n`, JSON.stringify(uniqueCourses, null, 2));
             alert(`解析成功！获取到 ${uniqueCourses.length} 门课程及过滤后的作息时间。\n请打开F12控制台查看。`);
             return;
         }
 
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
         if (timeSlots.length > 0) {
-            await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+            await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         }
         
-        const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(uniqueCourses));
+        const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(uniqueCourses));
         if (!saveResult) {
-            AndroidBridge.showToast("保存失败，请重试！");
+            window.shiguangBridge.showToast("保存失败，请重试！");
             return;
         }
 
-        AndroidBridge.showToast(`成功导入 ${uniqueCourses.length} 节课程！`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${uniqueCourses.length} 节课程！`);
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (error) {
-        if (typeof window.AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast("导入异常: " + error.message);
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast("导入异常: " + error.message);
         } else {
             console.error("【导入异常】", error);
             alert("导入异常: " + error.message);

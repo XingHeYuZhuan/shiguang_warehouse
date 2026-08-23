@@ -165,41 +165,41 @@ function formatNoArrangementMessage(courses) {
 // 调度流程
 async function runImportFlow() {
     try {
-        AndroidBridge.showToast("开始解析课表...");
+        window.shiguangBridge.showToast("开始解析课表...");
         
-        const alertConfirmed = await window.AndroidBridgePromise.showAlert(
+        const alertConfirmed = await window.shiguangBridgePromise.showAlert(
             "导入确认",
             "请确保您目前处于教务系统的“学生课表”显示页面。\n是否立即提取并导入课表？",
             "开始提取"
         );
         
         if (!alertConfirmed) {
-            AndroidBridge.showToast("导入已取消");
+            window.shiguangBridge.showToast("导入已取消");
             return;
         }
         
         let courses = fetchAndParseCourses();
         
         if (!courses || courses.length === 0) {
-            await window.AndroidBridgePromise.showAlert("错误", "未在当前页面找到课表数据，请确认是否处于课表页面，或联系适配开发者。", "好的");
+            await window.shiguangBridgePromise.showAlert("错误", "未在当前页面找到课表数据，请确认是否处于课表页面，或联系适配开发者。", "好的");
             return;
         }
 
         let noArrangementCourses = parseNoArrangementCourses();
         if (noArrangementCourses.length > 0) {
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "存在未安排课程",
                 formatNoArrangementMessage(noArrangementCourses),
                 "继续"
             );
         }
         
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程块！`);
-        AndroidBridge.notifyTaskCompletion();
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程块！`);
+        window.shiguangBridge.notifyTaskCompletion();
         
     } catch (error) {
-        AndroidBridge.showToast("导入发生错误: " + error.message);
+        window.shiguangBridge.showToast("导入发生错误: " + error.message);
     }
 }
 

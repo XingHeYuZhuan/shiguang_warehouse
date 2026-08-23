@@ -78,14 +78,14 @@ async function fetchIndexDoc() {
 async function selectTermByUserFromDoc(doc) {
   const { yearData, semesterData } = parseTermOptionsFromDoc(doc);
 
-  const yearIndex = await window.AndroidBridgePromise.showSingleSelection(
+  const yearIndex = await window.shiguangBridgePromise.showSingleSelection(
     '选择学年',
     JSON.stringify(yearData.options.map(item => item.text)),
     yearData.defaultIndex
   );
   if (yearIndex === null || yearIndex === -1) throw new Error('已取消学年选择');
 
-  const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+  const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
     '选择学期',
     JSON.stringify(semesterData.options.map(item => item.text)),
     semesterData.defaultIndex
@@ -173,7 +173,7 @@ async function fetchCourses(xnm, xqm) {
 async function run() {
   try {
     const { xnm, xqm } = await resolveTerm();
-    AndroidBridge.showToast('正在解析课表数据...');
+    window.shiguangBridge.showToast('正在解析课表数据...');
 
     const rawData = await fetchCourses(xnm, xqm);
     const { courses } = parseCourses(rawData);
@@ -182,19 +182,19 @@ async function run() {
     const allWeeks = courses.flatMap(course => course.weeks);
     const semesterTotalWeeks = allWeeks.length ? Math.max(...allWeeks) : 20;
 
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
       semesterTotalWeeks,
       semesterStartDate: null,
       firstDayOfWeek: 1
     }));
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 
-    AndroidBridge.showToast(`导入成功：${courses.length} 门`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`导入成功：${courses.length} 门`);
+    window.shiguangBridge.notifyTaskCompletion();
   } catch (error) {
     console.error(error);
-    AndroidBridge.showToast(`导入失败: ${error.message}`);
+    window.shiguangBridge.showToast(`导入失败: ${error.message}`);
   }
 }
 

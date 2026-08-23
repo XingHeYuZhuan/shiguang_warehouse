@@ -247,8 +247,8 @@
 
     // ==================== 主导入流程 ====================
     async function runImportFlow() {
-        if (!window.AndroidBridgePromise) throw new Error("AndroidBridgePromise 不可用");
-        AndroidBridge.showToast("正在探测教务参数...");
+        if (!window.shiguangBridgePromise) throw new Error("AndroidBridgePromise 不可用");
+        window.shiguangBridge.showToast("正在探测教务参数...");
 
         const entryHtml = await requestText(`${BASE}/eams/courseTableForStd.action?&sf_request_type=ajax`, {
             method: "GET",
@@ -256,7 +256,7 @@
         });
         const params = parseEntryParams(entryHtml);
         if (!params.studentId || !params.tagId) {
-            await window.AndroidBridgePromise.showAlert("参数探测失败", "未能识别学生ID或学期组件", "确定");
+            await window.shiguangBridgePromise.showAlert("参数探测失败", "未能识别学生ID或学期组件", "确定");
             return;
         }
 
@@ -268,17 +268,17 @@
         const allSemesters = parseSemesterResponse(semesterRaw);
         if (allSemesters.length === 0) throw new Error("学期列表为空");
         const recentSemesters = allSemesters.slice(-8);
-        const selectIndex = await window.AndroidBridgePromise.showSingleSelection(
+        const selectIndex = await window.shiguangBridgePromise.showSingleSelection(
             "请选择导入学期",
             JSON.stringify(recentSemesters.map(s => s.name || s.id)),
             recentSemesters.length - 1
         );
         if (selectIndex === null) {
-            AndroidBridge.showToast("已取消导入");
+            window.shiguangBridge.showToast("已取消导入");
             return;
         }
         const selectedSemester = recentSemesters[selectIndex];
-        AndroidBridge.showToast("正在获取课表数据...");
+        window.shiguangBridge.showToast("正在获取课表数据...");
 
         const courseHtml = await requestText(`${BASE}/eams/courseTableForStd!courseTable.action?sf_request_type=ajax`, {
             method: "POST",
@@ -294,16 +294,16 @@
 
         const courses = parseCoursesFromHtml(courseHtml);
         if (courses.length === 0) {
-            await window.AndroidBridgePromise.showAlert("解析失败", "未提取到课程数据", "确定");
+            await window.shiguangBridgePromise.showAlert("解析失败", "未提取到课程数据", "确定");
             return;
         }
 
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程`);
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程`);
 
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(getPresetTimeSlots()));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(getPresetTimeSlots()));
 
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.notifyTaskCompletion();
     }
 
     (async function bootstrap() {
@@ -311,7 +311,7 @@
             await runImportFlow();
         } catch (error) {
             console.error("导入流程失败:", error);
-            AndroidBridge.showToast("导入失败: " + error.message);
+            window.shiguangBridge.showToast("导入失败: " + error.message);
         }
     })();
 })();

@@ -17,7 +17,7 @@ async function checkLoginEnvironment() {
     const currentUrl = window.location.href;
     const loginUrl = "http://211.86.128.194/suzxyjw/cas/login.action";
     if (currentUrl.includes(loginUrl)) {
-        AndroidBridge.showToast("请先登录教务系统再进行导入");
+        window.shiguangBridge.showToast("请先登录教务系统再进行导入");
         return false;
     }
     return true;
@@ -156,7 +156,7 @@ function parseAndMergeXmcuData(htmlText) {
  */
 async function getYearAndSemester() {
     try {
-        AndroidBridge.showToast("正在获取学期列表...");
+        window.shiguangBridge.showToast("正在获取学期列表...");
         const response = await fetch("http://211.86.128.194/suzxyjw/frame/droplist/getDropLists.action", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
@@ -165,12 +165,12 @@ async function getYearAndSemester() {
         });
         const list = await response.json();
         const names = list.map(item => item.name);
-        const selectedIndex = await window.AndroidBridgePromise.showSingleSelection("选择导入学期", JSON.stringify(names), 0);
+        const selectedIndex = await window.shiguangBridgePromise.showSingleSelection("选择导入学期", JSON.stringify(names), 0);
         if (selectedIndex === null) return null;
         const [xn, xq] = list[selectedIndex].code.split('-');
         return { xn, xq };
     } catch (error) {
-        AndroidBridge.showToast("获取列表失败");
+        window.shiguangBridge.showToast("获取列表失败");
         return null;
     }
 }
@@ -182,13 +182,13 @@ async function fetchCourses(xn, xq) {
     try {
         const paramsBase64 = encodeParams(xn, xq);
         const url = `http://211.86.128.194/suzxyjw/student/wsxk.xskcb10319.jsp?params=${paramsBase64}`;
-        AndroidBridge.showToast("正在提取数据...");
+        window.shiguangBridge.showToast("正在提取数据...");
         const response = await fetch(url, { method: "GET", credentials: "include" });
         const arrayBuffer = await response.arrayBuffer();
         const htmlText = new TextDecoder('gbk').decode(arrayBuffer);
         return parseAndMergeXmcuData(htmlText);
     } catch (error) {
-        AndroidBridge.showToast("抓取课表失败");
+        window.shiguangBridge.showToast("抓取课表失败");
         return null;
     }
 }
@@ -210,7 +210,7 @@ async function importPresetTimeSlots() {
         { "number": 10, "startTime": "19:55", "endTime": "20:40" },
         { "number": 11, "startTime": "20:50", "endTime": "21:35" }
     ];
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots)).catch(() => {});
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(slots)).catch(() => {});
 }
 
 /**
@@ -222,7 +222,7 @@ async function runImportFlow() {
     if (!isReady) return;
 
     // 弹窗确认
-    const confirmed = await window.AndroidBridgePromise.showAlert("教务导入", "建议在‘课表查询’页面进行导入以确保数据最全。", "确定");
+    const confirmed = await window.shiguangBridgePromise.showAlert("教务导入", "建议在‘课表查询’页面进行导入以确保数据最全。", "确定");
     if (!confirmed) return;
 
     // 选择学期
@@ -232,17 +232,17 @@ async function runImportFlow() {
     // 获取并解析数据
     const courses = await fetchCourses(params.xn, params.xq);
     if (!courses || courses.length === 0) {
-        AndroidBridge.showToast("未找到有效课程");
+        window.shiguangBridge.showToast("未找到有效课程");
         return;
     }
 
     // 存储
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
     await importPresetTimeSlots();
 
     // 完成
-    AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 启动

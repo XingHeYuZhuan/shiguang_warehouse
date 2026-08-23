@@ -69,10 +69,10 @@ async function showSemesterSelection() {
 async function showCampusSelection() {
     const campuses = ["南湖校区", "浑南校区"];
     try {
-        const idx = await window.AndroidBridgePromise.showSingleSelection("选择你所在的校区", JSON.stringify(campuses), 2);
+        const idx = await window.shiguangBridgePromise.showSingleSelection("选择你所在的校区", JSON.stringify(campuses), 2);
         return idx !== -1 ? campuses[idx] : false;
     } catch(e) {
-        AndroidBridge.showToast("显示校区列表出错：" + e.message);
+        window.shiguangBridge.showToast("显示校区列表出错：" + e.message);
         return false;
     }
 }
@@ -324,7 +324,7 @@ async function fetchCoursesFromAPI(semesterCode, retries=2) {
  * @param {Array<object>} lessons 课程对象数组
  */
 async function SaveCourses(lessons) {
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(lessons));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(lessons));
 }
 
 /**
@@ -335,7 +335,7 @@ async function importTimeSlotsByCampus(campus) {
     const hunNan = [{"number":1,"startTime":"08:30","endTime":"09:15"},{"number":2,"startTime":"09:25","endTime":"10:10"},{"number":3,"startTime":"10:30","endTime":"11:15"},{"number":4,"startTime":"11:25","endTime":"12:10"},{"number":5,"startTime":"14:00","endTime":"14:45"},{"number":6,"startTime":"14:55","endTime":"15:40"},{"number":7,"startTime":"16:00","endTime":"16:45"},{"number":8,"startTime":"16:55","endTime":"17:40"},{"number":9,"startTime":"18:30","endTime":"19:15"},{"number":10,"startTime":"19:25","endTime":"20:10"},{"number":11,"startTime":"20:30","endTime":"21:15"},{"number":12,"startTime":"21:15","endTime":"22:10"}];
     const nanHu = [{"number":1,"startTime":"08:00","endTime":"08:45"},{"number":2,"startTime":"08:55","endTime":"09:40"},{"number":3,"startTime":"10:00","endTime":"10:45"},{"number":4,"startTime":"10:55","endTime":"11:40"},{"number":5,"startTime":"14:00","endTime":"14:45"},{"number":6,"startTime":"14:55","endTime":"15:40"},{"number":7,"startTime":"16:00","endTime":"16:45"},{"number":8,"startTime":"16:55","endTime":"17:40"},{"number":9,"startTime":"18:30","endTime":"19:15"},{"number":10,"startTime":"19:25","endTime":"20:10"},{"number":11,"startTime":"20:20","endTime":"21:05"},{"number":12,"startTime":"21:15","endTime":"22:00"}];
     const slots = campus === "南湖校区" ? nanHu : hunNan;
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
 }
 
 /**
@@ -343,7 +343,7 @@ async function importTimeSlotsByCampus(campus) {
  */
 async function SaveConfig() {
     const cfg = { semesterTotalWeeks:18, defaultClassDuration:45, defaultBreakDuration:10, firstDayOfWeek:7 };
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(cfg));
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(cfg));
 }
 
 /**
@@ -351,46 +351,46 @@ async function SaveConfig() {
  * 最后通知Android任务完成
  */
 async function runAllDemosSequentially() {
-    AndroidBridge.showToast("开始导入课表...");
+    window.shiguangBridge.showToast("开始导入课表...");
     const campus = await showCampusSelection();
-    if (!campus) { AndroidBridge.showToast("已取消导入"); return; }
+    if (!campus) { window.shiguangBridge.showToast("已取消导入"); return; }
     const semester = await showSemesterSelection();
-    if (!semester) { AndroidBridge.showToast("已取消导入"); return; }
+    if (!semester) { window.shiguangBridge.showToast("已取消导入"); return; }
     
-    AndroidBridge.showToast("正在获取课表数据...");
+    window.shiguangBridge.showToast("正在获取课表数据...");
     let lessons;
     try {
         lessons = await fetchCoursesFromAPI(semester);
-        if (!lessons.length) { AndroidBridge.showToast("未获取到任何课程"); return; }
+        if (!lessons.length) { window.shiguangBridge.showToast("未获取到任何课程"); return; }
         console.log(`获取到 ${lessons.length} 门课程`);
     } catch(e) {
-        AndroidBridge.showToast("获取课表失败: "+e.message);
+        window.shiguangBridge.showToast("获取课表失败: "+e.message);
         return;
     }
     await SaveCourses(lessons);
     await importTimeSlotsByCampus(campus);
     await SaveConfig();
-    AndroidBridge.showToast("课表导入完成！");
+    window.shiguangBridge.showToast("课表导入完成！");
     
     const importExams = await askImportExams();
     if (importExams) {
-        AndroidBridge.showToast("正在获取考试数据...");
+        window.shiguangBridge.showToast("正在获取考试数据...");
         try {
             const examLessons = await fetchExamsFromAPI(semester);
             if (examLessons.length === 0) {
-                AndroidBridge.showToast("未获取到考试数据");
+                window.shiguangBridge.showToast("未获取到考试数据");
             } else {
                 const allLessons = [...lessons, ...examLessons];
                 await SaveCourses(allLessons);
-                AndroidBridge.showToast(`已导入 ${examLessons.length} 条考试记录（合并至课表）`);
+                window.shiguangBridge.showToast(`已导入 ${examLessons.length} 条考试记录（合并至课表）`);
             }
         } catch(e) {
-            AndroidBridge.showToast("导入考试失败: "+e.message);
+            window.shiguangBridge.showToast("导入考试失败: "+e.message);
             console.error(e);
         }
     }
     
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 启动主流程

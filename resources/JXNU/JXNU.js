@@ -407,7 +407,7 @@ function getTimeSlots() {
 // ---------- 用户交互 ----------
 
 async function promptUserToStart() {
-    return await window.AndroidBridgePromise.showAlert(
+    return await window.shiguangBridgePromise.showAlert(
         "江西师范大学 课表导入",
         "请确认：\n1. 已在浏览器中登录教务系统\n2. 已进入学生课表查询页面并选择了正确的学年学期\n3. 已点击【查询】按钮，课表已正常显示\n\n点击确定开始导入。",
         "确定，开始导入"
@@ -415,7 +415,7 @@ async function promptUserToStart() {
 }
 
 async function getTotalWeeks() {
-    return await window.AndroidBridgePromise.showPrompt(
+    return await window.shiguangBridgePromise.showPrompt(
         "设置本学期总周数",
         "请输入本学期总周数（默认 20，范围 1-55）:",
         "20",
@@ -428,15 +428,15 @@ async function getTotalWeeks() {
 async function run() {
     try {
         const confirmed = await promptUserToStart();
-        if (!confirmed) { AndroidBridge.showToast("用户取消了导入。"); return; }
+        if (!confirmed) { window.shiguangBridge.showToast("用户取消了导入。"); return; }
 
         const weeksInput = await getTotalWeeks();
-        if (weeksInput === null) { AndroidBridge.showToast("导入已取消。"); return; }
+        if (weeksInput === null) { window.shiguangBridge.showToast("导入已取消。"); return; }
         const totalWeeks = parseInt(weeksInput, 10);
-        if (isNaN(totalWeeks) || totalWeeks < 1) { AndroidBridge.showToast("周数设置无效。"); return; }
+        if (isNaN(totalWeeks) || totalWeeks < 1) { window.shiguangBridge.showToast("周数设置无效。"); return; }
         const defaultWeeks = Array.from({ length: totalWeeks }, (_, i) => i + 1);
 
-        AndroidBridge.showToast("正在解析课表数据...");
+        window.shiguangBridge.showToast("正在解析课表数据...");
         const { courses: parsedCourses, html: pageHtml } = parseCourseTableFromCurrentPage();
 
         if (parsedCourses.length === 0) {
@@ -458,7 +458,7 @@ async function run() {
                 detail = '未能在当前页面中找到课表数据。\n' +
                     '请确认已在学生课表查询页面正确选择了学期并点击了【查询】。';
             }
-            await window.AndroidBridgePromise.showAlert("未解析到课程", detail, "确定");
+            await window.shiguangBridgePromise.showAlert("未解析到课程", detail, "确定");
             return;
         }
 
@@ -469,31 +469,31 @@ async function run() {
         }));
 
         try {
-            await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(coursesWithWeeks));
-            AndroidBridge.showToast(`课程数据已导入（共 ${coursesWithWeeks.length} 条）`);
+            await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(coursesWithWeeks));
+            window.shiguangBridge.showToast(`课程数据已导入（共 ${coursesWithWeeks.length} 条）`);
         } catch (saveErr) {
             console.error("[JXNU] 保存课程失败:", saveErr);
-            await window.AndroidBridgePromise.showAlert("保存课程失败", saveErr.message || String(saveErr), "确定");
+            await window.shiguangBridgePromise.showAlert("保存课程失败", saveErr.message || String(saveErr), "确定");
             return;
         }
 
         const timeSlots = getTimeSlots();
         try {
-            await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-            AndroidBridge.showToast("时间段数据已导入");
+            await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+            window.shiguangBridge.showToast("时间段数据已导入");
         } catch (slotErr) {
             console.error("[JXNU] 保存时间段失败:", slotErr);
-            AndroidBridge.showToast(`时间段保存失败：${slotErr.message}`);
+            window.shiguangBridge.showToast(`时间段保存失败：${slotErr.message}`);
         }
 
-        AndroidBridge.showToast("导入完成！");
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast("导入完成！");
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (err) {
         console.error("[JXNU] 导入流程出错:", err);
         try {
-            await window.AndroidBridgePromise.showAlert("导入失败", `未知错误：${err.message || err}\n\n请联系开发者。`, "确定");
+            await window.shiguangBridgePromise.showAlert("导入失败", `未知错误：${err.message || err}\n\n请联系开发者。`, "确定");
         } catch (_) {}
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.notifyTaskCompletion();
     }
 }
 

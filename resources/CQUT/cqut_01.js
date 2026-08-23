@@ -19,14 +19,14 @@ const baseFetch = async (path, body, description) => {
     });
 
     if (!response.ok) {
-        AndroidBridge.showToast(`获取${description}失败，请确认已登录后重试`);
+        window.shiguangBridge.showToast(`获取${description}失败，请确认已登录后重试`);
         throw new Error(`获取${description}失败: ${response.status} ${response.statusText}`);
     }
 
     try {
         return await response.json();
     } catch (error) {
-        AndroidBridge.showToast(`解析${description}失败，请确认当前页面登录状态`);
+        window.shiguangBridge.showToast(`解析${description}失败，请确认当前页面登录状态`);
         throw new Error(`解析${description}失败: ${error.message}`);
     }
 };
@@ -134,15 +134,15 @@ const mergeCourses = (events) => {
 
 // 将解析后的结构写入 App（配置、课程列表、节次时间表）
 const saveSchedule = (parsedSchedule) => Promise.all([
-    window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(parsedSchedule.courseConfig)),
-    window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(parsedSchedule.courses)),
-    window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(parsedSchedule.timeSlots)),
+    window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(parsedSchedule.courseConfig)),
+    window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(parsedSchedule.courses)),
+    window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(parsedSchedule.timeSlots)),
 ]);
 
 // 主流程：校验页面 → 拉取用户/校区 → 拉取节次/当前学期信息 → 拉取全学期每周课程 → 合并保存
 (async () => {
     if (!checkLogin()) {
-        AndroidBridge.showToast('请先打开重庆理工大学课表页面并登录');
+        window.shiguangBridge.showToast('请先打开重庆理工大学课表页面并登录');
         throw new Error('当前不在重庆理工大学课表页面');
     }
 
@@ -151,7 +151,7 @@ const saveSchedule = (parsedSchedule) => Promise.all([
     const campusName = userInfo?.userCustomSetting?.campusName;
 
     if (!userID || !campusName) {
-        AndroidBridge.showToast('未获取到完整的用户信息，请确认已登录');
+        window.shiguangBridge.showToast('未获取到完整的用户信息，请确认已登录');
         throw new Error('用户信息不完整');
     }
 
@@ -166,7 +166,7 @@ const saveSchedule = (parsedSchedule) => Promise.all([
     const semesterStartDate = parseSemesterStartDate(yearTerm, currentWeekData?.weekDayList);
 
     if (!yearTerm || weekList.length === 0) {
-        AndroidBridge.showToast('未获取到当前学期信息');
+        window.shiguangBridge.showToast('未获取到当前学期信息');
         throw new Error('当前学期信息不完整');
     }
 
@@ -185,5 +185,5 @@ const saveSchedule = (parsedSchedule) => Promise.all([
         courses: mergeCourses(weekResults.flatMap((result) => result?.eventList ?? [])),
     });
 
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 })();

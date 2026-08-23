@@ -200,88 +200,88 @@ async function fetchTimetable(selectTableType) {
 // ==================== 主流程 ====================
 
 async function runImportFlow() {
-    AndroidBridge.showToast("正在初始化吉利学院课表导入...");
+    window.shiguangBridge.showToast("正在初始化吉利学院课表导入...");
 
     // 1. 前置提示
-    const confirmed = await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
         "教务系统课表导入",
         "请确认已在当前页面成功登录教务系统（输入学号、密码及验证码）。\n登录成功后点击“好的，开始导入”。",
         "好的，开始导入"
     );
     if (!confirmed) {
-        AndroidBridge.showToast("已取消导入");
+        window.shiguangBridge.showToast("已取消导入");
         return;
     }
 
     // 2. 检测登录状态
-    AndroidBridge.showToast("正在检测登录状态...");
+    window.shiguangBridge.showToast("正在检测登录状态...");
     if (!(await isLoggedIn())) {
-        await window.AndroidBridgePromise.showAlert(
+        await window.shiguangBridgePromise.showAlert(
             "未检测到登录状态",
             "当前会话未登录，请先在页面中完成登录，之后重新发起导入。",
             "知道了"
         );
-        AndroidBridge.showToast("未登录，导入中止");
+        window.shiguangBridge.showToast("未登录，导入中止");
         return;
     }
 
     // 3. 选择学期
     const semesters = ["本学期", "下学期"];
-    const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(semesters),
         0
     );
     if (semesterIndex === null || semesterIndex === -1) {
-        AndroidBridge.showToast("已取消学期选择");
+        window.shiguangBridge.showToast("已取消学期选择");
         return;
     }
     const selectTableType = semesterIndex === 0 ? "ThisTerm" : "NextTerm";
 
     // 4. 拉取课表页面
-    AndroidBridge.showToast("正在获取课表数据...");
+    window.shiguangBridge.showToast("正在获取课表数据...");
     const html = await fetchTimetable(selectTableType);
     if (!html) {
-        AndroidBridge.showToast("获取课表失败，请确认登录状态后重试");
+        window.shiguangBridge.showToast("获取课表失败，请确认登录状态后重试");
         return;
     }
 
     // 5. 解析课程
     const courses = parseTimetableToCourses(html);
     if (courses.length === 0) {
-        AndroidBridge.showToast("未解析到课程数据，请确认当前学期是否有课程");
+        window.shiguangBridge.showToast("未解析到课程数据，请确认当前学期是否有课程");
         return;
     }
     console.log("解析到课程记录数:", courses.length, courses);
 
     // 6. 保存课程
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        AndroidBridge.showToast(`成功保存 ${courses.length} 条课程记录`);
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        window.shiguangBridge.showToast(`成功保存 ${courses.length} 条课程记录`);
     } catch (e) {
-        AndroidBridge.showToast("课程保存失败: " + e.message);
+        window.shiguangBridge.showToast("课程保存失败: " + e.message);
         return;
     }
 
     // 7. 保存作息时间
     try {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
-        AndroidBridge.showToast("作息时间保存成功");
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+        window.shiguangBridge.showToast("作息时间保存成功");
     } catch (e) {
-        AndroidBridge.showToast("作息时间保存失败: " + e.message);
+        window.shiguangBridge.showToast("作息时间保存失败: " + e.message);
     }
 
     // 8. 保存课表配置（按课程数据中的最大周数设置学期总周数）
     try {
         const maxWeek = courses.reduce((max, c) => Math.max(max, Math.max(...c.weeks)), 0);
         const config = { semesterStartDate: null, semesterTotalWeeks: Math.max(maxWeek, 1) };
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
     } catch (e) {
-        AndroidBridge.showToast("课表配置保存失败: " + e.message);
+        window.shiguangBridge.showToast("课表配置保存失败: " + e.message);
     }
 
-    AndroidBridge.showToast(`课表导入完成，共 ${courses.length} 条记录`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`课表导入完成，共 ${courses.length} 条记录`);
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 启动导入流程

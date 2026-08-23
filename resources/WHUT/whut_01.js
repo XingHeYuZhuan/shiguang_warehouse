@@ -143,13 +143,13 @@ function parseSingleCourse(rawCourse, sectionMap) {
 }
 
 async function promptUserToStart() {
-    const confirmed = await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
         "武汉理工大学课表导入",
         "本流程将通过教务系统接口获取您的个人课表与开学时间。\n重要提示:\n导入前请确保您已在浏览器中成功登录教务系统，且未关闭登录窗口。",
         "好的，开始导入"
     );
     if (!confirmed) {
-        AndroidBridge.showToast("用户取消了导入。");
+        window.shiguangBridge.showToast("用户取消了导入。");
         return null;
     }
     return true;
@@ -157,7 +157,7 @@ async function promptUserToStart() {
 
 async function getAcademicYear() {
     const currentYear = new Date().getFullYear();
-    const yearSelection = await window.AndroidBridgePromise.showPrompt(
+    const yearSelection = await window.shiguangBridgePromise.showPrompt(
         "选择学年",
         "请输入要导入课程的起始学年（例如 2025-2026 应输入2025）:",
         String(currentYear), 
@@ -168,7 +168,7 @@ async function getAcademicYear() {
 
 async function selectSemester() {
     const semesters = ["1 (秋季学期/上学期)", "2 (春季学期/下学期)"];
-    const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(semesters),
         0
@@ -225,7 +225,7 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
         studentId = userData?.datas?.userId;
         if (!studentId) throw new Error("无法读取 userId");
     } catch (e) {
-        AndroidBridge.showToast("获取用户信息失败，请确认是否登录教务系统！");
+        window.shiguangBridge.showToast("获取用户信息失败，请确认是否登录教务系统！");
         console.error("Fetch User Error:", e);
         return null;
     }
@@ -270,14 +270,14 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
         });
         rawCourseData = JSON.parse(await response.text());
     } catch (e) {
-        AndroidBridge.showToast("请求课表 API 失败，请检查网络和登录状态。");
+        window.shiguangBridge.showToast("请求课表 API 失败，请检查网络和登录状态。");
         console.error("Fetch Course Error:", e);
         return null;
     }
 
     const rawCourses = rawCourseData?.datas?.cxxskcb?.rows || [];
     if (rawCourses.length === 0) {
-        AndroidBridge.showToast("该学期未查询到您的课程数据。");
+        window.shiguangBridge.showToast("该学期未查询到您的课程数据。");
         return null;
     }
 
@@ -292,15 +292,15 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
 
 async function saveCourses(parsedCourses) {
     if (parsedCourses.length === 0) {
-        AndroidBridge.showToast("没有有效的课程数据可供保存。");
+        window.shiguangBridge.showToast("没有有效的课程数据可供保存。");
         return true;
     }
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses));
-        AndroidBridge.showToast(`成功导入 ${parsedCourses.length} 个规范后的课程块！`);
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses));
+        window.shiguangBridge.showToast(`成功导入 ${parsedCourses.length} 个规范后的课程块！`);
         return true;
     } catch (error) {
-        AndroidBridge.showToast(`保存课程数据失败: ${error.message}`);
+        window.shiguangBridge.showToast(`保存课程数据失败: ${error.message}`);
         return false;
     }
 }
@@ -326,7 +326,7 @@ async function importPresetTimeSlots() {
     ];
 
     try {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
         return true; 
     } catch (error) {
         console.error("导入时间段失败: " + error.message);
@@ -336,7 +336,7 @@ async function importPresetTimeSlots() {
 
 async function saveConfig(configData) {
     try {
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(configData));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(configData));
         return true;
     } catch (error) {
         console.error("保存配置失败: " + error.message);
@@ -345,20 +345,20 @@ async function saveConfig(configData) {
 }
 
 async function runImportFlow() {
-    AndroidBridge.showToast("武汉理工大学课程导入流程启动...");
+    window.shiguangBridge.showToast("武汉理工大学课程导入流程启动...");
 
     const alertConfirmed = await promptUserToStart();
     if (!alertConfirmed) return;
     
     const academicYear = await getAcademicYear();
     if (academicYear === null) {
-        AndroidBridge.showToast("导入已取消。");
+        window.shiguangBridge.showToast("导入已取消。");
         return;
     }
     
     const semesterCode = await selectSemester();
     if (semesterCode === null) {
-        AndroidBridge.showToast("导入已取消。");
+        window.shiguangBridge.showToast("导入已取消。");
         return;
     }
 
@@ -373,7 +373,7 @@ async function runImportFlow() {
     const saveResult = await saveCourses(courseData.courses);
     if (!saveResult) return;
 
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runImportFlow();

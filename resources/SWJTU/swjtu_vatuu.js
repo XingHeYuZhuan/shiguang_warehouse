@@ -274,11 +274,11 @@
 
     async function importSwjtuSchedule() {
         try {
-            AndroidBridge.showToast("正在解析西南交通大学 VATUU 课表...");
+            window.shiguangBridge.showToast("正在解析西南交通大学 VATUU 课表...");
 
             const courses = await parseScheduleTable();
             if (courses.length === 0) {
-                await window.AndroidBridgePromise.showAlert(
+                await window.shiguangBridgePromise.showAlert(
                     "导入失败",
                     "未解析到课程。请确认当前页面为本学期课表，并选择“全部周次”。",
                     "确定",
@@ -286,30 +286,30 @@
                 return false;
             }
 
-            await window.AndroidBridgePromise.saveCourseConfig(
+            await window.shiguangBridgePromise.saveCourseConfig(
                 JSON.stringify(SWJTU_COURSE_CONFIG),
             );
-            await window.AndroidBridgePromise.savePresetTimeSlots(
+            await window.shiguangBridgePromise.savePresetTimeSlots(
                 JSON.stringify(SWJTU_TIME_SLOTS),
             );
-            await window.AndroidBridgePromise.saveImportedCourses(
+            await window.shiguangBridgePromise.saveImportedCourses(
                 JSON.stringify(courses),
             );
 
             const unscheduledCourses = collectUnscheduledCourses();
             if (unscheduledCourses.length > 0) {
-                AndroidBridge.showToast(
+                window.shiguangBridge.showToast(
                     `成功导入 ${courses.length} 条课程，另有 ${unscheduledCourses.length} 门无节次课程已跳过`,
                 );
             } else {
-                AndroidBridge.showToast(`成功导入 ${courses.length} 条课程`);
+                window.shiguangBridge.showToast(`成功导入 ${courses.length} 条课程`);
             }
 
-            AndroidBridge.notifyTaskCompletion();
+            window.shiguangBridge.notifyTaskCompletion();
             return true;
         } catch (error) {
             console.error("SWJTU VATUU 课表导入失败：", error);
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "导入失败",
                 `解析或保存课表失败：${error.message}`,
                 "确定",
