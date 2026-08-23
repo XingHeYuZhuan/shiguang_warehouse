@@ -9,6 +9,9 @@
 // 课表页面地址（selectTableType: ThisTerm=本学期, NextTerm=下学期）
 const COURSE_TABLE_URL = "https://jw.guc.edu.cn/yethan/CourseAction?setAction=userCourseScheduleTable&viewType=studentCourseTableWeek&selectTableType=";
 
+// 课表表单提交地址（"按周次查课表"用 POST 提交，weekNo=1 请求用于解析开学日期，复刻页面表单）
+const COURSE_ACTION_URL = "https://jw.guc.edu.cn/yethan/CourseAction";
+
 // 默认导入本学期（学校系统仅支持查看本学期课表）；如需下学期请改为 "NextTerm"
 const SELECT_TABLE_TYPE = "ThisTerm";
 
@@ -244,7 +247,52 @@ function parseTimetableToCourses(html) {
     return mergeAndDistinctCourses(results);
 }
 
+/**
+ * 从课表 HTML 动态提取作息时间（节次 + 上课时间列，如 "08:20-09:05"）。
+ * 返回 [{ number, startTime, endTime }]；无有效节次时返回 null（由调用方回退写死常量）。
+ * 表头行（节次为"节"字）与 rowspan 跨节的空节次行经 parseInt 后自然跳过。
+ */
+function parseTimeSlots(html) {
+    try {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const table = doc.querySelector("table.table_border");
+        if (!table) return null;
+        const slots = [];
+        const rows = Array.from(table.querySelectorAll("tr"));
+        for (const row of rows) {
+            const cells = Array.from(row.querySelectorAll("td"));
+            if (cells.length < 2) continue;
+            const number = parseInt(cells[0].textContent.trim(), 10);
+            if (isNaN(number) || number < 1) continue;
+            const timeText = (cells[1].textContent || "").trim();
+            const m = timeText.match(/^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$/);
+            if (!m) continue;
+            slots.push({ number: number, startTime: m[1], endTime: m[2] });
+        }
+        if (slots.length === 0) return null;
+        slots.sort((a, b) => a.number - b.number);
+        return slots;
+    } catch (e) {
+        console.error("解析作息时间失败:", e);
+        return null;
+    }
+}
+
 // ==================== 网络请求 ====================
+
+/**
+ * 带超时的 fetch 封装：统一 AbortController 超时与登录会话 Cookie(credentials: "include")。
+ * 超时/网络异常由调用方 catch 处理。
+ */
+async function fetchWithTimeout(url, options) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+        return await fetch(url, Object.assign({ credentials: "include" }, options, { signal: controller.signal }));
+    } finally {
+        clearTimeout(timer);
+    }
+}
 
 /**
  * 拉取本学期课表页面并检测登录状态（一次请求完成）。
@@ -256,13 +304,8 @@ function parseTimetableToCourses(html) {
  *   - { error: "no_table" }        已登录但页面无课表
  */
 async function fetchTimetableOnce() {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-        const resp = await fetch(COURSE_TABLE_URL + SELECT_TABLE_TYPE + "&queryType=student", {
-            credentials: "include",
-            signal: controller.signal
-        });
+        const resp = await fetchWithTimeout(COURSE_TABLE_URL + SELECT_TABLE_TYPE + "&queryType=student");
         if (!resp.ok) return { error: "request_failed" };
         const html = await resp.text();
         if (html.includes('id="ranstring"') || html.includes("LoginForm")) return { error: "not_logged_in" };
@@ -271,8 +314,91 @@ async function fetchTimetableOnce() {
     } catch (e) {
         console.error("获取课表失败:", e);
         return { error: "network" };
-    } finally {
-        clearTimeout(timer);
+    }
+}
+
+/**
+ * 请求第 1 周课表（POST，复刻页面"查周课表"表单，weekNo=1）。
+ * 第 1 周视图的表头带日期（如 "星期一<br>03月02日"），用于解析开学日期。
+ * 成功返回响应 HTML；任何失败返回 null（不阻断主流程，开学日期缺失时 App 端可手动设置）。
+ */
+async function fetchWeek1Timetable() {
+    try {
+        const resp = await fetchWithTimeout(COURSE_ACTION_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+            body: new URLSearchParams({
+                setAction: "userCourseScheduleTable",
+                viewType: "studentCourseTableWeek",
+                selectTableType: SELECT_TABLE_TYPE,
+                queryType: "student",
+                weekNo: "1"
+            }).toString()
+        });
+        if (!resp.ok) return null;
+        return await resp.text();
+    } catch (e) {
+        console.error("获取第1周课表失败:", e);
+        return null;
+    }
+}
+
+/**
+ * 从第 1 周课表 HTML 解析开学日期（第一周第一天 = 表头"星期一"的日期）。
+ * 返回 "yyyy-MM-dd"（官方 CourseConfigJsonModel 格式）；解析失败返回 null。
+ *
+ * 年份策略（两步）：
+ *   1) 优先页头学年解析："2025-2026第2学期" → 第1学期取学年首年(秋季)、第2学期取学年次年(春季)；
+ *   2) 兜底：取 "MM月DD日" 距今天最近的年份（候选: 去年/今年/明年）。
+ *      依据：教务系统仅显示本学期，开学日必然距今天不足半年，最近年份即正确年份。
+ */
+function parseSemesterStartDate(html) {
+    try {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const table = doc.querySelector("table.table_border");
+        if (!table) return null;
+        const headerRow = table.querySelector("tr");
+        const cells = headerRow ? Array.from(headerRow.querySelectorAll("td")) : [];
+        // 表头：[0]=节, [1]=上课时间, [2]=星期一 ...
+        if (cells.length < 3) return null;
+        const mondayText = cells[2].textContent || ""; // 如 "星期一03月02日"
+        const m = mondayText.match(/(\d{1,2})月(\d{1,2})日/);
+        if (!m) return null;
+        const month = parseInt(m[1], 10);
+        const day = parseInt(m[2], 10);
+        if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+        // 年份：优先页头学年解析
+        let year = null;
+        const termMatch = html.match(/(20\d{2})\s*[-—]\s*(20\d{2})第?(\d)学期/);
+        if (termMatch) {
+            const y1 = parseInt(termMatch[1], 10);
+            const y2 = parseInt(termMatch[2], 10);
+            const termNo = parseInt(termMatch[3], 10);
+            if (y2 === y1 + 1 && (termNo === 1 || termNo === 2)) {
+                year = termNo === 2 ? y2 : y1; // 第1学期=首年(秋季)，第2学期=次年(春季)
+            }
+        }
+
+        // 兜底：距今天最近的年份
+        if (!year) {
+            const now = new Date();
+            const thisYear = now.getFullYear();
+            let best = thisYear;
+            let bestDiff = Infinity;
+            for (const y of [thisYear - 1, thisYear, thisYear + 1]) {
+                const d = new Date(y, month - 1, day);
+                const diff = Math.abs(d - now);
+                if (diff < bestDiff) { bestDiff = diff; best = y; }
+            }
+            year = best;
+        }
+
+        const pad = n => String(n).padStart(2, "0");
+        return `${year}-${pad(month)}-${pad(day)}`;
+    } catch (e) {
+        console.error("解析开学日期失败:", e);
+        return null;
     }
 }
 
@@ -338,18 +464,29 @@ async function runImportFlow() {
         return;
     }
 
-    // 5. 保存作息时间
+    // 5. 保存作息时间（优先从课表"上课时间"列动态提取，学校调作息后无需改代码；提取失败回退写死常量）
     try {
-        await BRIDGE_P.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+        const timeSlots = parseTimeSlots(html) || TIME_SLOTS;
+        await BRIDGE_P.savePresetTimeSlots(JSON.stringify(timeSlots));
         BRIDGE.showToast("作息时间保存成功");
     } catch (e) {
         BRIDGE.showToast("作息时间保存失败: " + e.message);
     }
 
-    // 6. 保存课表配置（按课程数据中的最大周数设置学期总周数）
+    // 6. 保存课表配置（学期总周数 + 开学日期）
     try {
         const maxWeek = courses.reduce((max, c) => Math.max(max, Math.max(...c.weeks)), 0);
         const config = { semesterTotalWeeks: Math.max(maxWeek, 1) };
+        // 开学日期：请求第 1 周课表，取表头"星期一"日期作为第一周第一天（"yyyy-MM-dd"，官方格式）；
+        // 请求失败或解析失败时不设置该字段（App 端可手动设置），不影响课程导入
+        const week1Html = await fetchWeek1Timetable();
+        if (week1Html) {
+            const semesterStartDate = parseSemesterStartDate(week1Html);
+            if (semesterStartDate) {
+                config.semesterStartDate = semesterStartDate;
+                console.log("开学日期:", semesterStartDate);
+            }
+        }
         await BRIDGE_P.saveCourseConfig(JSON.stringify(config));
     } catch (e) {
         BRIDGE.showToast("课表配置保存失败: " + e.message);
