@@ -1,13 +1,5 @@
 # shiguang_warehouse  
 
->[!WARNING]
->本仓库将于2026/8/23将适配版本升级至v2版本，截止2026/8/23日期前允许提交v1版本的适配代码，不必担心升级问题，我们将通过迁移程序升级仓库里面的现有适配  
->目前仓库索引还是保持在v1版本标识，支持v2适配版本的软件版本已经发布[v2.0.0](https://github.com/XingHeYuZhuan/shiguangschedule/releases/tag/v2.0.0) 请尽快升级保证兼容  
->
-> 参考文档：[适配开发变化日志](https://github.com/XingHeYuZhuan/shiguangschedule/wiki/%E9%80%82%E9%85%8D%E6%9B%B4%E6%96%B0%E6%97%A5%E5%BF%97)  
-> 为了保障还未升级软件版本在2026/8/23前可以使用新增的适配代码，请开发者尽量使用v1版本接口提交  
-> 本条目将于升级结束后移除
-
 本仓库用于管理 [shiguangschedule](https://github.com/XingHeYuZhuan/shiguangschedule) 的适配脚本，供软件拉取和测试。
 
 > [!important]
@@ -120,7 +112,13 @@ Fork 本仓库 → 在 index/root_index.yaml 文件中登记 → 在 resources �
   import_url: ""
   maintainer: "星河欲转"
   description: "空网站以及不存在适配代码，用于在不更新索引的情况下给开发者进行适配的软件测试"    
-```
+```  
+
+## 关于仓库索引  
+当前仓库下面的固定孤立分支index-pb-release承担存放索引的功能  
+school_index.pb文件存放了适配仓库里面的所有yaml文件的信息，因此软件仅需要拉取该索引文件和resources资源目录下面的所有*.js文件  
+`scripts\build_data.py`代码负责编译出school_index.pb文件
+> 当前索引协议版本：v2
 
 > [!tip]
 > 如需更新索引，可自行了解仓库的 CI 配置（不建议测试适配时还更新索引）
@@ -147,10 +145,9 @@ Fork 本仓库 → 在 index/root_index.yaml 文件中登记 → 在 resources �
 
 - 请确保 `adapters.yaml` 信息准确完整，符合规范要求。
 - 每次提交适配代码或索引信息后，建议自测通过再提交 PR。
-- 仓库需保留 `lighthouse` 标签，否则软件无法识别为适配仓库。
 
 ## 更多链接  
-- **[如何适配](https://github.com/XingHeYuZhuan/shiguangschedule/wiki/%E5%A6%82%E4%BD%95%E9%80%82%E9%85%8D%E6%95%99%E5%8A%A1)**  
+- **[如何适配教务](https://github.com/XingHeYuZhuan/shiguangschedule/wiki)**  
 - **[浏览器测试插件](https://github.com/XingHeYuZhuan/shiguang_Tester)**
 
 ---  
