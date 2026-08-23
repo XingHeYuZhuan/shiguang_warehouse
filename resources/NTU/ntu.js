@@ -1,3 +1,6 @@
+// 南通大学拾光课程表适配脚本
+// 通过正方教务V9个人/班级课表接口获取课程，并转换为导入格式
+
 (function () {
 const WINTER_TIME_SLOTS = [
     { number: 1, startTime: "07:50", endTime: "08:30" },
@@ -38,6 +41,7 @@ function parseSections(value) {
     return { startSection, endSection };
 }
 
+// 将周次文本转换为周数数组
 function parseWeeks(value) {
     const weeks = new Set();
     String(value || "").replace(/（/g, "(").replace(/）/g, ")").split(/[，,、;]/).forEach((part) => {
@@ -114,6 +118,7 @@ async function fetchSemesterStartDate() {
     }
 }
 
+// 将课程字段转换为导入协议字段
 function normalizeCourses(rawCourses) {
     const uniqueCourses = new Map();
     rawCourses.forEach((rawCourse) => {
@@ -131,6 +136,7 @@ function normalizeCourses(rawCourses) {
     return [...uniqueCourses.values()].sort((left, right) => left.day - right.day || left.startSection - right.startSection || left.name.localeCompare(right.name));
 }
 
+// 合并同一课程的重复节次
 function mergeAndDistinctCourses(courses) {
     if (courses.length <= 1) return courses;
     const list = courses.map((course) => ({ ...course, weeks: [...new Set(course.weeks)].sort((left, right) => left - right) }));
@@ -150,6 +156,7 @@ function mergeAndDistinctCourses(courses) {
     return merged;
 }
 
+// 个人课表
 async function fetchApiCourses() {
     const xnm = document.querySelector("#xnm")?.value;
     const xqm = document.querySelector("#xqm")?.value;
@@ -173,6 +180,7 @@ async function fetchApiCourses() {
     }
 }
 
+// 班级课表
 async function fetchClassApiCourses() {
     const pageMap = window.api?.data?.map || {};
     const readValue = (key) => pageMap[key] ?? document.querySelector(`#${key}`)?.value ?? "";
@@ -216,7 +224,7 @@ async function fetchClassApiCourses() {
 
 async function runImport() {
     try {
-        if (!await window.shiguangBridgePromise.showAlert("南通大学课表导入", "请先登录南通大学教务系统。", "开始导入")) return;
+        if (!await window.shiguangBridgePromise.showAlert("南通大学课表导入", "导入前请确保已登录南通大学教务系统。", "开始导入")) return;
         const formAction = document.querySelector("#ajaxForm")?.getAttribute("action") || "";
         const isPersonalPage = /xskbcx_cxXskbcxIndex/i.test(formAction) || /\/kbcx\/xskbcx/i.test(window.location.pathname);
         const pageCourses = isPersonalPage ? await fetchApiCourses() : await fetchClassApiCourses();
