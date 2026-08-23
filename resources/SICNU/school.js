@@ -315,7 +315,7 @@ async function main() {
         console.log('[教务适配] 学期日期:', semesterInfo.startDate, '~', semesterInfo.endDate);
 
         // 2. 获取课程数据
-        AndroidBridge.showToast('正在采集课程数据...');
+        window.shiguangBridge.showToast('正在采集课程数据...');
         const data = await fetchCourseData(semesterInfo.id);
 
         if (!data || !data.lessons || data.lessons.length === 0) {
@@ -373,32 +373,32 @@ async function main() {
         console.log('  - 开学日期:', config.semesterStartDate);
 
         // 7. 导入数据
-        AndroidBridge.showToast(`正在导入 ${allCourses.length} 门课程...`);
+        window.shiguangBridge.showToast(`正在导入 ${allCourses.length} 门课程...`);
 
-        const courseResult = await window.AndroidBridgePromise.saveImportedCourses(
+        const courseResult = await window.shiguangBridgePromise.saveImportedCourses(
             JSON.stringify(allCourses)
         );
         console.log('[教务适配] 课程导入结果:', courseResult);
 
-        const timeSlotResult = await window.AndroidBridgePromise.savePresetTimeSlots(
+        const timeSlotResult = await window.shiguangBridgePromise.savePresetTimeSlots(
             JSON.stringify(timeSlots)
         );
         console.log('[教务适配] 时间段导入结果:', timeSlotResult);
 
-        const configResult = await window.AndroidBridgePromise.saveCourseConfig(
+        const configResult = await window.shiguangBridgePromise.saveCourseConfig(
             JSON.stringify(config)
         );
         console.log('[教务适配] 配置导入结果:', configResult);
 
         // 8. 触发下载
         console.log('[教务适配] ✅ 所有数据导入完成，触发下载...');
-        AndroidBridge.showToast('课程数据采集完成！请保存下载的文件。');
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast('课程数据采集完成！请保存下载的文件。');
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (error) {
         console.error('[教务适配] ❌ 执行失败:', error.message);
         console.error(error.stack);
-        AndroidBridge.showToast('采集失败: ' + error.message);
+        window.shiguangBridge.showToast('采集失败: ' + error.message);
     }
 }
 

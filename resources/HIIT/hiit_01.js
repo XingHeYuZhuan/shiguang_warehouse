@@ -1,7 +1,7 @@
 (function () {
     function showToast(message) {
-        if (typeof AndroidBridge !== "undefined" && AndroidBridge.showToast) {
-            AndroidBridge.showToast(String(message || ""));
+        if (typeof window.shiguangBridge !== "undefined" && window.shiguangBridge.showToast) {
+            window.shiguangBridge.showToast(String(message || ""));
         } else {
             console.log(message);
         }
@@ -444,7 +444,7 @@
 
     async function selectSemester(semesters) {
         const recent = semesters.slice(-8);
-        const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+        const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
             "选择要导入的学期",
             JSON.stringify(recent.map((semester) => semester.name || semester.id)),
             recent.length - 1
@@ -499,15 +499,15 @@
             config.semesterTotalWeeks = calendarInfo.semesterTotalWeeks;
         }
 
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (timeSlots.length) {
-            await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+            await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         }
 
         showToast(`导入完成，共 ${courses.length} 门课程`);
-        if (typeof AndroidBridge !== "undefined" && AndroidBridge.notifyTaskCompletion) {
-            AndroidBridge.notifyTaskCompletion();
+        if (typeof window.shiguangBridge !== "undefined" && window.shiguangBridge.notifyTaskCompletion) {
+            window.shiguangBridge.notifyTaskCompletion();
         }
     }
 

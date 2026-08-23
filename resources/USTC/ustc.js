@@ -300,7 +300,7 @@ async function pollUntilTableReady(intervalMs, maxAttempts) {
  */
 async function runImportFlow() {
     // 步骤 1：提示用户
-    const confirmed = await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
         "USTC 课表导入",
         "请确保您已登录教务系统(jw.ustc.edu.cn)并处于课表查询页面。\n\n" +
         "操作步骤：\n" +
@@ -314,7 +314,7 @@ async function runImportFlow() {
 
     // 步骤 2：检查当前页面是否为教务系统
     if (!window.location.href.startsWith("https://jw.ustc.edu.cn")) {
-        await window.AndroidBridgePromise.showAlert(
+        await window.shiguangBridgePromise.showAlert(
             "页面错误",
             "当前页面不是教务系统页面，请先登录并导航到「学生课表」页面。",
             "确定"
@@ -323,17 +323,17 @@ async function runImportFlow() {
     }
 
     // 步骤 3：轮询等待课表 DOM 加载完成（含 iframe 检测）
-    AndroidBridge.showToast("正在等待课表加载...");
+    window.shiguangBridge.showToast("正在等待课表加载...");
     var timetableDoc = await pollUntilTableReady();
     if (!timetableDoc) {
-        AndroidBridge.showToast("未找到课表，请确认已进入「学生课表」页面且课表已加载");
+        window.shiguangBridge.showToast("未找到课表，请确认已进入「学生课表」页面且课表已加载");
         return;
     }
 
     // 步骤 4：解析课程数据（表格已加载，可能为空学期）
     var courses = parseCoursesFromDoc(timetableDoc);
     if (courses.length === 0) {
-        AndroidBridge.showToast("该学期暂无课程数据");
+        window.shiguangBridge.showToast("该学期暂无课程数据");
         return;
     }
 
@@ -342,27 +342,27 @@ async function runImportFlow() {
 
     // 步骤 6：保存时间段
     try {
-        await window.AndroidBridgePromise.savePresetTimeSlots(
+        await window.shiguangBridgePromise.savePresetTimeSlots(
             JSON.stringify(getUSTCTimeSlots())
         );
     } catch (e) {
-        AndroidBridge.showToast("保存时间段失败: " + e.message);
+        window.shiguangBridge.showToast("保存时间段失败: " + e.message);
         return;
     }
 
     // 步骤 7：保存课程
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(
+        await window.shiguangBridgePromise.saveImportedCourses(
             JSON.stringify(courses)
         );
     } catch (e) {
-        AndroidBridge.showToast("保存课程失败: " + e.message);
+        window.shiguangBridge.showToast("保存课程失败: " + e.message);
         return;
     }
 
     // 步骤 8：完成
-    AndroidBridge.showToast("成功导入 " + courses.length + " 门课程（" + semesterName + "）");
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast("成功导入 " + courses.length + " 门课程（" + semesterName + "）");
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runImportFlow();

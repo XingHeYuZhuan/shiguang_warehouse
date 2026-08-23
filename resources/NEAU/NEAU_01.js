@@ -39,8 +39,8 @@ function parseWeeks(weekStr) {
  */
 async function runImportFlow() {
     try {
-        if (typeof window.AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast("正在通过数据接口获取课表...");
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast("正在通过数据接口获取课表...");
         } else {
             console.log("正在请求 URP 内部数据接口...");
         }
@@ -58,8 +58,8 @@ async function runImportFlow() {
         // URP 的课程数据存放在 xkxx 这个数组的第0个对象里
         if (!data || !data.xkxx || !data.xkxx[0]) {
             const errMsg = "未获取到有效的课表数据，可能是当前学期暂无排课。";
-            if (typeof window.AndroidBridgePromise !== 'undefined') {
-                await window.AndroidBridgePromise.showAlert("提示", errMsg, "好的");
+            if (typeof window.shiguangBridgePromise !== 'undefined') {
+                await window.shiguangBridgePromise.showAlert("提示", errMsg, "好的");
             } else {
                 alert(errMsg);
             }
@@ -141,7 +141,7 @@ async function runImportFlow() {
         };
 
         // 3. 浏览器测试环境，直接打印输出
-        if (typeof window.AndroidBridgePromise === 'undefined') {
+        if (typeof window.shiguangBridgePromise === 'undefined') {
             console.log("【URP系统测试成功】提取的课程数据：\n", JSON.stringify(parsedCourses, null, 2));
             if (timeSlots.length > 0) {
                 console.log("【URP系统测试成功】提取到的作息时间：\n", JSON.stringify(timeSlots, null, 2));
@@ -153,25 +153,25 @@ async function runImportFlow() {
         }
 
         // 4. APP 环境保存数据
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
         
         // 将格式化后的标准作息时间交给 APP 进行保存
         if (timeSlots.length > 0) {
-            await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+            await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         }
         
-        const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses));
+        const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses));
         if (!saveResult) {
-            AndroidBridge.showToast("保存课程失败，请重试！");
+            window.shiguangBridge.showToast("保存课程失败，请重试！");
             return;
         }
 
-        AndroidBridge.showToast(`成功导入 ${parsedCourses.length} 节课程！`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${parsedCourses.length} 节课程！`);
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (error) {
-        if (typeof window.AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast("导入发生异常: " + error.message);
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast("导入发生异常: " + error.message);
         } else {
             console.error("【导入发生异常】", error);
             alert("导入发生异常: " + error.message);

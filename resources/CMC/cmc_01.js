@@ -173,7 +173,7 @@ function extractSemesterOptions(doc) {
 
 // 导入前提示用户先登录教务系统
 async function promptUserToStart() {
-    return await window.AndroidBridgePromise.showAlert(
+    return await window.shiguangBridgePromise.showAlert(
         "成都医学院教务导入",
         "请先确保已登录教务系统，再继续导入。",
         "我已登录"
@@ -182,7 +182,7 @@ async function promptUserToStart() {
 
 // 从页面已有学期中选择目标学期
 async function selectSemester(semesterOptions) {
-    const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(semesterOptions.semesters),
         semesterOptions.defaultIndex
@@ -196,7 +196,7 @@ async function selectSemester(semesterOptions) {
 
 // 询问是否同时导入考试
 async function askImportExams() {
-    const bridge = window.AndroidBridgePromise;
+    const bridge = window.shiguangBridgePromise;
     if (!bridge || typeof bridge.showAlert !== "function") return true;
     return await bridge.showAlert(
         "导入考试安排",
@@ -264,33 +264,33 @@ async function fetchExamData(xnxqdm) {
 }
 
 async function saveCourses(courses) {
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 }
 
 async function saveTimeSlots(timeSlots) {
     if (timeSlots.length === 0) return;
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
 }
 
 // 编排导入流程：提示 → 选学期 → 请求课表与考试 → 合并保存课程与作息时间
 async function runImportFlow() {
     try {
         const confirmed = await promptUserToStart();
-        if (!confirmed) { AndroidBridge.showToast("导入已取消"); return; }
+        if (!confirmed) { window.shiguangBridge.showToast("导入已取消"); return; }
 
         const pageHtml = await fetchSchedulePage();
         const semesterOptions = extractSemesterOptions(new DOMParser().parseFromString(pageHtml, "text/html"));
         if (!semesterOptions) throw new Error("未找到学期列表，请先登录教务系统");
 
         const semester = await selectSemester(semesterOptions);
-        if (!semester) { AndroidBridge.showToast("导入已取消"); return; }
+        if (!semester) { window.shiguangBridge.showToast("导入已取消"); return; }
 
         const { slots, map: slotMap } = parseBusinessHoursFromHtml(pageHtml);
-        AndroidBridge.showToast(`正在获取 ${semester.label} 的课表...`);
+        window.shiguangBridge.showToast(`正在获取 ${semester.label} 的课表...`);
         const courses = parseCourseList(await fetchCourseData(semester.value), slotMap);
 
         if (courses.length === 0) {
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "提示",
                 "该学期没有获取到课程数据，请检查登录状态和所选学期。",
                 "确定"
@@ -306,23 +306,23 @@ async function runImportFlow() {
                 if (c.startSection >= 6) c.startSection += 1;
                 if (c.endSection >= 6) c.endSection += 1;
             });
-            AndroidBridge.showToast("正在获取考试安排...");
+            window.shiguangBridge.showToast("正在获取考试安排...");
             exams.push(...parseExamList(await fetchExamData(semester.value), timeSlots));
-            if (exams.length === 0) AndroidBridge.showToast("该学期暂时没有考试安排");
+            if (exams.length === 0) window.shiguangBridge.showToast("该学期暂时没有考试安排");
         }
 
         await saveCourses([...courses, ...exams]);
         try {
             await saveTimeSlots(timeSlots);
         } catch (error) {
-            AndroidBridge.showToast(`课程已导入，作息时间导入失败：${error.message}`);
+            window.shiguangBridge.showToast(`课程已导入，作息时间导入失败：${error.message}`);
         }
 
         const examTip = exams.length > 0 ? `成功导入 ${exams.length} 门考试` : "导入完成";
-        AndroidBridge.showToast(examTip);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(examTip);
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
-        await window.AndroidBridgePromise.showAlert(
+        await window.shiguangBridgePromise.showAlert(
             "导入失败",
             error.message || String(error),
             "确定"

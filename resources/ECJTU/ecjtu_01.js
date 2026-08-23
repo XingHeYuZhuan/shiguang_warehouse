@@ -236,7 +236,7 @@ async function loadScheduleDoc() {
 
 async function runImportFlow() {
   try {
-    const confirmed = await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
       '华东交通大学教务导入',
       '请确认你已经登录教务系统；如需导入其他学期，请先在页面上切换到目标学期后再导入。',
       '确定，开始导入'
@@ -245,7 +245,7 @@ async function runImportFlow() {
 
     const doc = await loadScheduleDoc();
     const termInfo = getCurrentTermInfo(doc);
-    AndroidBridge.showToast(termInfo?.text ? `正在导入 ${termInfo.text} 课表...` : '正在解析课表数据...');
+    window.shiguangBridge.showToast(termInfo?.text ? `正在导入 ${termInfo.text} 课表...` : '正在解析课表数据...');
 
     const courses = parseScheduleTable(doc);
     if (!courses.length) {
@@ -255,19 +255,19 @@ async function runImportFlow() {
     const allWeeks = courses.flatMap(course => course.weeks);
     const semesterTotalWeeks = allWeeks.length ? Math.max(...allWeeks) : 20;
 
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
       semesterTotalWeeks,
       semesterStartDate: null,
       firstDayOfWeek: 1
     }));
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 
-    AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
+    window.shiguangBridge.notifyTaskCompletion();
   } catch (error) {
     console.error(error);
-    AndroidBridge.showToast(`导入失败: ${error.message}`);
+    window.shiguangBridge.showToast(`导入失败: ${error.message}`);
   }
 }
 

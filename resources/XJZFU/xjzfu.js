@@ -107,31 +107,31 @@ async function fetchTermList() {
 
 async function importCourseSchedule() {
     try {
-        AndroidBridge.showToast('正在获取学期列表...');
+        window.shiguangBridge.showToast('正在获取学期列表...');
 
         const termList = await fetchTermList();
 
         let selectedIdx = termList.defaultIndex;
-        if (typeof window.AndroidBridgePromise !== 'undefined') {
-            const choice = await window.AndroidBridgePromise.showSingleSelection(
+        if (typeof window.shiguangBridgePromise !== 'undefined') {
+            const choice = await window.shiguangBridgePromise.showSingleSelection(
                 '请选择要导入的学期',
                 JSON.stringify(termList.termNames),
                 termList.defaultIndex
             );
             if (choice === null) {
-                AndroidBridge.showToast('已取消导入');
+                window.shiguangBridge.showToast('已取消导入');
                 return false;
             }
             selectedIdx = choice;
         }
 
         const termCode = termList.termCodes[selectedIdx];
-        AndroidBridge.showToast('正在获取课表数据...');
+        window.shiguangBridge.showToast('正在获取课表数据...');
         const datas = await fetchScheduleData(termCode);
         const arrangedList = datas.arrangedList || [];
 
         if (arrangedList.length === 0) {
-            AndroidBridge.showToast('未找到课程数据');
+            window.shiguangBridge.showToast('未找到课程数据');
             return false;
         }
 
@@ -156,23 +156,23 @@ async function importCourseSchedule() {
 
         console.log(`找到 ${courses.length} 门课程:`, courses);
 
-        const courseResult = await window.AndroidBridgePromise.saveImportedCourses(
+        const courseResult = await window.shiguangBridgePromise.saveImportedCourses(
             JSON.stringify(courses)
         );
         if (courseResult !== true) {
-            AndroidBridge.showToast('课程导入失败');
+            window.shiguangBridge.showToast('课程导入失败');
             return false;
         }
-        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程！`);
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程！`);
 
         const timeSlots = generateTimeSlots(arrangedList);
         console.log('时间段配置:', timeSlots);
 
-        const slotResult = await window.AndroidBridgePromise.savePresetTimeSlots(
+        const slotResult = await window.shiguangBridgePromise.savePresetTimeSlots(
             JSON.stringify(timeSlots)
         );
         if (slotResult === true) {
-            AndroidBridge.showToast('时间段配置成功！');
+            window.shiguangBridge.showToast('时间段配置成功！');
         }
 
         const weeksData = await fetchTermWeeks(termCode);
@@ -185,17 +185,17 @@ async function importCourseSchedule() {
                 defaultBreakDuration: 10,
                 firstDayOfWeek: 1
             };
-            await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+            await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
             console.log('学期配置已保存:', config);
         }
 
-        AndroidBridge.showToast('课表导入完成！');
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast('课表导入完成！');
+        window.shiguangBridge.notifyTaskCompletion();
         return true;
 
     } catch (error) {
         console.error('导入过程出错:', error);
-        AndroidBridge.showToast('导入失败: ' + error.message);
+        window.shiguangBridge.showToast('导入失败: ' + error.message);
         return false;
     }
 }
@@ -204,5 +204,5 @@ if (isOnStudentPage()) {
     console.log('检测到新疆政法学院教务系统');
     setTimeout(() => { importCourseSchedule(); }, 1000);
 } else {
-    AndroidBridge.showToast('请先登录教务系统！');
+    window.shiguangBridge.showToast('请先登录教务系统！');
 }

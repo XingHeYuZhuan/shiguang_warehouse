@@ -134,7 +134,7 @@ function getDefaultAcademicYear() {
 }
 
 async function promptUserToStart() {
-    return await window.AndroidBridgePromise.showAlert(
+    return await window.shiguangBridgePromise.showAlert(
         "无锡学院课表导入",
         "请先登录无锡学院教务系统。登录成功后可在教务系统任意页面开始导入。",
         "开始导入"
@@ -142,7 +142,7 @@ async function promptUserToStart() {
 }
 
 async function getAcademicYear() {
-    return await window.AndroidBridgePromise.showPrompt(
+    return await window.shiguangBridgePromise.showPrompt(
         "选择学年",
         "请输入学年的起始年份，例如 2025-2026 学年请输入 2025。",
         getDefaultAcademicYear(),
@@ -151,7 +151,7 @@ async function getAcademicYear() {
 }
 
 async function selectSemester() {
-    return await window.AndroidBridgePromise.showSingleSelection(
+    return await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(["第一学期", "第二学期"]),
         0
@@ -163,7 +163,7 @@ function getSemesterCode(semesterIndex) {
 }
 
 async function fetchCourses(academicYear, semesterIndex) {
-    AndroidBridge.showToast("正在获取课表数据...");
+    window.shiguangBridge.showToast("正在获取课表数据...");
 
     const requestBody = new URLSearchParams({
         xnm: academicYear,
@@ -216,47 +216,47 @@ async function fetchCourses(academicYear, semesterIndex) {
 
 async function saveCourses(courses) {
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         return true;
     } catch (error) {
         console.error("CWXU: Save courses error", error);
-        await window.AndroidBridgePromise.showAlert("保存失败", `课程保存失败：${error.message}`, "确定");
+        await window.shiguangBridgePromise.showAlert("保存失败", `课程保存失败：${error.message}`, "确定");
         return false;
     }
 }
 
 async function saveOptionalSettings(config) {
     try {
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
     } catch (error) {
         console.error("CWXU: Save config error", error);
-        AndroidBridge.showToast(`课表配置保存失败：${error.message}`);
+        window.shiguangBridge.showToast(`课表配置保存失败：${error.message}`);
     }
 
     try {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
     } catch (error) {
         console.error("CWXU: Save time slots error", error);
-        AndroidBridge.showToast(`作息时间保存失败：${error.message}`);
+        window.shiguangBridge.showToast(`作息时间保存失败：${error.message}`);
     }
 }
 
 async function runImportFlow() {
     const confirmed = await promptUserToStart();
     if (!confirmed) {
-        AndroidBridge.showToast("用户取消了导入。");
+        window.shiguangBridge.showToast("用户取消了导入。");
         return;
     }
 
     const academicYear = await getAcademicYear();
     if (academicYear === null) {
-        AndroidBridge.showToast("导入已取消。");
+        window.shiguangBridge.showToast("导入已取消。");
         return;
     }
 
     const semesterIndex = await selectSemester();
     if (semesterIndex === null || semesterIndex < 0) {
-        AndroidBridge.showToast("导入已取消。");
+        window.shiguangBridge.showToast("导入已取消。");
         return;
     }
 
@@ -265,7 +265,7 @@ async function runImportFlow() {
         result = await fetchCourses(String(academicYear).trim(), semesterIndex);
     } catch (error) {
         console.error("CWXU: Fetch or parse error", error);
-        await window.AndroidBridgePromise.showAlert("导入失败", error.message, "确定");
+        await window.shiguangBridgePromise.showAlert("导入失败", error.message, "确定");
         return;
     }
 
@@ -273,8 +273,8 @@ async function runImportFlow() {
     if (!saved) return;
 
     await saveOptionalSettings(result.config);
-    AndroidBridge.showToast(`课程导入成功，共导入 ${result.courses.length} 条课程安排。`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`课程导入成功，共导入 ${result.courses.length} 条课程安排。`);
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runImportFlow();

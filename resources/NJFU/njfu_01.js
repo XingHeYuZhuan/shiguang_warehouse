@@ -44,8 +44,8 @@ function cleanPosition(position) {
 }
 
 function showToast(message) {
-    if (typeof window.AndroidBridge !== "undefined") {
-        AndroidBridge.showToast(message);
+    if (typeof window.shiguangBridge !== "undefined") {
+        window.shiguangBridge.showToast(message);
     } else {
         console.log(message);
     }
@@ -275,11 +275,11 @@ async function fetchTermDoc(termValue) {
 
 async function pickTerm(doc) {
     const { labels, values, defaultIndex } = parseSemesterOptions(doc);
-    if (!labels.length || typeof window.AndroidBridgePromise === "undefined") {
+    if (!labels.length || typeof window.shiguangBridgePromise === "undefined") {
         return { doc, termLabel: labels[defaultIndex] || "" };
     }
 
-    const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "请选择要导入的学期",
         JSON.stringify(labels),
         defaultIndex
@@ -301,7 +301,7 @@ async function saveToApp(courses, primaryCampus) {
     const allWeeks = courses.flatMap((course) => course.weeks || []);
     const semesterTotalWeeks = allWeeks.length ? Math.max(...allWeeks) : 20;
 
-    if (typeof window.AndroidBridgePromise === "undefined") {
+    if (typeof window.shiguangBridgePromise === "undefined") {
         console.log("Primary campus:", primaryCampus);
         console.log("Time slots:", timeSlots);
         console.log("Courses:", courses);
@@ -309,13 +309,13 @@ async function saveToApp(courses, primaryCampus) {
         return;
     }
 
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
         semesterTotalWeeks,
         firstDayOfWeek: 1
     }));
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
     const appCourses = courses.map(({ campus, ...course }) => course);
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(appCourses));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(appCourses));
 }
 
 async function runImportFlow() {
@@ -337,8 +337,8 @@ async function runImportFlow() {
         const message = `导入完成：${primaryCampus}${termLabel ? ` ${termLabel}` : ""}`;
 
         showToast(message);
-        if (typeof window.AndroidBridge !== "undefined") {
-            AndroidBridge.notifyTaskCompletion();
+        if (typeof window.shiguangBridge !== "undefined") {
+            window.shiguangBridge.notifyTaskCompletion();
         }
     } catch (error) {
         console.error(error);

@@ -7,7 +7,7 @@ const promptForStartDate = async () => {
         const today = new Date();
         const defaultDate = today.toISOString().split('T')[0];
         
-        const startDate = await window.AndroidBridgePromise.showPrompt(
+        const startDate = await window.shiguangBridgePromise.showPrompt(
             "请输入学期开始日期",
             "格式：YYYY-MM-DD（例如：2026-02-24）",
             defaultDate,
@@ -19,7 +19,7 @@ const promptForStartDate = async () => {
         }
         
         if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-            AndroidBridge.showToast("日期格式不正确，请使用YYYY-MM-DD格式");
+            window.shiguangBridge.showToast("日期格式不正确，请使用YYYY-MM-DD格式");
             throw new Error("日期格式不正确");
         }
         
@@ -287,16 +287,16 @@ const getTimeSlots = (html) => {
 const saveSchedule = async (courses, courseConfig, timeSlots) => {
     try {
         await Promise.allSettled([
-            window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(courseConfig)),
-            window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses)),
-            window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots))
+            window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(courseConfig)),
+            window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses)),
+            window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots))
         ]);
         
-        AndroidBridge.showToast("课程表导入成功！");
+        window.shiguangBridge.showToast("课程表导入成功！");
         return true;
     } catch (error) {
         console.error("保存课程数据时出错:", error);
-        AndroidBridge.showToast("课程表导入失败：" + error.message);
+        window.shiguangBridge.showToast("课程表导入失败：" + error.message);
         return false;
     }
 };
@@ -327,7 +327,7 @@ const fetchMultiWeekTimetable = async (startDate) => {
     let weekCount = 0;
     let timeSlots = null;
     
-    AndroidBridge.showToast("正在获取课程表数据，请稍候...");
+    window.shiguangBridge.showToast("正在获取课程表数据，请稍候...");
     
     while (true) {
         weekCount++;
@@ -359,7 +359,7 @@ const fetchMultiWeekTimetable = async (startDate) => {
             }
         } catch (error) {
             console.error(`获取第${weekCount}周课程表失败:`, error);
-            AndroidBridge.showToast(`第${weekCount}周获取失败，继续下一周`);
+            window.shiguangBridge.showToast(`第${weekCount}周获取失败，继续下一周`);
             requestDate = addDays(requestDate, 7);
             continue;
         }
@@ -375,14 +375,14 @@ const fetchMultiWeekTimetable = async (startDate) => {
 // 主函数
 (async () => {
     try {
-        AndroidBridge.showToast("正在启动GDIPU课程表导入...");
+        window.shiguangBridge.showToast("正在启动GDIPU课程表导入...");
         
         const startDate = await promptForStartDate();
         
         const { courses, totalWeeks, timeSlots } = await fetchMultiWeekTimetable(startDate);
         
         if (courses.length === 0) {
-            AndroidBridge.showToast("未找到任何课程信息");
+            window.shiguangBridge.showToast("未找到任何课程信息");
             throw new Error("未找到课程信息");
         }
         
@@ -393,13 +393,13 @@ const fetchMultiWeekTimetable = async (startDate) => {
         const success = await saveSchedule(courses, courseConfig, timeSlots);
         
         if (success) {
-            AndroidBridge.notifyTaskCompletion();
+            window.shiguangBridge.notifyTaskCompletion();
         } else {
             throw new Error("保存课程数据失败");
         }
         
     } catch (error) {
         console.error("导入课程表时出错:", error);
-        AndroidBridge.showToast("导入课程表失败：" + error.message);
+        window.shiguangBridge.showToast("导入课程表失败：" + error.message);
     }
 })();

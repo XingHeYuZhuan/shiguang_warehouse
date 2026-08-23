@@ -147,7 +147,7 @@ async function chooseCampus() {
 
 	let selectedIndex = null;
 	do {
-		selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+		selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
 			"校区检测失败，请选择校区",
 			JSON.stringify(labels),
 			-1
@@ -443,7 +443,7 @@ async function fetchSemesterCalendarInfo(semesterId) {
 
 // 主流程：读取课表 -> 选择校区 -> 拉周历 -> 生成节次 -> 调桥接导入
 async function importSchedule() {
-	AndroidBridge.showToast("开始读取教务课表……");
+	window.shiguangBridge.showToast("开始读取教务课表……");
 
 	// 读取 iframe 并获取当前学年学期 ID
 	const iframeDoc = getScheduleIframeDocument();
@@ -474,12 +474,12 @@ async function importSchedule() {
 	};
 
 	// 通知课表软件进行导入，传递课程与预设时间配置
-	await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-	await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
-	await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+	await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+	await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+	await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 
-	AndroidBridge.showToast(`导入成功：${campusLabel}，课程 ${courses.length} 条`);
-	AndroidBridge.notifyTaskCompletion();
+	window.shiguangBridge.showToast(`导入成功：${campusLabel}，课程 ${courses.length} 条`);
+	window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 自执行入口
@@ -489,6 +489,6 @@ async function importSchedule() {
 	} catch (error) {
 		console.error("课表导入失败：", error);
 		// 失败原因直接提示给用户，便于在移动端快速定位问题
-		AndroidBridge.showToast(`导入失败：${error.message}`);
+		window.shiguangBridge.showToast(`导入失败：${error.message}`);
 	}
 })();

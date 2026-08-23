@@ -176,7 +176,7 @@ async function resolveTermSelection() {
     throw new Error('未读取到学期列表，请先进入“学生个人课表”页面');
   }
 
-  const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+  const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
     '选择学期',
     JSON.stringify(options.map(item => item.text)),
     defaultIndex
@@ -395,7 +395,7 @@ async function loadTimetableDoc(term) {
 
 async function runImportFlow() {
   try {
-    const confirmed = await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
       '信阳农林学院教务导入',
       '请确认你已登录教务系统，并且最好已经打开“学生个人课表”页面。',
       '确定，开始导入'
@@ -403,7 +403,7 @@ async function runImportFlow() {
     if (!confirmed) return;
 
     const term = await resolveTermSelection();
-    AndroidBridge.showToast('正在提取青果课表数据...');
+    window.shiguangBridge.showToast('正在提取青果课表数据...');
 
     const timeSlots = term.isSpringSummer ? TIME_SLOTS_SPRING_SUMMER : TIME_SLOTS_AUTUMN_WINTER;
 
@@ -416,19 +416,19 @@ async function runImportFlow() {
     const allWeeks = courses.flatMap(course => course.weeks);
     const semesterTotalWeeks = allWeeks.length ? Math.max(...allWeeks) : 20;
 
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
       semesterTotalWeeks,
       semesterStartDate: null,
       firstDayOfWeek: 1
     }));
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 
-    AndroidBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`导入成功：共 ${courses.length} 门课程`);
+    window.shiguangBridge.notifyTaskCompletion();
   } catch (error) {
     console.error(error);
-    AndroidBridge.showToast(`导入失败: ${error.message}`);
+    window.shiguangBridge.showToast(`导入失败: ${error.message}`);
   }
 }
 

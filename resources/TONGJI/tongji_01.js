@@ -45,7 +45,7 @@
       res.json(),
     );
     const currTermId = currTermResponse.data.schoolCalendar.id;
-    const useOtherTerm = await AndroidBridgePromise.showSingleSelection(
+    const useOtherTerm = await window.shiguangBridgePromise.showSingleSelection(
       "是否使用当前学期",
       JSON.stringify([
         `使用当前学期\n(${currTermResponse.data.simpleName})`,
@@ -54,19 +54,19 @@
     );
     let termId = currTermId;
     if (useOtherTerm === null)
-      AndroidBridge.showToast("未选择学期，使用当前学期");
+      window.shiguangBridge.showToast("未选择学期，使用当前学期");
     else if (useOtherTerm === 1) {
-      AndroidBridge.showToast("正在加载学期列表");
+      window.shiguangBridge.showToast("正在加载学期列表");
       const termListResponse = await fetch(ENDPOINTS.termList()).then((res) =>
         res.json(),
       );
-      const index = await AndroidBridgePromise.showSingleSelection(
+      const index = await window.shiguangBridgePromise.showSingleSelection(
         "请选择学期",
         JSON.stringify(termListResponse.data.map((term) => term.fullName)),
       );
       const selectedId = termListResponse.data[index]?.id;
       if (selectedId) termId = selectedId;
-      else AndroidBridge.showToast("未选择学期，使用当前学期");
+      else window.shiguangBridge.showToast("未选择学期，使用当前学期");
     }
     const termMetaDataResponse = await fetch(
       ENDPOINTS.termMetaData(termId),
@@ -103,9 +103,9 @@
       ...courseInfo.map((c) => Math.max(...c.weeks)),
     );
     const result = await Promise.allSettled([
-      AndroidBridgePromise.saveImportedCourses(JSON.stringify(courseInfo)),
-      AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots)),
-      AndroidBridgePromise.saveCourseConfig(
+      window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courseInfo)),
+      window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots)),
+      window.shiguangBridgePromise.saveCourseConfig(
         JSON.stringify({ semesterStartDate, semesterTotalWeeks }),
       ),
     ]);
@@ -118,10 +118,10 @@
 
   main()
     .catch((e) => {
-      AndroidBridge.showToast(`错误: ${e.message ?? e}`);
+      window.shiguangBridge.showToast(`错误: ${e.message ?? e}`);
       console.error(e);
     })
     .finally(() => {
-      AndroidBridge.notifyTaskCompletion();
+      window.shiguangBridge.notifyTaskCompletion();
     });
 })();

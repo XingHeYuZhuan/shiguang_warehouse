@@ -486,7 +486,7 @@ async function showConfirmDialog(courseCount) {
     console.log('[步骤2] 显示确认弹窗...');
     
     try {
-        const confirmed = await window.AndroidBridgePromise.showAlert(
+        const confirmed = await window.shiguangBridgePromise.showAlert(
             "导入课程表",
             `检测到 ${courseCount} 门课程，是否导入？`,
             "确认导入"
@@ -512,19 +512,19 @@ async function saveCourses(courses) {
     console.log('[步骤3] 开始保存课程数据...');
     
     try {
-        AndroidBridge.showToast('正在保存课程...');
+        window.shiguangBridge.showToast('正在保存课程...');
         
-        const result = await window.AndroidBridgePromise.saveImportedCourses(
+        const result = await window.shiguangBridgePromise.saveImportedCourses(
             JSON.stringify(courses)
         );
         
         if (result === true) {
             console.log(`[步骤3] ✓ 成功保存 ${courses.length} 门课程\n`);
-            AndroidBridge.showToast(`成功导入 ${courses.length} 门课程！`);
+            window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程！`);
             return true;
         } else {
             console.error('[步骤3] ✗ 课程保存失败');
-            AndroidBridge.showToast('课程保存失败');
+            window.shiguangBridge.showToast('课程保存失败');
             throw new Error('课程保存失败');
         }
     } catch (error) {
@@ -540,21 +540,21 @@ async function saveTimeSlots() {
     console.log('[步骤4] 开始保存时间段配置...');
     
     try {
-        AndroidBridge.showToast('正在保存时间段配置...');
+        window.shiguangBridge.showToast('正在保存时间段配置...');
         
         const timeSlots = generateTimeSlots();
         
-        const result = await window.AndroidBridgePromise.savePresetTimeSlots(
+        const result = await window.shiguangBridgePromise.savePresetTimeSlots(
             JSON.stringify(timeSlots)
         );
         
         if (result === true) {
             console.log('[步骤4] ✓ 时间段配置保存成功\n');
-            AndroidBridge.showToast('时间段配置成功！');
+            window.shiguangBridge.showToast('时间段配置成功！');
             return true;
         } else {
             console.error('[步骤4] ✗ 时间段配置保存失败');
-            AndroidBridge.showToast('时间段配置失败');
+            window.shiguangBridge.showToast('时间段配置失败');
             throw new Error('时间段配置失败');
         }
     } catch (error) {
@@ -576,7 +576,7 @@ async function runImportFlow() {
     try {
         const courses = await fetchCoursesFromPage();
         if (!courses) {
-            AndroidBridge.showToast('未找到课程数据');
+            window.shiguangBridge.showToast('未找到课程数据');
             console.log('❌ 流程终止: 无课程数据\n');
             return false;
         }
@@ -600,8 +600,8 @@ async function runImportFlow() {
         }
         
         console.log('[步骤5] 发送完成信号...');
-        AndroidBridge.notifyTaskCompletion();
-        AndroidBridge.showToast('课程表导入完成！');
+        window.shiguangBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast('课程表导入完成！');
         
         console.log('\n╔════════════════════════════════════════╗');
         console.log('║    导入流程完成 ✓                     ║');
@@ -611,7 +611,7 @@ async function runImportFlow() {
     } catch (error) {
         console.error('\n❌ 导入流程出错:', error);
         console.log('╚════════════════════════════════════════╝\n');
-        AndroidBridge.showToast('导入失败: ' + error.message);
+        window.shiguangBridge.showToast('导入失败: ' + error.message);
         return false;
     }
 }
@@ -627,5 +627,5 @@ if (isOnSchedulePage() || document.querySelector('table.CourseFormTable')) {
     
 } else {
     console.log('✗ 当前不在课程表页面');
-    AndroidBridge.showToast('请先在教务系统打开课程表页面！');
+    window.shiguangBridge.showToast('请先在教务系统打开课程表页面！');
 }

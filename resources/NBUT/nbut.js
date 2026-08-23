@@ -15,12 +15,12 @@ async function checkLoginEnvironment() {
     const targetUrl = "http://jwxt.nbut.edu.cn/"
 
     if (!currentUrl.includes(targetUrl)) {
-        AndroidBridge.showToast("不处于教务系统网站，自动为你跳转");
+        window.shiguangBridge.showToast("不处于教务系统网站，自动为你跳转");
         window.location.href = loginUrl;
         return false;
     } 
     if (currentUrl.includes(loginUrl)) {
-        AndroidBridge.showToast("请先登录教务系统再进行导入");
+        window.shiguangBridge.showToast("请先登录教务系统再进行导入");
         return false;
     }
     return true; 
@@ -246,7 +246,7 @@ async function runImportFlow() {
         console.log("未找到有效课程");
         return;
     }
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 
     // 获取，解析，保存时间段
     const time = await fetchPresetTimeSlots(params.xn, params.xq);
@@ -254,17 +254,17 @@ async function runImportFlow() {
         console.log("未找到有效时间段");
         return;
     }
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(time));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(time));
 
     const config = await fetchConfig(params);
     if(!config){
         console.log("未找到学校全局配置")
         return;
     }
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
     // 完成
     console.log('导入成功')
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 启动

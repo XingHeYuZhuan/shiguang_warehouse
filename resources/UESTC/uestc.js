@@ -431,7 +431,7 @@ async function runImportFlow() {
 
   try {
     // ── Step 1: 欢迎提示 ──
-    const ready = await window.AndroidBridgePromise.showAlert(
+    const ready = await window.shiguangBridgePromise.showAlert(
       '电子科技大学 - 教务导入',
       '请确保已在 eams.uestc.edu.cn 完成登录。\n\n建议先在教务中打开「个人课表」页面，\n然后返回本应用执行导入。',
       '已登录，开始导入'
@@ -443,7 +443,7 @@ async function runImportFlow() {
     const labels = options.map(o => o.label);
     const defaultIdx = Math.min(4, labels.length - 1);
 
-    const selectedIdx = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIdx = await window.shiguangBridgePromise.showSingleSelection(
       '选择学期',
       JSON.stringify(labels),
       defaultIdx
@@ -454,7 +454,7 @@ async function runImportFlow() {
     console.log(`📅 学期: ${options[selectedIdx].label} (id=${semesterId})`);
 
     // ── Step 3: 获取课表数据 ──
-    AndroidBridge.showToast('正在获取课表数据...');
+    window.shiguangBridge.showToast('正在获取课表数据...');
     const html = await fetchCourseHtml(semesterId);
 
     // ── Step 4: 解析 ──
@@ -463,8 +463,8 @@ async function runImportFlow() {
     console.log(`📊 活动记录: ${activities.length} 条`);
 
     if (activities.length === 0) {
-      AndroidBridge.showToast('未找到课程数据');
-      await window.AndroidBridgePromise.showAlert('导入结果', '未在当前学期找到课程数据。', '知道了');
+      window.shiguangBridge.showToast('未找到课程数据');
+      await window.shiguangBridgePromise.showAlert('导入结果', '未在当前学期找到课程数据。', '知道了');
       return;
     }
 
@@ -472,35 +472,35 @@ async function runImportFlow() {
     console.log(`📋 课程: ${courses.length} 门`);
 
     // ── Step 5: 保存 ──
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
     console.log('✅ 课程已保存');
 
     try {
-      await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(DEFAULT_TIME_SLOTS));
+      await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(DEFAULT_TIME_SLOTS));
       console.log('✅ 时间段已保存');
     } catch (e) { console.warn('⚠️ 时间段保存失败:', e.message); }
 
     try {
-      await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+      await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
         semesterTotalWeeks: UESTC_CONFIG.defaultTotalWeeks,
       }));
       console.log('✅ 配置已保存');
     } catch (e) { console.warn('⚠️ 配置保存失败:', e.message); }
 
     // ── Step 6: 完成 ──
-    AndroidBridge.showToast(`导入成功！共 ${courses.length} 门课程`);
-    await window.AndroidBridgePromise.showAlert(
+    window.shiguangBridge.showToast(`导入成功！共 ${courses.length} 门课程`);
+    await window.shiguangBridgePromise.showAlert(
       '✅ 导入完成',
       `成功导入 ${courses.length} 门课程。\n学期: ${options[selectedIdx].label}\n请返回课表查看。`,
       '好的'
     );
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 
   } catch (error) {
     console.error('❌ 导入失败:', error);
-    AndroidBridge.showToast('导入失败: ' + error.message);
+    window.shiguangBridge.showToast('导入失败: ' + error.message);
     try {
-      await window.AndroidBridgePromise.showAlert(
+      await window.shiguangBridgePromise.showAlert(
         '❌ 导入失败',
         '错误: ' + error.message + '\n\n请检查:\n1. 已登录 eams.uestc.edu.cn\n2. 网络正常\n3. 可先打开个人课表页面',
         '知道了'

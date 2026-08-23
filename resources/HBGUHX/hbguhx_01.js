@@ -314,7 +314,7 @@ function calculateCurrentWeek(semesterId) {
  * 显示欢迎提示
  */
 async function showWelcomeAlert() {
-    return await window.AndroidBridgePromise.showAlert(
+    return await window.shiguangBridgePromise.showAlert(
         "导入提示",
         "请确保已在学期理论课表页面,（首页课表是本周课表不可导入,请进入学期理论课表页面）",
         "开始导入"
@@ -326,14 +326,14 @@ async function showWelcomeAlert() {
  */
 async function getSemesterParamsFromUser(semesterOptions) {
     if (!semesterOptions || semesterOptions.length === 0) {
-        AndroidBridge.showToast("未获取到学期列表");
+        window.shiguangBridge.showToast("未获取到学期列表");
         return null;
     }
     
     // 直接显示所有学期选项，让用户一次性选择
     const semesterLabels = semesterOptions.map(opt => opt.text);
     
-    const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(semesterLabels),
         0 // 默认选择第一个（最新学期）
@@ -378,7 +378,7 @@ async function saveCourseDataToApp(courses, timeSlots, semesterId) {
     const currentWeek = calculateCurrentWeek(semesterId);
 
     // 保存学期配置
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
         "semesterStartDate": startMonday ? formatDate(startMonday) : null,
         "currentWeek": currentWeek,
         "semesterTotalWeeks": 20,
@@ -387,11 +387,11 @@ async function saveCourseDataToApp(courses, timeSlots, semesterId) {
 
     // 保存作息时间（从网页提取）
     if (timeSlots && timeSlots.length > 0) {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
     }
 
     // 保存课程数据
-    return await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    return await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 }
 
 /**
@@ -444,13 +444,13 @@ async function runImportFlow() {
         const finalCourses = parseTimetableToModel(courseHtml);
 
         if (finalCourses.length === 0) {
-            AndroidBridge.showToast("未发现课程，请检查学期选择或登录状态。");
+            window.shiguangBridge.showToast("未发现课程，请检查学期选择或登录状态。");
             // 尝试直接从初始 HTML 中解析课程
             const initialCourses = parseTimetableToModel(html);
             if (initialCourses.length > 0) {
                 await saveCourseDataToApp(initialCourses, timeSlots, semesterId);
-                AndroidBridge.showToast(`成功导入 ${initialCourses.length} 门课程`);
-                AndroidBridge.notifyTaskCompletion();
+                window.shiguangBridge.showToast(`成功导入 ${initialCourses.length} 门课程`);
+                window.shiguangBridge.notifyTaskCompletion();
             }
             return;
         }
@@ -458,12 +458,12 @@ async function runImportFlow() {
         // 8. 保存课程数据
         await saveCourseDataToApp(finalCourses, timeSlots, semesterId);
 
-        AndroidBridge.showToast(`成功导入 ${finalCourses.length} 门课程（当前第 ${calculateCurrentWeek(semesterId)} 周）`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${finalCourses.length} 门课程（当前第 ${calculateCurrentWeek(semesterId)} 周）`);
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (error) {
         console.error('导入异常：', error);
-        AndroidBridge.showToast("导入异常：" + error.message);
+        window.shiguangBridge.showToast("导入异常：" + error.message);
     }
 }
 

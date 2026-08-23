@@ -196,7 +196,7 @@ function parseTimetableToModel(doc) {
 
 async function saveAppConfig() {
     const config = { "semesterTotalWeeks": 20, "firstDayOfWeek": 1 };
-    return await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+    return await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 }
 
 async function saveAppTimeSlots() {
@@ -214,24 +214,24 @@ async function saveAppTimeSlots() {
         { "number": 11, "startTime": "19:40", "endTime": "20:25" },
         { "number": 12, "startTime": "20:30", "endTime": "21:15" }
     ];
-    return await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+    return await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
 }
 
 async function runImportFlow() {
     try {
-        const confirmed = await window.AndroidBridgePromise.showAlert("提示", "请确保已成功登录教务系统。是否开始导入？", "开始");
+        const confirmed = await window.shiguangBridgePromise.showAlert("提示", "请确保已成功登录教务系统。是否开始导入？", "开始");
         if (!confirmed) return;
 
         const currentYear = new Date().getFullYear();
-        const year = await window.AndroidBridgePromise.showPrompt("选择学年", "请输入要导入课程的起始学年（例如 2025-2026 应输入2025）:", String(currentYear), "validateYearInput");
+        const year = await window.shiguangBridgePromise.showPrompt("选择学年", "请输入要导入课程的起始学年（例如 2025-2026 应输入2025）:", String(currentYear), "validateYearInput");
         if (!year) return;
 
-        const semesterIndex = await window.AndroidBridgePromise.showSingleSelection("选择学期", JSON.stringify(["第一学期", "第二学期"]), 0);
+        const semesterIndex = await window.shiguangBridgePromise.showSingleSelection("选择学期", JSON.stringify(["第一学期", "第二学期"]), 0);
         if (semesterIndex === null) return;
 
         const semesterId = `${year}-${parseInt(year) + 1}-${semesterIndex + 1}`;
 
-        AndroidBridge.showToast("正在请求数据...");
+        window.shiguangBridge.showToast("正在请求数据...");
         const response = await fetch("https://http-10-198-47-148-8080.webvpn.ccit.edu.cn/jsxsd/xskb/xskb_list.do", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -243,18 +243,18 @@ async function runImportFlow() {
         const finalCourses = parseTimetableToModel(new DOMParser().parseFromString(html, "text/html"));
 
         if (finalCourses.length === 0) {
-            AndroidBridge.showToast("未发现课程，请检查学期选择或登录状态。");
+            window.shiguangBridge.showToast("未发现课程，请检查学期选择或登录状态。");
             return;
         }
 
         await saveAppConfig();
         await saveAppTimeSlots();
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(finalCourses)); //[cite: 1]
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses)); //[cite: 1]
         
-        AndroidBridge.showToast(`成功导入 ${finalCourses.length} 门课程`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${finalCourses.length} 门课程`);
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
-        AndroidBridge.showToast("异常: " + error.message);
+        window.shiguangBridge.showToast("异常: " + error.message);
     }
 }
 

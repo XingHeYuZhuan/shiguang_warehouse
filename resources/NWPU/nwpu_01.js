@@ -107,14 +107,14 @@ async function getSemestersAndStudentId() {
  */
 async function getCourseData(semesterId, studentId) {
     console.log("[NWPU] 正在获取课程数据...");
-    AndroidBridge.showToast("正在同步课表...");
+    window.shiguangBridge.showToast("正在同步课表...");
     try {
         var url = "/student/for-std/course-table/semester/" + semesterId + "/print-data/" + studentId;
         var data = await request(url);
         return JSON.parse(data);
     } catch (e) {
         console.error("[NWPU] 获取课程数据失败: " + e.message);
-        AndroidBridge.showToast("获取课程数据失败: " + e.message);
+        window.shiguangBridge.showToast("获取课程数据失败: " + e.message);
         return null;
     }
 }
@@ -286,12 +286,12 @@ async function saveTimeSlots(timeSlots) {
     }
     try {
         console.log("[NWPU] 正在保存时间段...");
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-        AndroidBridge.showToast("成功导入 " + timeSlots.length + " 个时间段");
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        window.shiguangBridge.showToast("成功导入 " + timeSlots.length + " 个时间段");
         return true;
     } catch (e) {
         console.error("[NWPU] 保存时间段失败: " + e.message);
-        AndroidBridge.showToast("保存时间段失败: " + e.message);
+        window.shiguangBridge.showToast("保存时间段失败: " + e.message);
         return false;
     }
 }
@@ -302,12 +302,12 @@ async function saveTimeSlots(timeSlots) {
 async function saveConfig(config) {
     try {
         console.log("[NWPU] 正在保存课表配置...");
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
-        AndroidBridge.showToast("课表配置导入成功");
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+        window.shiguangBridge.showToast("课表配置导入成功");
         return true;
     } catch (e) {
         console.error("[NWPU] 保存配置失败: " + e.message);
-        AndroidBridge.showToast("保存配置失败: " + e.message);
+        window.shiguangBridge.showToast("保存配置失败: " + e.message);
         return false;
     }
 }
@@ -317,17 +317,17 @@ async function saveConfig(config) {
  */
 async function saveCourses(courses) {
     if (courses.length === 0) {
-        AndroidBridge.showToast("没有课程数据需要导入");
+        window.shiguangBridge.showToast("没有课程数据需要导入");
         return true;
     }
     try {
         console.log("[NWPU] 正在保存课程数据...");
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        AndroidBridge.showToast("成功导入 " + courses.length + " 个课程条目");
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        window.shiguangBridge.showToast("成功导入 " + courses.length + " 个课程条目");
         return true;
     } catch (e) {
         console.error("[NWPU] 保存课程失败: " + e.message);
-        AndroidBridge.showToast("保存课程失败: " + e.message);
+        window.shiguangBridge.showToast("保存课程失败: " + e.message);
         return false;
     }
 }
@@ -338,22 +338,22 @@ async function saveCourses(courses) {
 async function runImportFlow() {
     try {
         // 1. 显示导入说明
-        var confirmed = await window.AndroidBridgePromise.showAlert(
+        var confirmed = await window.shiguangBridgePromise.showAlert(
             "西北工业大学课表导入",
             "导入前请确保您已在浏览器中登录教务系统（jwxt.nwpu.edu.cn）。\n\n" +
             "本适配将自动获取学期信息、时间段和课程数据。",
             "开始导入"
         );
         if (!confirmed) {
-            AndroidBridge.showToast("导入已取消");
+            window.shiguangBridge.showToast("导入已取消");
             return;
         }
 
         // 2. 获取学期列表和学生 ID（从同一页面提取）
-        AndroidBridge.showToast("正在获取学期列表...");
+        window.shiguangBridge.showToast("正在获取学期列表...");
         var pageData = await getSemestersAndStudentId();
         if (!pageData.studentId) {
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "导入失败",
                 "未能获取学生 ID，请确认您已登录教务系统。",
                 "确定"
@@ -361,7 +361,7 @@ async function runImportFlow() {
             return;
         }
         if (pageData.semesters.length === 0) {
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "导入失败",
                 "未能获取学期列表，请刷新页面后重试。",
                 "确定"
@@ -381,13 +381,13 @@ async function runImportFlow() {
         var selectedSemester = null;
 
         while (true) {
-            var selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+            var selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
                 "选择学期",
                 JSON.stringify(semesterNames),
                 0
             );
             if (selectedIndex === null || selectedIndex < 0 || selectedIndex >= semesters.length) {
-                AndroidBridge.showToast("导入已取消");
+                window.shiguangBridge.showToast("导入已取消");
                 return;
             }
             selectedSemester = semesters[selectedIndex];
@@ -404,13 +404,13 @@ async function runImportFlow() {
             }
 
             // 无数据，弹窗提示后重新选择
-            var retry = await window.AndroidBridgePromise.showAlert(
+            var retry = await window.shiguangBridgePromise.showAlert(
                 "无课程数据",
                 "「" + selectedSemester.name + "」没有课程数据，请选择其他学期。",
                 "重新选择"
             );
             if (!retry) {
-                AndroidBridge.showToast("导入已取消");
+                window.shiguangBridge.showToast("导入已取消");
                 return;
             }
         }
@@ -418,7 +418,7 @@ async function runImportFlow() {
         console.log("[NWPU] 获取到 " + activities.length + " 条课程活动");
 
         // 5. 获取学期信息（开始日期、结束日期）
-        AndroidBridge.showToast("正在获取学期信息...");
+        window.shiguangBridge.showToast("正在获取学期信息...");
         var semesterInfo = await getSemesterInfo(selectedSemester.id);
         console.log("[NWPU] 学期开始: " + (semesterInfo.startDate || "未知") + ", 结束: " + (semesterInfo.endDate || "未知"));
 
@@ -442,12 +442,12 @@ async function runImportFlow() {
         if (!courseResult) return;
 
         // 完成
-        AndroidBridge.showToast("课表导入完成！");
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast("课表导入完成！");
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (e) {
         console.error("[NWPU] 导入异常: " + e.message);
-        AndroidBridge.showToast("导入异常: " + e.message);
+        window.shiguangBridge.showToast("导入异常: " + e.message);
     }
 }
 

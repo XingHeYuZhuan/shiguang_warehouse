@@ -163,27 +163,27 @@ function parserWeeks(str) {
 }
 
 async function scrapeAndParseCourses() {
-    AndroidBridge.showToast("正在检查页面并抓取课程数据...");
+    window.shiguangBridge.showToast("正在检查页面并抓取课程数据...");
     const ts = `1.登陆教务系统\n2.导航到学生课表查询页面\n3.等待课表信息加载，选择对应学年、学期，确认无误后点击【查询】\n4.确保页面上显示了课程表\n5.点击下方【一键导入】`
     try {
         const response = await fetch(window.location.href);
         const text = await response.text();
         if (!text.includes("课表查询")) {
             console.log("页面内容检查失败！");
-            await window.AndroidBridgePromise.showAlert("导入失败", "当前页面似乎不是学生课表查询页面。请检查：\n" + ts, "确定"); 
+            await window.shiguangBridgePromise.showAlert("导入失败", "当前页面似乎不是学生课表查询页面。请检查：\n" + ts, "确定"); 
             return null;
         }
         const typeElement = document.querySelector('#shcPDF');
         if (!typeElement) {
              console.log("未能找到视图类型元素 (#shcPDF)");
-             await window.AndroidBridgePromise.showAlert("导入失败", "未能识别课表视图类型，请确认您已点击查询且课表已加载完毕。", "确定");
+             await window.shiguangBridgePromise.showAlert("导入失败", "未能识别课表视图类型，请确认您已点击查询且课表已加载完毕。", "确定");
              return null;
         }
         const type = typeElement.dataset['type'];
         const tableElement = document.querySelector(type === 'list' ? '#kblist_table' : '#kbgrid_table_0');
         if (!tableElement) {
              console.log("未能找到课表主体 HTML");
-             await window.AndroidBridgePromise.showAlert("导入失败", `未能找到课表主体 (${type} 视图)，请确认您已点击查询且课表已加载完毕。`, "确定");
+             await window.shiguangBridgePromise.showAlert("导入失败", `未能找到课表主体 (${type} 视图)，请确认您已点击查询且课表已加载完毕。`, "确定");
              return null;
         }
         let result = [];
@@ -193,28 +193,28 @@ async function scrapeAndParseCourses() {
             result = parserTbale(); 
         }
         if (result.length === 0) {
-            AndroidBridge.showToast("未找到任何课程数据，请检查所选学年学期是否正确或本学期无课。");
+            window.shiguangBridge.showToast("未找到任何课程数据，请检查所选学年学期是否正确或本学期无课。");
             return null;
         }
         console.log(`JS: 课程数据解析成功，共找到 ${result.length} 门课程。`);
         return { courses: result };
     } catch (error) {
-        AndroidBridge.showToast(`抓取或解析失败: ${error.message}`);
+        window.shiguangBridge.showToast(`抓取或解析失败: ${error.message}`);
         console.error('JS: Scrape/Parse Error:', error);
-        await window.AndroidBridgePromise.showAlert("抓取或解析失败", `发生错误：${error.message}。请重试或联系开发者。`, "确定");
+        await window.shiguangBridgePromise.showAlert("抓取或解析失败", `发生错误：${error.message}。请重试或联系开发者。`, "确定");
         return null;
     }
 }
 
 async function saveCourses(parsedCourses) {
-    AndroidBridge.showToast(`正在保存 ${parsedCourses.length} 门课程...`);
+    window.shiguangBridge.showToast(`正在保存 ${parsedCourses.length} 门课程...`);
     console.log(`JS: 尝试保存 ${parsedCourses.length} 门课程...`);
     try {
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses, null, 2));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses, null, 2));
         console.log("JS: 课程保存成功！");
         return true;
     } catch (error) {
-        AndroidBridge.showToast(`课程保存失败: ${error.message}`);
+        window.shiguangBridge.showToast(`课程保存失败: ${error.message}`);
         console.error('JS: Save Courses Error:', error);
         return false;
     }
@@ -222,20 +222,20 @@ async function saveCourses(parsedCourses) {
 
 
 async function runImportFlow() {
-    const alertConfirmed = await window.AndroidBridgePromise.showAlert(
+    const alertConfirmed = await window.shiguangBridgePromise.showAlert(
         "教务系统课表导入",
         "导入前请确保您已在浏览器中成功登录教务系统，并处于课表查询页面且已点击查询。",
         "好的，开始导入"
     );
     if (!alertConfirmed) {
-        AndroidBridge.showToast("用户取消了导入。");
+        window.shiguangBridge.showToast("用户取消了导入。");
         return;
     }
     
     if (typeof window.jQuery === 'undefined' && typeof $ === 'undefined') {
         const errorMsg = "当前教务系统页面似乎没有加载 jQuery 库。本脚本依赖 jQuery 进行 DOM 解析。";
-        AndroidBridge.showToast(errorMsg);
-        await window.AndroidBridgePromise.showAlert("导入失败", errorMsg + "\n请尝试刷新页面或使用其他导入方式。", "确定");
+        window.shiguangBridge.showToast(errorMsg);
+        await window.shiguangBridgePromise.showAlert("导入失败", errorMsg + "\n请尝试刷新页面或使用其他导入方式。", "确定");
         console.error("JS: 缺少 jQuery 依赖，流程终止。");
         return;
     }
@@ -253,9 +253,9 @@ async function runImportFlow() {
         return;
     }
     
-    AndroidBridge.showToast(`课程导入成功，共导入 ${courses.length} 门课程！`);
+    window.shiguangBridge.showToast(`课程导入成功，共导入 ${courses.length} 门课程！`);
     console.log("JS: 整个导入流程执行完毕并成功。");
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runImportFlow();
