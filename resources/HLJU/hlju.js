@@ -1,490 +1,326 @@
-function findHljuTimetableRequest() {
-    const resources = performance.getEntriesByType("resource");
-
-    const matches = resources
-    .map(item => item.name)
-    .filter(url =>
-    url.includes("TimeTableNewService/GetTimeTableByStudent")
-    );
-
-    if (matches.length === 0) {
-        return null;
-    }
-
-    return matches[matches.length - 1];
+function findHljuTimetableRequest(){
+    const resources=performance.getEntriesByType("resource");
+    const matches=resources.map(item=>item.name).filter(url=>url.includes("TimeTableNewService/GetTimeTableByStudent"));
+    return matches.length?matches[matches.length-1]:null;
 }
 
-
-async function fetchHljuTimetable() {
-    const url = findHljuTimetableRequest();
-
-    if (!url) {
-        throw new Error(
-            "没有找到课表请求。\n" +
-            "请先在黑龙江大学教务系统中打开“我的课程表”，" +
-            "选择学期并点击“查询”。"
-        );
+async function fetchHljuTimetable(){
+    const url=findHljuTimetableRequest();
+    if(!url){
+        throw new Error("没有找到课表请求，请先打开黑龙江大学课表并查询。");
     }
-
-    console.log("找到黑龙江大学课表请求。");
-
-    const response = await fetch(url, {
-        method: "GET",
-        credentials: "include",
-        headers: {
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest"
+    const response=await fetch(url,{
+        method:"GET",
+        credentials:"include",
+        headers:{
+            "Accept":"application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With":"XMLHttpRequest"
         }
     });
-
-    console.log("课表 API HTTP Status:", response.status);
-
-    if (!response.ok) {
-        throw new Error(
-            `课表请求失败：HTTP ${response.status}`
-        );
+    if(!response.ok){
+        throw new Error(`课表请求失败 HTTP ${response.status}`);
     }
-
-    const data = await response.json();
-
-    if (!Array.isArray(data)) {
-        throw new Error("课表接口返回的数据不是数组。");
+    const data=await response.json();
+    if(!Array.isArray(data)){
+        throw new Error("课表接口返回格式错误");
     }
-
     return data;
 }
 
-
-function parseSections(sectionText) {
-    if (!sectionText) {
-        return null;
-    }
-
-    const match = sectionText.match(
-        /(\d+)\s*(?:,|，|-|~|～|至)\s*(\d+)/
-    );
-
-    if (!match) {
-        return null;
-    }
-
+function parseSections(text){
+    if(!text)return null;
+    const match=text.match(/(\d+)\s*(?:,|，|-|~|～|至)\s*(\d+)/);
+    if(!match)return null;
     return {
-        start: parseInt(match[1], 10),
-        end: parseInt(match[2], 10)
+        start:Number(match[1]),
+        end:Number(match[2])
     };
 }
 
-
-
-function parseWeeks(weekText) {
-    if (!weekText) {
-        return [];
-    }
-
-    let text = weekText
-    .replace(/^周次\s*[:：]\s*/, "")
-    .replace(/周/g, "")
-    .trim();
-
-    if (!text) {
-        return [];
-    }
-
-    const weeks = new Set();
-
-
-    const rangeRegex = /(\d+)\s*[-~～至]\s*(\d+)/g;
-
-    let rangeMatch;
-
-    while ((rangeMatch = rangeRegex.exec(text)) !== null) {
-        const start = parseInt(rangeMatch[1], 10);
-        const end = parseInt(rangeMatch[2], 10);
-
-        if (start <= end) {
-            for (let i = start; i <= end; i++) {
-                weeks.add(i);
-            }
-        } else {
-            for (let i = start; i >= end; i--) {
-                weeks.add(i);
-            }
+function parseWeeks(text){
+    if(!text)return [];
+    const weeks=new Set();
+    const regex=/(\d+)\s*[-~～至]\s*(\d+)/g;
+    let match;
+    while((match=regex.exec(text))!==null){
+        const start=Number(match[1]);
+        const end=Number(match[2]);
+        for(let i=start;i<=end;i++){
+            weeks.add(i);
         }
     }
-
-    const remainingText = text.replace(
-        /(\d+)\s*[-~～至]\s*(\d+)/g,
-                                       ""
-    );
-
-    const numberMatches = remainingText.match(/\d+/g);
-
-    if (numberMatches) {
-        for (const number of numberMatches) {
-            weeks.add(parseInt(number, 10));
-        }
-    }
-
-    return Array.from(weeks).sort((a, b) => a - b);
+    return Array.from(weeks).sort((a,b)=>a-b);
 }
 
-
-function parseCourseBlock(block, weekday, sections) {
-    const lines = block
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(line => line.length > 0);
-
-    if (lines.length < 2) {
-        return null;
+function parseMultiTeacherWeeks(text){
+    const result=[];
+    if(!text)return result;
+    const regex=/(\d+(?:[-~～]\d+)?)\(([^)]+)\)/g;
+    let match;
+    while((match=regex.exec(text))!==null){
+        result.push({
+            teacher:match[2].trim(),
+            weeks:parseWeeks(match[1])
+        });
     }
-
-
-    const name = lines[0];
-
-    if (!name) {
-        return null;
-    }
-
-
-    const teacherLine = lines[1] || "";
-
-    let teacher = teacherLine
-    .split(/\s+/)[0]
-    .trim();
-
-    // 查找地点
-    let position = "";
-
-    for (const line of lines) {
-        const match = line.match(/^地点\s*[:：]\s*(.*)$/);
-
-        if (match) {
-            position = match[1].trim();
-            break;
-        }
-    }
-
-    // 查找周次
-    let weeks = [];
-
-    for (const line of lines) {
-        const match = line.match(/^周次\s*[:：]\s*(.*)$/);
-
-        if (match) {
-            weeks = parseWeeks(match[1]);
-            break;
-        }
-    }
-
-
-    let courseSections = sections;
-
-    for (const line of lines) {
-        const match = line.match(/^节次\s*[:：]\s*(.*)$/);
-
-        if (match) {
-            const parsed = parseSections(match[1]);
-
-            if (parsed) {
-                courseSections = parsed;
-            }
-
-            break;
-        }
-    }
-
-    if (!courseSections) {
-        console.warn("无法解析课程节次：", block);
-        return null;
-    }
-
-    if (weeks.length === 0) {
-        console.warn("无法解析课程周次：", block);
-        return null;
-    }
-
-    return {
-        name: name,
-        teacher: teacher,
-        position: position,
-        day: weekday,
-        startSection: courseSections.start,
-        endSection: courseSections.end,
-        weeks: weeks
-    };
+    return result;
 }
 
-
-function parseCourseCell(content, weekday, sections) {
-    if (
-        content === null ||
-        content === undefined ||
-        typeof content !== "string"
-    ) {
-        return [];
+function getField(lines,name){
+    for(const line of lines){
+        const match=line.match(new RegExp("^"+name+"\\s*[:：](.*)$"));
+        if(match)return match[1].trim();
     }
+    return "";
+}
 
-    const text = content
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .trim();
+function parseCourseBlock(block,weekday,sections){
+    const lines=block.split(/\r?\n/).map(x=>x.trim()).filter(x=>x);
+    if(lines.length<1)return [];
 
-    if (!text) {
-        return [];
-    }
+    const name=lines[0];
+    const weekText=getField(lines,"周次");
+    const position=getField(lines,"地点");
 
-    const blocks = text
-    .split(/\n\s*\n+/)
-    .map(block => block.trim())
-    .filter(block => block.length > 0);
+    const multi=parseMultiTeacherWeeks(weekText);
+    const courses=[];
 
-    const courses = [];
-
-    for (const block of blocks) {
-        const course = parseCourseBlock(
-            block,
-            weekday,
-            sections
-        );
-
-        if (course) {
-            courses.push(course);
+    if(multi.length){
+        for(const item of multi){
+            courses.push({
+                name:name,
+                teacher:item.teacher,
+                position:position,
+                day:weekday,
+                startSection:sections.start,
+                endSection:sections.end,
+                weeks:item.weeks,
+                isCustomTime:false
+            });
         }
+        return courses;
     }
+
+    const teacherLine=lines[1]||"";
+    const teacher=teacherLine.split(/\s+/)[0].trim();
+    const weeks=parseWeeks(weekText);
+
+    if(!weeks.length)return [];
+
+    courses.push({
+        name:name,
+        teacher:teacher,
+        position:position,
+        day:weekday,
+        startSection:sections.start,
+        endSection:sections.end,
+        weeks:weeks,
+        isCustomTime:false
+    });
 
     return courses;
 }
 
+function parseCourseCell(content,weekday,sections){
+    if(!content||typeof content!=="string")return [];
+    const text=content.replace(/\r\n/g,"\n").replace(/\r/g,"\n").trim();
+    if(!text)return [];
 
-function parseHljuTimetable(data) {
-    const weekdayFields = [
-        { field: "Monday", day: 1 },
-        { field: "Tuesday", day: 2 },
-        { field: "Wednesday", day: 3 },
-        { field: "Thursday", day: 4 },
-        { field: "Friday", day: 5 },
-        { field: "Saturday", day: 6 },
-        { field: "Sunday", day: 7 }
+    const blocks=text.split(/\n\s*\n+/).map(x=>x.trim()).filter(x=>x);
+
+    let result=[];
+
+    for(const block of blocks){
+        result.push(...parseCourseBlock(block,weekday,sections));
+    }
+
+    return result;
+}
+function parseHljuTimetable(data){
+    const weekdayFields=[
+        {field:"Monday",day:1},
+        {field:"Tuesday",day:2},
+        {field:"Wednesday",day:3},
+        {field:"Thursday",day:4},
+        {field:"Friday",day:5},
+        {field:"Saturday",day:6},
+        {field:"Sunday",day:7}
     ];
 
-    const courses = [];
+    const courses=[];
 
-    for (const row of data) {
-        if (!row || typeof row !== "object") {
+    for(const row of data){
+        if(!row||typeof row!=="object")continue;
+
+        const sections=parseSections(row.JieCi);
+
+        if(!sections){
+            console.warn("无法解析节次:",row.JieCi);
             continue;
         }
 
-        // 当前这一行代表的节次，例如 "5,6"
-        const sections = parseSections(row.JieCi);
+        for(const weekday of weekdayFields){
+            const content=row[weekday.field];
 
-        if (!sections) {
-            console.warn("无法解析节次：", row.JieCi);
-            continue;
-        }
+            if(!content)continue;
 
-        for (const weekday of weekdayFields) {
-            const content = row[weekday.field];
-
-            if (
-                content === null ||
-                content === undefined ||
-                content === ""
-            ) {
-                continue;
-            }
-
-            const cellCourses = parseCourseCell(
+            const result=parseCourseCell(
                 content,
                 weekday.day,
                 sections
             );
 
-            courses.push(...cellCourses);
+            courses.push(...result);
         }
     }
 
     return courses;
 }
 
-
-function validateCourses(courses) {
-    if (!Array.isArray(courses)) {
-        throw new Error("解析结果不是课程数组。");
+function validateCourses(courses){
+    if(!Array.isArray(courses)){
+        throw new Error("课程解析结果错误");
     }
 
-    if (courses.length === 0) {
-        throw new Error(
-            "没有解析到任何课程。\n" +
-            "请确认当前学期已经查询成功，并且课表中有课程。"
-        );
+    if(courses.length===0){
+        throw new Error("没有解析到任何课程");
     }
 
-    for (const course of courses) {
-        if (!course.name) {
-            throw new Error("存在课程名称为空的课程。");
+    for(const course of courses){
+        if(!course.name){
+            throw new Error("存在课程名称为空");
         }
 
-        if (!course.teacher) {
-            console.warn("课程没有解析出教师：", course.name);
-        }
-
-        if (!course.position) {
-            console.warn("课程没有解析出地点：", course.name);
-        }
-
-        if (
-            !Number.isInteger(course.day) ||
-            course.day < 1 ||
-            course.day > 7
-        ) {
+        if(!Number.isInteger(course.day)){
             throw new Error(
-                `课程“${course.name}”的星期数据非法。`
+                `课程 ${course.name} 星期解析错误`
             );
         }
 
-        if (
-            !Number.isInteger(course.startSection) ||
-            !Number.isInteger(course.endSection)
-        ) {
+        if(!Number.isInteger(course.startSection)||
+           !Number.isInteger(course.endSection)){
             throw new Error(
-                `课程“${course.name}”的节次数据非法。`
+                `课程 ${course.name} 节次解析错误`
             );
         }
 
-        if (
-            !Array.isArray(course.weeks) ||
-            course.weeks.length === 0
-        ) {
+        if(!Array.isArray(course.weeks)||
+           course.weeks.length===0){
             throw new Error(
-                `课程“${course.name}”没有有效周次。`
+                `课程 ${course.name} 周次解析错误`
             );
         }
     }
 }
 
-
-function printCourses(courses) {
+function printCourses(courses){
     console.log(
-        "========== 黑龙江大学解析后的拾光课程 =========="
+        "========== 黑龙江大学课程解析结果 =========="
     );
 
     console.table(
-        courses.map(course => ({
-            课程: course.name,
-            教师: course.teacher,
-            地点: course.position,
-            星期: course.day,
-            开始节次: course.startSection,
-            结束节次: course.endSection,
-            周次: course.weeks.join(",")
+        courses.map(course=>({
+            课程:course.name,
+            教师:course.teacher,
+            地点:course.position,
+            星期:course.day,
+            节次:
+            `${course.startSection}-${course.endSection}`,
+            周次:
+            course.weeks.join(",")
         }))
     );
 
     console.log(
-        "完整 CourseJsonModel：",
+        "完整课程数据:",
         courses
     );
 
     console.log(
-        "================================================"
+        "=========================================="
     );
 }
 
-
-
-async function saveHljuCourses(courses) {
-    try {
-        await window.shiguangBridgePromise.saveImportedCourses(
+async function saveHljuCourses(courses){
+    try{
+        await window.AndroidBridgePromise.saveImportedCourses(
             JSON.stringify(courses)
         );
 
-        window.shiguangBridge.showToast(
-            `成功导入 ${courses.length} 个课程时段！`
-        );
-
-        console.log(
-            `成功导入 ${courses.length} 个课程时段。`
+        AndroidBridge.showToast(
+            `成功导入 ${courses.length} 个课程时段`
         );
 
         return true;
 
-    } catch (error) {
-        console.error("保存课程失败：", error);
+    }catch(error){
 
-        window.shiguangBridge.showToast(
-            "课程保存失败：" + error.message
+        console.error(
+            "保存课程失败:",
+            error
+        );
+
+        AndroidBridge.showToast(
+            "课程保存失败:"+error.message
         );
 
         return false;
     }
 }
 
-
-
-async function runImportFlow() {
-    try {
-        window.shiguangBridge.showToast(
+async function runImportFlow(){
+    try{
+        AndroidBridge.showToast(
             "正在获取黑龙江大学课表..."
         );
 
-
-        const timetable = await fetchHljuTimetable();
+        const timetable=
+            await fetchHljuTimetable();
 
         console.log(
-            "黑龙江大学原始课表数据：",
+            "黑龙江大学原始数据:",
             timetable
         );
 
+        const courses=
+            parseHljuTimetable(
+                timetable
+            );
 
-        const courses = parseHljuTimetable(
-            timetable
-        );
-
-        validateCourses(courses);
-
-
-
-        printCourses(courses);
-
-        window.shiguangBridge.showToast(
-            `解析成功，共 ${courses.length} 个课程时段`
-        );
-
-
-
-        const saveSuccess = await saveHljuCourses(
+        validateCourses(
             courses
         );
 
-        if (!saveSuccess) {
+        printCourses(
+            courses
+        );
+
+        const success=
+            await saveHljuCourses(
+                courses
+            );
+
+        if(!success){
             return;
         }
 
-
-
-        window.shiguangBridge.showToast(
-            "黑龙江大学课表导入成功！"
+        AndroidBridge.showToast(
+            "黑龙江大学课表导入成功"
         );
 
-        console.log(
-            "黑龙江大学课程导入全部完成。"
-        );
+        AndroidBridge.notifyTaskCompletion();
 
-        // 只有全部成功后才发送结束信号
-        window.shiguangBridge.notifyTaskCompletion();
+    }catch(error){
 
-    } catch (error) {
         console.error(
-            "========== 黑龙江大学课表导入失败 ==========",
+            "========== 导入失败 ==========",
             error
         );
 
-        window.shiguangBridge.showToast(
-            "课表导入失败：" + error.message
+        AndroidBridge.showToast(
+            "导入失败:"+error.message
         );
     }
 }
-
 
 runImportFlow();
