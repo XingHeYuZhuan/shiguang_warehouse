@@ -193,13 +193,13 @@ async function saveCourses() {
   });
 
   try {
-    await window.AndroidBridgePromise.saveImportedCourses(
+    await window.shiguangBridgePromise.saveImportedCourses(
       JSON.stringify(courseModels),
     );
     return courseModels.length;
   } catch (error) {
     console.error("保存课程失败:", error);
-    window.AndroidBridge.showToast("保存课程失败，请重试");
+    window.shiguangBridge.showToast("保存课程失败，请重试");
     return 0;
   }
 }
@@ -211,9 +211,9 @@ async function checkEnvirenment() {
     !nowSite.includes(urlPersonnalClassTable) &&
     !nowSite.includes(urlClassTable)
   ) {
-    window.AndroidBridge.showToast("当前页面不在支持的导入范围内");
+    window.shiguangBridge.showToast("当前页面不在支持的导入范围内");
     const selectedOption =
-      await window.AndroidBridgePromise.showSingleSelection(
+      await window.shiguangBridgePromise.showSingleSelection(
         "现在不在可导入的页面中，请选择导入班级课表还是个人课表，之后并确保打开具体课程页面",
         JSON.stringify(tableType), // 必须是 JSON 字符串
         -1, // 默认不选中
@@ -243,7 +243,7 @@ async function checkEnvirenment() {
 }
 
 async function runImportFlow() {
-  window.AndroidBridge.showToast("课程导入流程即将开始...");
+  window.shiguangBridge.showToast("课程导入流程即将开始...");
 
   if (!(await checkEnvirenment())) return;
 
@@ -265,17 +265,17 @@ async function runImportFlow() {
     new CustomTimeModel(11, "20:50", "21:45"),
   ];
   try {
-    await window.AndroidBridgePromise.savePresetTimeSlots(
+    await window.shiguangBridgePromise.savePresetTimeSlots(
       JSON.stringify(slots),
     );
   } catch (error) {
     console.error("保存时间段失败:", error);
-    window.AndroidBridge.showToast("保存时间段失败，请重试");
+    window.shiguangBridge.showToast("保存时间段失败，请重试");
     return;
   }
   // 8. 流程**完全成功**，发送结束信号。
-  AndroidBridge.showToast(`导入成功：共 ${savedCourseCount} 门课程`);
-  AndroidBridge.notifyTaskCompletion();
+  window.shiguangBridge.showToast(`导入成功：共 ${savedCourseCount} 门课程`);
+  window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 启动导入流程

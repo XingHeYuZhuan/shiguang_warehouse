@@ -1,0 +1,18 @@
+# resources/GDOU/adapters.yaml
+adapters:
+  - adapter_id: "GDOU_01"
+    adapter_name: "广东海洋大学教务"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "gdou.js"
+    import_url: "https://jw.gdou.edu.cn/"
+    maintainer: "Mccurtain"
+    description: "广东海洋大学教务适配，如有误请提交 issues"
+
+  - adapter_id: "GDOUYJ_01"
+    adapter_name: "广东海洋大学阳江校区教务"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "gdouyj.js"
+    import_url: "https://jw.gdou.edu.cn/"
+    maintainer: "Yihe-ng"
+    description: "广东海洋大学阳江校区教务适配，使用阳江校区教学楼错峰作息时间，如有误请提交issues"
+

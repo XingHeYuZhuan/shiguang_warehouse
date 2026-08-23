@@ -345,7 +345,7 @@ function parseScheduleHtml(html) {
 }
 
 /**
- * 转换课程数据格式以符合时光课表规范
+ * 转换课程数据格式以符合拾光课程表规范
  * @param {Array} rawCourses 原始课程数据
  * @returns {Array} 转换后的课程数据
  */
@@ -453,7 +453,7 @@ function generateTimeSlots(campusIdx = 0) {
  * @returns {Promise<Object>} 学期列表数据
  */
 async function getSemesterList() {
-    AndroidBridge.showToast('正在获取学期列表...');
+    window.shiguangBridge.showToast('正在获取学期列表...');
     const response = await fetch('/jsxsd/xskb/xskb_list.do', { method: 'GET', credentials: 'include' });
     const htmlText = await response.text();
     const parser = new DOMParser();
@@ -474,6 +474,50 @@ async function getSemesterList() {
             }
         });
     }
+
+    // 仅保留最新学期往前五年内的学期选项
+    const semesterYearPattern = /^(\d{4})-(\d{4})-(\d+)$/;
+    const semesterStartYears = [];
+    const semesterRecords = semesterValues.map((value, index) => {
+        const label = semesters[index] || '';
+        const valueMatch = String(value).match(semesterYearPattern);
+        const labelMatch = String(label).match(semesterYearPattern);
+        const startYear = valueMatch ? Number(valueMatch[1]) : (labelMatch ? Number(labelMatch[1]) : null);
+
+        if (startYear !== null) {
+            semesterStartYears.push(startYear);
+        }
+
+        return { index, value, label, startYear };
+    });
+
+    if (semesterStartYears.length > 0) {
+        const latestStartYear = Math.max(...semesterStartYears);
+        const minStartYear = latestStartYear - 4;
+        const filteredSemesters = [];
+        const filteredSemesterValues = [];
+        let filteredDefaultIndex = -1;
+
+        semesterRecords.forEach((record) => {
+            if (record.startYear !== null && record.startYear >= minStartYear) {
+                filteredSemesters.push(record.label);
+                filteredSemesterValues.push(record.value);
+                if (record.index === defaultIndex) {
+                    filteredDefaultIndex = filteredSemesters.length - 1;
+                }
+            }
+        });
+
+        semesters = filteredSemesters;
+        semesterValues = filteredSemesterValues;
+
+        if (filteredDefaultIndex !== -1) {
+            defaultIndex = filteredDefaultIndex;
+        } else if (defaultIndex >= semesterValues.length) {
+            defaultIndex = Math.max(semesterValues.length - 1, 0);
+        }
+    }
+
     return { semesters, semesterValues, defaultIndex, htmlText };
 }
 
@@ -533,14 +577,14 @@ async function fetchAndParseCourses(html) {
 }
 
 /**
- * 保存课程数据到时光课表
+ * 保存课程数据到拾光课程表
  * @param {Array} courses 课程数组
  * @returns {boolean} 保存是否成功
  */
 async function saveCourses(courses) {
     try {
         console.log(`正在保存 ${courses.length} 门课程...`);
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         console.log('课程数据保存成功');
         return true;
     } catch (error) {
@@ -550,7 +594,7 @@ async function saveCourses(courses) {
 }
 
 /**
- * 导入预设时间段到时光课表
+ * 导入预设时间段到拾光课程表
  * @param {number} campusIdx 校区索引
  * @returns {boolean} 导入是否成功
  */
@@ -558,7 +602,7 @@ async function importPresetTimeSlots(campusIdx = 0) {
     try {
         console.log('正在导入时间段配置...');
         const presetTimeSlots = generateTimeSlots(campusIdx);
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
         console.log('时间段配置导入成功');
         return true;
     } catch (error) {
@@ -576,7 +620,7 @@ async function importYnufeCourseSchedule() {
     // 检查是否在登录页面
     if (isLoginPage()) {
         console.log('检测到在登录页面，终止导入');
-        AndroidBridge.showToast('请先登录教务系统！');
+        window.shiguangBridge.showToast('请先登录教务系统！');
         return; // 直接返回,不抛出错误,不调用notifyTaskCompletion
     }
     
@@ -602,7 +646,7 @@ async function importYnufeCourseSchedule() {
             // 循环直到用户选择学期才进行下一步(强制不可取消)
             let selectedIdx = null;
             while (true) {
-                selectedIdx = await window.AndroidBridgePromise.showSingleSelection(
+                selectedIdx = await window.shiguangBridgePromise.showSingleSelection(
                     "选择学期", 
                     JSON.stringify(semesters), 
                     -1
@@ -610,15 +654,15 @@ async function importYnufeCourseSchedule() {
                 if (selectedIdx !== null && selectedIdx !== -1) {
                     break;
                 }
-                AndroidBridge.showToast("必须选择一个学期才能继续导入！");
+                window.shiguangBridge.showToast("必须选择一个学期才能继续导入！");
             }
             
             // 获取对应学期的课表HTML
-            AndroidBridge.showToast(`正在获取 [${semesters[selectedIdx]}] 的课表...`);
+            window.shiguangBridge.showToast(`正在获取 [${semesters[selectedIdx]}] 的课表...`);
             targetHtml = await fetchScheduleForSemester(semesterValues[selectedIdx]);
 
             const campuses = ["龙泉校区（默认）", "安宁校区"];
-            selectedCampusIdx = await window.AndroidBridgePromise.showSingleSelection(
+            selectedCampusIdx = await window.shiguangBridgePromise.showSingleSelection(
                 "选择校区",
                 JSON.stringify(campuses),
                 0
@@ -640,11 +684,11 @@ async function importYnufeCourseSchedule() {
             if (targetHtml && targetHtml.includes('kbtable')) {
                 // 找到了课表元素但没有课程,是真的空课表
                 console.log('检测到空课表');
-                AndroidBridge.showToast('当前课表为空');
+                window.shiguangBridge.showToast('当前课表为空');
                 courses = []; // 返回空数组
             } else {
                 // 找不到课表元素,解析失败
-                AndroidBridge.showToast('获取课表失败,请检查网络和页面状态');
+                window.shiguangBridge.showToast('获取课表失败,请检查网络和页面状态');
                 throw new Error('未找到课表数据');
             }
         } else {
@@ -654,28 +698,28 @@ async function importYnufeCourseSchedule() {
         // 保存课程数据
         const saveResult = await saveCourses(courses);
         if (!saveResult) {
-            AndroidBridge.showToast('保存课程失败');
+            window.shiguangBridge.showToast('保存课程失败');
             throw new Error('保存课程数据失败');
         }
 
         // 导入时间段配置
         const timeSlotResult = await importPresetTimeSlots(selectedCampusIdx);
         if (!timeSlotResult) {
-            AndroidBridge.showToast('导入时间段配置失败');
+            window.shiguangBridge.showToast('导入时间段配置失败');
             throw new Error('导入时间段失败');
         }
 
         // 成功
         if (courses.length > 0) {
             const campusName = selectedCampusIdx === 1 ? "安宁校区" : "龙泉校区";
-            AndroidBridge.showToast(`成功导入 ${courses.length} 门课程！（${campusName}）`);
+            window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程！（${campusName}）`);
         }
         console.log('课程导入完成');
         return true;
 
     } catch (error) {
         console.error('导入过程出错:', error);
-        AndroidBridge.showToast('导入失败: ' + error.message);
+        window.shiguangBridge.showToast('导入失败: ' + error.message);
         return false;
     }
 }
@@ -688,7 +732,7 @@ async function runImportFlow() {
     
     // 只有成功导入时才发送完成信号
     if (success) {
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.notifyTaskCompletion();
     }
     
     return success;

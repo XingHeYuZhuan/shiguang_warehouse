@@ -7,11 +7,6 @@ for(let i=1990; i<=2100; i++){
     yearArr.push(i);
 }
 
-//获取本月最大日期
-function getDaysInMonth(year, month) {
-    return new Date(year, month, 0).getDate();
-}
-
 //根据URL特征判断当前所在界面
 function checkCurrentPage() {
     const currenturl = window.location.href.toLowerCase(); //获取当前URL并转为小写
@@ -27,43 +22,56 @@ function checkCurrentPage() {
     return -1; //未知错误，返回值-1
 }
 
-//显示一个公告信息弹窗
+//显示是否确认导入课程弹窗
 async function confirmAlert() {
     try {
-        const confirmed = await window.AndroidBridgePromise.showAlert(
+        const confirmed = await window.shiguangBridgePromise.showAlert(
             "重要提醒",
-            "自动加载上课时间段仅支持珠海校区，\n每周第一天默认为星期日，可自行修改。\n是否确认获取课表？",
+            "自动加载上课时间段仅支持珠海校区，\n是否确认获取课表？",
             "确认",
         );
         if (confirmed) {
-            AndroidBridge.showToast("正在尝试导入课表...");
+            window.shiguangBridge.showToast("正在尝试导入课表...");
             return true; // 成功时返回 true
         } else {
-            AndroidBridge.showToast("已取消！");
+            window.shiguangBridge.showToast("已取消！");
             return false; // 用户取消时返回 false
         }
     } catch (error) {
-        AndroidBridge.showToast("显示弹窗出错！" + error.message);
+        window.shiguangBridge.showToast("显示弹窗出错！" + error.message);
         return false; // 出现错误时也返回 false
     }
+}
+
+//显示到设置中选择开学日期的提醒
+async function setinfoAlert() {
+    const confirmed = await window.shiguangBridgePromise.showAlert(
+        "重要提醒",
+        "导入课程信息成功，请到设置界面选择当前学期的开学日期",
+        "好的"
+    );
+    if (!confirmed) {
+        return false;
+    }
+    return true;
 }
 
 //显示一个是否手动输入学年学期信息的弹窗
 async function confirmGetXNXQAlert() {
     try {
-        const confirmed = await window.AndroidBridgePromise.showAlert(
+        const confirmed = await window.shiguangBridgePromise.showAlert(
             "重要提醒",
-            "是否确认手动输入学年学期信息？",
+            "自动获取学年学期信息失败，\n是否确认手动输入学年学期信息？",
             "确认",
         );
         if (confirmed) {
             return true; // 成功时返回 true
         } else {
-            AndroidBridge.showToast("已取消！");
+            window.shiguangBridge.showToast("已取消！");
             return false; // 用户取消时返回 false
         }
     } catch (error) {
-        AndroidBridge.showToast("显示弹窗出错！" + error.message);
+        window.shiguangBridge.showToast("显示弹窗出错！" + error.message);
         return false; // 出现错误时也返回 false
     }
 }
@@ -71,20 +79,19 @@ async function confirmGetXNXQAlert() {
 //向用户获取学年信息
 async function getSession() {
     try {
-        const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+        const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
             "请选择学年的起始年（如2025-2026学年的2025）",
             JSON.stringify(yearArr),
             36
         );
         if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < yearArr.length) {
-            AndroidBridge.showToast("你选择了" + yearArr[selectedIndex] + '-' + (Number(yearArr[selectedIndex])+1) + "学年");
             return (yearArr[selectedIndex] + '-' + (Number(yearArr[selectedIndex])+1));
         } else {
-            AndroidBridge.showToast("用户取消了选择！");
+            window.shiguangBridge.showToast("用户取消了选择！");
             return -1; // 用户取消时返回-1
         }
     } catch (error) {
-        AndroidBridge.showToast("显示列表出错！" + error.message);
+        window.shiguangBridge.showToast("显示列表出错！" + error.message);
         return -1; // 出现错误时也返回-1
     }
 }
@@ -92,25 +99,23 @@ async function getSession() {
 //向用户获取学期信息
 async function getSemester() {
     try {
-        const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+        const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
             "请选择学期（1-第一学期，2-第二学期）",
             JSON.stringify([1,2]),
             1
         );
         if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < 2) {
             if(selectedIndex === 0) {
-                AndroidBridge.showToast("你选择了第一学期");
                 return 1;
             }else{
-                AndroidBridge.showToast("你选择了第二学期");
                 return 2;
             }
         } else {
-            AndroidBridge.showToast("用户取消了选择！");
+            window.shiguangBridge.showToast("用户取消了选择！");
             return -1; // 用户取消时返回 -1
         }
     } catch (error) {
-        AndroidBridge.showToast("显示列表出错！" + error.message);
+        window.shiguangBridge.showToast("显示列表出错！" + error.message);
         return -1; // 出现错误时也返回 -1
     }
 }
@@ -135,14 +140,13 @@ async function importPresetTimeSlots() {
     ]
 
     try {
-        const result = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         if (result === true) {
-            //AndroidBridge.showToast("时间段导入成功！");
         } else {
-            AndroidBridge.showToast("时间段导入失败!");
+            window.shiguangBridge.showToast("时间段导入失败!");
         }
     } catch (error) {
-        AndroidBridge.showToast("导入时间段失败: " + error.message);
+        window.shiguangBridge.showToast("导入时间段失败: " + error.message);
     }
 }
 
@@ -181,13 +185,13 @@ async function getCourses(xnxqID) {
         }
         const courseData = await response.json();
         if (courseData.datas.xskcb.totalSize === 0){
-            AndroidBridge.showToast("获取到的课表为空课表，请检查学年学期信息！")
+            window.shiguangBridge.showToast("获取到的课表为空课表，请检查学年学期信息！")
             return -1;
         }
-        AndroidBridge.showToast("成功获取课程表信息，共" + courseData.datas.xskcb.totalSize + "门课程");
+        window.shiguangBridge.showToast("成功获取课程表信息，共" + courseData.datas.xskcb.totalSize + "门课程");
         return courseData;
     }catch (error){
-        AndroidBridge.showToast("获取课程表失败:" + error.message);
+        window.shiguangBridge.showToast("获取课程表失败:" + error.message);
         return -1;
     }
 }
@@ -302,7 +306,7 @@ function autoGetTotalWeekNum(courses) {
 async function saveCourses(courseData) {
     let xnxqID = getSessionSemester();
     if (xnxqID === -1) {
-        AndroidBridge.showToast("无法自动获取学年学期信息！");
+        //无法自动获取学年学期信息，询问是否手动输入
         if(await confirmGetXNXQAlert()){
             const session = await getSession();
             if(session === -1){
@@ -313,11 +317,12 @@ async function saveCourses(courseData) {
                 return -1;
             }
             xnxqID = (session + '-' + semester);
+            window.shiguangBridge.showToast("你选择的学年学期信息：" + xnxqID);
         }else {
             return -1;
         }
     }else{
-        AndroidBridge.showToast("自动获取到学年学期信息：" + xnxqID);
+        window.shiguangBridge.showToast("自动获取到学年学期信息：" + xnxqID);
     }
 
     const rawResponse = await getCourses(xnxqID);
@@ -329,16 +334,16 @@ async function saveCourses(courseData) {
     const totalWeeksNum = autoGetTotalWeekNum(courses);
 
     try {
-        const result = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        const result = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (result === true) {
-            //AndroidBridge.showToast("课程导入成功！");
+            //课程导入成功！
             return totalWeeksNum;
         } else {
-            AndroidBridge.showToast("课程导入失败!");
+            window.shiguangBridge.showToast("课程导入失败!");
             return -1
         }
     } catch (error) {
-        AndroidBridge.showToast("导入课程失败: " + error.message);
+        window.shiguangBridge.showToast("导入课程失败: " + error.message);
         return -1;
     }
 
@@ -347,81 +352,26 @@ async function saveCourses(courseData) {
 //导入课表配置
 async function saveConfig(semesterTotalWeeks) {
     // 注意：只传入要修改的字段，其他字段（如 semesterTotalWeeks）会使用 Kotlin 模型中的默认值
-    let semesterStartData = "";
-    let choseResult = 1;
-
-    //显示三次单项选择框，向用户获取开学时间
-    try {
-        const yearIndex = await window.AndroidBridgePromise.showSingleSelection(
-            "请选择开学时间（年份）",
-            JSON.stringify(yearArr),
-            36
-        );
-        if (yearIndex !== null && yearIndex >= 0 && yearIndex < yearArr.length) {
-            const year = yearArr[yearIndex];
-            const monthIndex = await window.AndroidBridgePromise.showSingleSelection(
-                "请选择开学时间（月份）",
-                JSON.stringify([1,2,3,4,5,6,7,8,9,10,11,12]),
-                2
-            );
-            if (monthIndex !== null && monthIndex >= 0 && monthIndex < 12) {
-                const month =[1,2,3,4,5,6,7,8,9,10,11,12][monthIndex];
-                const dayArr = [];
-                for (let i = 1; i <= getDaysInMonth(year,month); i++) {
-                    dayArr.push(i);
-                }
-                const dayIndex = await window.AndroidBridgePromise.showSingleSelection(
-                    "请选择开学时间（日期）",
-                    JSON.stringify(dayArr),
-                    7
-                );
-                if (dayIndex !== null && dayIndex >= 0 && dayIndex < dayArr.length) {
-                    const day = dayArr[dayIndex];
-                    const yearStr = year.toString();
-                    const monthStr = month.toString().padStart(2,"0"); //补充为两位
-                    const dayStr = day.toString().padStart(2,"0"); //补充为两位
-                    semesterStartData =  yearStr + '-' + monthStr + '-' + dayStr;
-                    AndroidBridge.showToast("你选择的开学时间为：" + semesterStartData);
-                } else {
-                    choseResult = 0;
-                }
-            } else {
-                choseResult = 0;
-            }
-        } else {
-            choseResult = 0;
-        }
-    } catch (error) {
-        AndroidBridge.showToast("显示列表出错！" + error.message);
-        return -1; // 出现错误时也返回 -1
-    }
-
-    if(!choseResult){
-        AndroidBridge.showToast("用户取消了选择，将按默认开学日期2026-3-9导入配置");
-        semesterStartData = "2026-03-09";
-    }
-
-
 
     try {
         const courseConfigData = {
-            "semesterStartDate": semesterStartData, //月份要使用两位数，否则软件会崩溃
+            // "semesterStartDate": semesterStartData, //月份要使用两位数，否则软件会崩溃
             "semesterTotalWeeks": Number(semesterTotalWeeks),
             "defaultClassDuration": 45,
             "defaultBreakDuration": 10,
-            "firstDayOfWeek": 7
+            "firstDayOfWeek": 1
         };
         const configJsonString = JSON.stringify(courseConfigData);
-        const result = await window.AndroidBridgePromise.saveCourseConfig(configJsonString);
+        const result = await window.shiguangBridgePromise.saveCourseConfig(configJsonString);
         if (result === true) {
+            //课表配置导入成功
             return 0;
-            //AndroidBridge.showToast("课表配置导入成功！");
         } else {
-            AndroidBridge.showToast("课表配置导入失败");
+            window.shiguangBridge.showToast("课表配置导入失败");
             return -1;
         }
     } catch (error) {
-        AndroidBridge.showToast("导入配置失败: " + error.message);
+        window.shiguangBridge.showToast("导入配置失败: " + error.message);
         return -1;
     }
 }
@@ -433,35 +383,45 @@ async function runAllDemosSequentially() {
     //检查是否进入课表界面
     const currentPageNum = checkCurrentPage();
     if(currentPageNum === 1){
-        AndroidBridge.showToast("请登录教务系统");
+        window.shiguangBridge.showToast("请登录教务系统");
         return;
     }else if(currentPageNum === 2) {
-        AndroidBridge.showToast("请进入我的课表界面");
+        window.shiguangBridge.showToast("请进入我的课表界面");
         return;
     }else if(currentPageNum === -1) {
-        AndroidBridge.showToast("未知错误");
+        window.shiguangBridge.showToast("未知错误");
         return;
     }
 
-    //确认窗口
+    //确认是否导入课程
     const alertResult = await confirmAlert();
     if (!alertResult) {
         return; // 用户取消，立即退出函数
     }
 
+    //导入课程，返回-1表示导入失败
     const totalNum = await saveCourses();
     if(totalNum === -1) {
         return;
     }
+
+    //导入预设上课时间段
     await importPresetTimeSlots();
+
+    //导入课表配置
     const saveConfigResult = await saveConfig(totalNum);
-    if(saveConfigResult === -1)
+    if(saveConfigResult === 0)
+    {
+        //课表导入成功，提示用户设置开学日期
+        await setinfoAlert();
+    }
+    else if(saveConfigResult === -1)
     {
         return;
     }
 
     // 发送最终的生命周期完成信号
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runAllDemosSequentially();

@@ -75,14 +75,14 @@ async function fetchIndexDoc() {
 async function selectTermByUserFromDoc(doc) {
   const { yearData, semesterData } = parseTermOptionsFromDoc(doc);
 
-  const yearIndex = await window.AndroidBridgePromise.showSingleSelection(
+  const yearIndex = await window.shiguangBridgePromise.showSingleSelection(
     '选择学年',
     JSON.stringify(yearData.options.map(i => i.text)),
     yearData.defaultIndex
   );
   if (yearIndex === null || yearIndex === -1) throw new Error('已取消学年选择');
 
-  const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+  const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
     '选择学期',
     JSON.stringify(semesterData.options.map(i => i.text)),
     semesterData.defaultIndex
@@ -162,7 +162,7 @@ function validateSemesterStartDateInput(input) {
 
 async function selectSemesterStartDate(xnm, xqm) {
   const defaultDate = xqm === '3' ? `${xnm}-09-01` : `${Number(xnm) + 1}-03-01`;
-  const picked = await window.AndroidBridgePromise.showPrompt(
+  const picked = await window.shiguangBridgePromise.showPrompt(
     '选择开学日期',
     '请输入开学日期（YYYY-MM-DD）',
     defaultDate,
@@ -183,26 +183,26 @@ async function run() {
 
     const courses = parseCourses(data);
     if (!courses.length) {
-      AndroidBridge.showToast('导入失败: 未获取到课表数据');
+      window.shiguangBridge.showToast('导入失败: 未获取到课表数据');
       return;
     }
 
     const semesterStartDate = await selectSemesterStartDate(xnm, xqm);
     const allWeeks = courses.flatMap(c => c.weeks);
     const maxWeek = allWeeks.length ? Math.max(...allWeeks) : 20;
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
       semesterTotalWeeks: maxWeek,
       semesterStartDate: semesterStartDate,
       firstDayOfWeek: 1
     }));
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 
-    AndroidBridge.showToast(`导入成功：${courses.length} 门`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`导入成功：${courses.length} 门`);
+    window.shiguangBridge.notifyTaskCompletion();
   } catch (e) {
     console.error(e);
-    AndroidBridge.showToast(`导入失败: ${e.message}`);
+    window.shiguangBridge.showToast(`导入失败: ${e.message}`);
   }
 }
 

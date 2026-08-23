@@ -1,0 +1,8 @@
+adapters: #固定字段
+  - adapter_id: "JLU_01" # id加上序号
+    adapter_name: "吉林大学（新）教务管理系统"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "JLU_01.js" #相对路径
+    import_url: "https://vpn.jlu.edu.cn/login"
+    maintainer: "Leimeng52mc"
+    description: "在网页版VPN系统登录后，打开(新)教务管理系统，定位到我的课表页面，点击导出按钮即可导出课表数据。"

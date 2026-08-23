@@ -125,7 +125,7 @@ async function saveAppConfig() {
         "semesterTotalWeeks": 20,
         "firstDayOfWeek": 1
     };
-    return await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+    return await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 }
 
 /**
@@ -148,7 +148,7 @@ async function saveAppTimeSlots() {
         { "number": 13, "startTime": "22:40", "endTime": "23:25" },
         { "number": 14, "startTime": "23:25", "endTime": "23:59" }
     ];
-    return await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+    return await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
 }
 
 /**
@@ -157,12 +157,12 @@ async function saveAppTimeSlots() {
 async function getSelectedSemesterId() {
     const currentYear = new Date().getFullYear();
     // 绑定验证函数 validateYearInput
-    const year = await window.AndroidBridgePromise.showPrompt(
+    const year = await window.shiguangBridgePromise.showPrompt(
         "选择学年", "请输入要导入课程的起始学年（例如 2025-2026 应输入2025）:", String(currentYear), "validateYearInput"
     );
     if (!year) return null;
     
-    const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期", JSON.stringify(["第一学期", "第二学期"]), 0
     );
     if (semesterIndex === null) return null;
@@ -174,23 +174,23 @@ async function getSelectedSemesterId() {
 
 async function runImportFlow() {
     try {
-        const confirmed = await window.AndroidBridgePromise.showAlert(
+        const confirmed = await window.shiguangBridgePromise.showAlert(
             "公告",
             "请确保您已在当前页面成功登录教务系统，否则无法获取数据。是否继续？",
             "确认已登录"
         );
         if (!confirmed) {
-            AndroidBridge.showToast("导入已取消");
+            window.shiguangBridge.showToast("导入已取消");
             return;
         }
 
         const semesterId = await getSelectedSemesterId();
         if (!semesterId) {
-            AndroidBridge.showToast("导入已取消");
+            window.shiguangBridge.showToast("导入已取消");
             return;
         }
 
-        AndroidBridge.showToast("正在获取教务数据...");
+        window.shiguangBridge.showToast("正在获取教务数据...");
         
         const response = await fetch("https://a.hblgxy.edu.cn:5111/jsxsd/xskb/xskb_list.do", {
             method: "POST",
@@ -203,21 +203,21 @@ async function runImportFlow() {
         const finalCourses = parseTimetableToModel(new DOMParser().parseFromString(html, "text/html"));
 
         if (finalCourses.length === 0) {
-            AndroidBridge.showToast("未发现任何课程数据,检查是否登录或者学期选择是否正确");
+            window.shiguangBridge.showToast("未发现任何课程数据,检查是否登录或者学期选择是否正确");
             return;
         }
 
         // 保存数据
-        AndroidBridge.showToast("正在保存配置...");
+        window.shiguangBridge.showToast("正在保存配置...");
         await saveAppConfig();
         await saveAppTimeSlots();
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
         
-        AndroidBridge.showToast(`成功导入 ${finalCourses.length} 门课程`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${finalCourses.length} 门课程`);
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (error) {
-        AndroidBridge.showToast("异常: " + error.message);
+        window.shiguangBridge.showToast("异常: " + error.message);
     }
 }
 

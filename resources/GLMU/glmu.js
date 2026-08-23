@@ -95,7 +95,7 @@ async function fetchCourseData(xnxqdm) {
     let total = 0;
 
     while (true) {
-        const res = await fetch("https://ejwc.glmu.edu.cn/xsgrkbcx!getDataList.action", {
+        const res = await fetch("https://ejwc.glmc.edu.cn/xsgrkbcx!getDataList.action", {
             headers: {
                 "accept": "application/json, text/javascript, */*; q=0.01",
                 "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -123,7 +123,7 @@ async function fetchCourseData(xnxqdm) {
 
 // ---------- 用户交互 ----------
 async function promptUserToStart() {
-    return await window.AndroidBridgePromise.showAlert(
+    return await window.shiguangBridgePromise.showAlert(
         "重要提醒",
         "请确保您已登录桂医教务系统，且当前页面为教务系统内任意页面。\n\n点击确定继续。",
         "确定"
@@ -131,7 +131,7 @@ async function promptUserToStart() {
 }
 
 async function getAcademicYear() {
-    return await window.AndroidBridgePromise.showPrompt(
+    return await window.shiguangBridgePromise.showPrompt(
         "学年设置",
         "请输入本学年开始的年份\n（例如 2024，代表 2024-2025 学年）",
         "2024",
@@ -141,7 +141,7 @@ async function getAcademicYear() {
 
 async function selectSemester() {
     const semesterOptions = ["上学期", "下学期", "短学期"];
-    const index = await window.AndroidBridgePromise.showSingleSelection(
+    const index = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(semesterOptions),
         0
@@ -156,38 +156,38 @@ async function run() {
         // 1. 公告
         const confirmed = await promptUserToStart();
         if (!confirmed) {
-            AndroidBridge.showToast("用户取消了导入流程。");
+            window.shiguangBridge.showToast("用户取消了导入流程。");
             return;
         }
 
         // 2. 获取学年
         const yearInput = await getAcademicYear();
         if (yearInput === null) {
-            AndroidBridge.showToast("导入已取消。");
+            window.shiguangBridge.showToast("导入已取消。");
             return;
         }
         const yearNum = parseInt(yearInput);
         if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) {
-            await window.AndroidBridgePromise.showAlert("错误", "学年输入无效，请输入2000-2100之间的数字。", "确定");
+            await window.shiguangBridgePromise.showAlert("错误", "学年输入无效，请输入2000-2100之间的数字。", "确定");
             return;
         }
 
         // 3. 获取学期
         const semesterIndex = await selectSemester();
         if (semesterIndex === null) {
-            AndroidBridge.showToast("导入已取消。");
+            window.shiguangBridge.showToast("导入已取消。");
             return;
         }
         const termCode = semesterIndex === 0 ? "01" : (semesterIndex === 1 ? "02" : "03");
         const xnxqdm = `${yearNum}${termCode}`;
 
         // 4. 请求课表
-        AndroidBridge.showToast("正在获取课表，请稍候...");
+        window.shiguangBridge.showToast("正在获取课表，请稍候...");
         let rawData;
         try {
             rawData = await fetchCourseData(xnxqdm);
         } catch (fetchErr) {
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "网络请求失败",
                 `请求教务系统失败：${fetchErr.message}\n\n请检查网络连接和登录状态。`,
                 "确定"
@@ -196,7 +196,7 @@ async function run() {
         }
 
         if (!rawData.length) {
-            await window.AndroidBridgePromise.showAlert("提示", "未获取到任何课程数据。请确认已登录教务系统并选择正确的学年学期。", "确定");
+            await window.shiguangBridgePromise.showAlert("提示", "未获取到任何课程数据。请确认已登录教务系统并选择正确的学年学期。", "确定");
             return;
         }
 
@@ -206,37 +206,37 @@ async function run() {
 
         // 6. 保存课程
         try {
-            await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(targetCourses));
-            AndroidBridge.showToast(`课程数据已导入（共 ${targetCourses.length} 条）`);
+            await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(targetCourses));
+            window.shiguangBridge.showToast(`课程数据已导入（共 ${targetCourses.length} 条）`);
         } catch (saveErr) {
-            await window.AndroidBridgePromise.showAlert("保存课程失败", saveErr.message, "确定");
+            await window.shiguangBridgePromise.showAlert("保存课程失败", saveErr.message, "确定");
             return;
         }
 
         // 7. 保存时间段
         const timeSlots = getTimeSlots();
         try {
-            await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-            AndroidBridge.showToast("时间段数据已导入");
+            await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+            window.shiguangBridge.showToast("时间段数据已导入");
         } catch (slotErr) {
             // 时间段保存失败不终止流程，只提示
-            AndroidBridge.showToast(`时间段保存失败：${slotErr.message}`);
+            window.shiguangBridge.showToast(`时间段保存失败：${slotErr.message}`);
         }
 
         // 8. 完成通知
-        AndroidBridge.showToast("导入完成！");
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast("导入完成！");
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (err) {
         // 捕获所有未预料的错误
         console.error("run error:", err);
-        await window.AndroidBridgePromise.showAlert(
+        await window.shiguangBridgePromise.showAlert(
             "导入失败",
             `未知错误：${err.message || err}\n\n请联系开发者。`,
             "确定"
         );
         // 仍然通知完成，但可能不会生成有效文件
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.notifyTaskCompletion();
     }
 }
 

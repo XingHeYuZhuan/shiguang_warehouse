@@ -79,7 +79,7 @@ function processAndMergeCourses(courses) {
 // 主程序
 async function runStarlinkImport() {
     try {
-        const userInput = await window.AndroidBridgePromise.showPrompt(
+        const userInput = await window.shiguangBridgePromise.showPrompt(
             "导入星链课表",
             "请粘贴分享文案（包含分享码）",
             "",
@@ -91,7 +91,7 @@ async function runStarlinkImport() {
         const shareCode = extractShareCode(userInput);
         const apiUrl = `https://api.starlinkkb.cn/share/curriculum/${shareCode}`;
         
-        AndroidBridge.showToast("正在同步云端数据...");
+        window.shiguangBridge.showToast("正在同步云端数据...");
 
         const response = await fetch(apiUrl);
         if (!response.ok) throw new Error("分享码已失效或网络异常");
@@ -119,15 +119,15 @@ async function runStarlinkImport() {
             semesterTotalWeeks: data.totalWeeks || 20
         };
 
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
-        const success = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+        const success = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
 
         if (success) {
-            AndroidBridge.showToast("导入成功！");
-            AndroidBridge.notifyTaskCompletion();
+            window.shiguangBridge.showToast("导入成功！");
+            window.shiguangBridge.notifyTaskCompletion();
         }
     } catch (e) {
-        await window.AndroidBridgePromise.showAlert("导入失败", e.message, "确定");
+        await window.shiguangBridgePromise.showAlert("导入失败", e.message, "确定");
     }
 }
 

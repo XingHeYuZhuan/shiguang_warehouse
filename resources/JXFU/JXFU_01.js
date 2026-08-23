@@ -132,8 +132,8 @@ function getCourseConfig() {
  */
 async function runImportFlow() {
     try {
-        if (typeof window.AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast("正在获取课表配置，请稍候...");
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast("正在获取课表配置，请稍候...");
         } else {
             console.log("正在请求获取学期列表...");
         }
@@ -166,16 +166,16 @@ async function runImportFlow() {
 
         // 第 2 步：选择学期
         let selectedIdx = defaultIndex;
-        if (typeof window.AndroidBridgePromise !== 'undefined') {
+        if (typeof window.shiguangBridgePromise !== 'undefined') {
             // APP 内原生弹窗
-            let userChoice = await window.AndroidBridgePromise.showSingleSelection(
+            let userChoice = await window.shiguangBridgePromise.showSingleSelection(
                 "请选择要导入的学期", 
                 JSON.stringify(semesters), 
                 defaultIndex
             );
 
             if (userChoice === null) {
-                AndroidBridge.showToast("已取消导入");
+                window.shiguangBridge.showToast("已取消导入");
                 return;
             }
             selectedIdx = userChoice;
@@ -199,8 +199,8 @@ async function runImportFlow() {
         
         let targetXnxqdm = semesterValues[selectedIdx];
 
-        if (typeof window.AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast(`正在获取 [${semesters[selectedIdx]}] 课表数据...`);
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast(`正在获取 [${semesters[selectedIdx]}] 课表数据...`);
         } else {
             console.log(`准备拉取学期 [${semesters[selectedIdx]} / 代码: ${targetXnxqdm}] 的课表数据...`);
         }
@@ -214,8 +214,8 @@ async function runImportFlow() {
         
         if (courses.length === 0) {
             const errMsg = "该学期暂无排课数据。";
-            if (typeof window.AndroidBridgePromise !== 'undefined') {
-                await window.AndroidBridgePromise.showAlert("提示", errMsg, "好的");
+            if (typeof window.shiguangBridgePromise !== 'undefined') {
+                await window.shiguangBridgePromise.showAlert("提示", errMsg, "好的");
             } else {
                 alert(errMsg);
             }
@@ -226,7 +226,7 @@ async function runImportFlow() {
         const timeSlots = getPresetTimeSlots();
 
         // 浏览器测试环境，直接打印输出
-        if (typeof window.AndroidBridgePromise === 'undefined') {
+        if (typeof window.shiguangBridgePromise === 'undefined') {
             console.log("【测试成功】课表配置：", config);
             console.log("【测试成功】作息时间：", timeSlots);
             console.log("【测试成功】课程数据：\n", JSON.stringify(courses, null, 2));
@@ -235,21 +235,21 @@ async function runImportFlow() {
         }
 
         // APP 环境保存数据
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         
-        const saveResult = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (!saveResult) {
-            AndroidBridge.showToast("保存课程失败，请重试！");
+            window.shiguangBridge.showToast("保存课程失败，请重试！");
             return;
         }
 
-        AndroidBridge.showToast(`成功导入 ${courses.length} 节课程及作息时间！`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 节课程及作息时间！`);
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (error) {
-        if (typeof window.AndroidBridge !== 'undefined') {
-            AndroidBridge.showToast("导入发生异常: " + error.message);
+        if (typeof window.shiguangBridge !== 'undefined') {
+            window.shiguangBridge.showToast("导入发生异常: " + error.message);
         } else {
             console.error("【导入发生异常】", error);
             alert("导入发生异常: " + error.message);

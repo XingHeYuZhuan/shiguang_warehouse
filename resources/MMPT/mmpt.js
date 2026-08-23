@@ -119,18 +119,17 @@ const MMPT_CONFIG = {
 const MMVT_SCHEDULE_CONFIG = {
     '南校区': {
         timeSlots: [
-            { number: 1, startTime: "08:20", endTime: "09:00" },
-            { number: 2, startTime: "09:10", endTime: "09:50" },
-            { number: 3, startTime: "10:00", endTime: "10:40" },
-            { number: 4, startTime: "10:50", endTime: "11:30" },
-            { number: 5, startTime: "11:40", endTime: "12:20" },
-            { number: 6, startTime: "14:30", endTime: "15:10" },
-            { number: 7, startTime: "15:20", endTime: "16:00" },
-            { number: 8, startTime: "16:15", endTime: "16:55" },
-            { number: 9, startTime: "17:05", endTime: "17:45" },
-            { number: 10, startTime: "19:00", endTime: "19:40" },
-            { number: 11, startTime: "19:50", endTime: "20:30" },
-            { number: 12, startTime: "20:40", endTime: "21:20" }
+            { number: 1, startTime: "08:30", endTime: "09:10" },
+            { number: 2, startTime: "09:20", endTime: "10:00" },
+            { number: 3, startTime: "10:15", endTime: "10:55" },
+            { number: 4, startTime: "11:05", endTime: "11:45" },
+            { number: 5, startTime: "14:30", endTime: "15:10" },
+            { number: 6, startTime: "15:20", endTime: "16:00" },
+            { number: 7, startTime: "16:15", endTime: "16:55" },
+            { number: 8, startTime: "17:05", endTime: "17:45" },
+            { number: 9, startTime: "19:00", endTime: "19:40" },
+            { number: 10, startTime: "19:50", endTime: "20:30" },
+            { number: 11, startTime: "20:40", endTime: "21:20" }
         ]
     },
     '北校区': {
@@ -160,14 +159,14 @@ function getMMPTConfig() {
 // 选择校区时间表
 async function selectCampusSchedule() {
     const campuses = Object.keys(MMVT_SCHEDULE_CONFIG);
-    const campusIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const campusIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择校区时间表", 
         JSON.stringify(campuses),
         -1
     );
     
     if (campusIndex === null) {
-        AndroidBridge.showToast("未选择校区，使用南校区时间表");
+        window.shiguangBridge.showToast("未选择校区，使用南校区时间表");
         return MMVT_SCHEDULE_CONFIG['南校区'];
     }
     
@@ -186,7 +185,7 @@ async function selectAcademicYear() {
         years.push(`${year}-${year + 1}`);
     }
     
-    const yearIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const yearIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学年", 
         JSON.stringify(years),
         0 // 默认选择当前学年
@@ -202,7 +201,7 @@ async function selectAcademicYear() {
 // 选择学期
 async function selectSemester() {
     const semesters = ["第一学期", "第二学期"];
-    const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期", 
         JSON.stringify(semesters),
         -1
@@ -254,7 +253,7 @@ async function fetchCourseData() {
         return data;
     } catch (err) {
         console.error("获取课程数据失败:", err);
-        AndroidBridge.showToast("获取课程数据失败：" + err.message);
+        window.shiguangBridge.showToast("获取课程数据失败：" + err.message);
         return null;
     }
 }
@@ -301,17 +300,17 @@ function parseCourseData(responseData) {
 // ====================== 保存课程 ======================
 async function saveCourses(courses) {
     try {
-        const result = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        const result = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (result === true) {
-            AndroidBridge.showToast("课程导入成功！");
+            window.shiguangBridge.showToast("课程导入成功！");
             return true;
         } else {
-            AndroidBridge.showToast("课程导入失败，请查看日志！");
+            window.shiguangBridge.showToast("课程导入失败，请查看日志！");
             return false;
         }
     } catch (err) {
         console.error("保存课程失败:", err);
-        AndroidBridge.showToast("保存课程失败：" + err.message);
+        window.shiguangBridge.showToast("保存课程失败：" + err.message);
         return false;
     }
 }
@@ -326,15 +325,15 @@ async function importPresetTimeSlots() {
         console.log(`使用校区时间表: ${campusConfig.name || '未知校区'}`);
         console.log(`时间段数量: ${timeSlots.length}`);
         
-        const result = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         if (result === true) {
-            AndroidBridge.showToast(`时间段导入成功！共导入${timeSlots.length}个时间段`);
+            window.shiguangBridge.showToast(`时间段导入成功！共导入${timeSlots.length}个时间段`);
         } else {
-            AndroidBridge.showToast("时间段导入失败，请查看日志！");
+            window.shiguangBridge.showToast("时间段导入失败，请查看日志！");
         }
     } catch (err) {
         console.error("时间段导入失败:", err);
-        AndroidBridge.showToast("时间段导入失败：" + err.message);
+        window.shiguangBridge.showToast("时间段导入失败：" + err.message);
     }
 }
 
@@ -342,54 +341,54 @@ async function importPresetTimeSlots() {
 async function runImportFlow() {
     // 检查用户是否已登录
     if (!isUserLoggedIn()) {
-        AndroidBridge.showToast("检测到未登录状态，请先登录后再使用课程导入功能！");
+        window.shiguangBridge.showToast("检测到未登录状态，请先登录后再使用课程导入功能！");
         return;
     }
     
-    AndroidBridge.showToast("课程导入流程即将开始...");
+    window.shiguangBridge.showToast("课程导入流程即将开始...");
 
     try {
         // 1️⃣ 获取课程数据（选择学年学期）
-        AndroidBridge.showToast("请选择学年和学期...");
+        window.shiguangBridge.showToast("请选择学年和学期...");
         
         // 从新系统获取课程数据
         const responseData = await fetchCourseData();
         if (!responseData) {
-            AndroidBridge.showToast("获取课程数据失败！");
+            window.shiguangBridge.showToast("获取课程数据失败！");
             return;
         }
         
         // 2️⃣ 解析课程数据
-        AndroidBridge.showToast("正在解析课程数据...");
+        window.shiguangBridge.showToast("正在解析课程数据...");
         const courses = parseCourseData(responseData);
         if (!courses || courses.length === 0) {
-            AndroidBridge.showToast("未找到课程数据！");
+            window.shiguangBridge.showToast("未找到课程数据！");
             return;
         }
         
         // 3️⃣ 合并重复课程
-        AndroidBridge.showToast("正在合并重复课程...");
+        window.shiguangBridge.showToast("正在合并重复课程...");
         const mergedCourses = mergeDuplicateCourses(courses);
         
         // 4️⃣ 保存课程
-        AndroidBridge.showToast("正在保存课程数据...");
+        window.shiguangBridge.showToast("正在保存课程数据...");
         const saveResult = await saveCourses(mergedCourses);
         if (!saveResult) {
             return;
         }
 
         // 5️⃣ 导入预设时间段（用户选择校区）
-        AndroidBridge.showToast("请选择校区时间表...");
+        window.shiguangBridge.showToast("请选择校区时间表...");
         await importPresetTimeSlots();
 
         // ✅ 只有所有步骤都成功完成，才通知任务完成
-        AndroidBridge.showToast(`课程导入成功，共导入 ${mergedCourses.length} 门课程！`);
+        window.shiguangBridge.showToast(`课程导入成功，共导入 ${mergedCourses.length} 门课程！`);
         console.log("JS：整个导入流程执行完毕并成功。");
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.notifyTaskCompletion();
         
     } catch (err) {
         console.error("导入流程失败:", err);
-        AndroidBridge.showToast("导入失败：" + err.message);
+        window.shiguangBridge.showToast("导入失败：" + err.message);
         // ❌ 失败时不调用 notifyTaskCompletion()
     }
 }

@@ -1,0 +1,9 @@
+# resources/GZTRC/adapters.yaml
+adapters:
+  - adapter_id: "GZTRC"
+    adapter_name: "铜仁学院联奕教务"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "gztrc.js"
+    import_url: "https://gztrc.edu.cn:17232/"
+    maintainer: "Daoguan-king"
+    description: "由于教务系统未适配手机端，须在右上角选择\"切换到电脑模式\"，然后点击\"刷新\"，正常登录后点击下方\"执行导入\"按钮进行导入。"

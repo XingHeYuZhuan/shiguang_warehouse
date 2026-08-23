@@ -1,196 +1,187 @@
 // 通用 URP 教务拾光课程表适配脚本
 
 /**
- * 验证学年输入（4位数字）
+ * 解析复杂的周次文本
+ * 示例: "1-8,10-17周" -> [1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17]
+ * 示例: "1-5,7-8,10-12周双周,13-17周" -> 自动过滤单双周
  */
-function validateYear(year) {
-    if (!year || year.trim().length === 0) return "学年不能为空！";
-    const yearRegex = /^\d{4}$/;
-    if (!yearRegex.test(year)) return "请输入正确的4位数字学年（例如：2025）";
-    return false;
-}
-
-/**
- * 解析位图格式的周次 (011100...)
- */
-function parseWeekString(weekStr) {
-    let weeks = [];
-    if (!weekStr) return weeks;
-    for (let i = 0; i < weekStr.length; i++) {
-        if (weekStr[i] === '1') weeks.push(i + 1);
-    }
-    return weeks;
-}
-
-/**
- * 格式化时间 (0800 -> 08:00)
- */
-function formatTime(timeStr) {
-    if (timeStr && timeStr.length === 4) {
-        return timeStr.substring(0, 2) + ":" + timeStr.substring(2);
-    }
-    return timeStr;
-}
-
-/**
- * 动态获取 API 路径
- */
-function getApiUrl() {
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/student/courseSelect/thisSemesterCurriculum/ajaxStudentSchedule/callback`;
-}
-
-async function promptUserToStart() {
-    return await window.AndroidBridgePromise.showAlert(
-        "教务系统课表导入",
-        "请确保您已进入教务系统课表查询页面后再开始导入",
-        "好的，开始导入"
-    );
-}
-
-/**
- * 获取学年
- */
-async function getAcademicYear() {
-    return await window.AndroidBridgePromise.showPrompt(
-        "学年设置",
-        "请输入要导入课程的起始学年（例如 2025-2026 应输入2025）:",
-        "", 
-        "validateYear"
-    );
-}
-
-/**
- * 获取学期
- */
-async function selectSemester() {
-    const semesters = ["1（第一学期）", "2（第二学期）"];
-    return await window.AndroidBridgePromise.showSingleSelection(
-        "选择学期", 
-        JSON.stringify(semesters),
-        -1 
-    );
-}
-
-/**
- * 网络请求和数据解析
- */
-async function fetchAndParseJwData(academicYear, semesterIndex) {
-    try {
-        const semesterValue = parseInt(semesterIndex) + 1; 
-        const endYear = parseInt(academicYear) + 1;
-        const planCode = `${academicYear}-${endYear}-${semesterValue}-1`;
+function parseWeekText(weekStr) {
+    let weeks = new Set();
+    if (!weekStr) return [];
+    
+    // 清理无用后缀，按逗号或分号切割
+    const rawSegments = weekStr.replace(/周/g, '').split(/[,，;；]/);
+    
+    rawSegments.forEach(segment => {
+        let isEven = segment.includes('双');
+        let isOdd = segment.includes('单');
+        let cleanSegment = segment.replace(/(单|双)/g, '').replace(/第/g, '').trim();
         
-        const apiUrl = getApiUrl();
-        console.log("正在通过动态地址获取教务数据:", apiUrl);
-
-        AndroidBridge.showToast("正在获取教务数据...");
-        
-        const response = await fetch(apiUrl, {
-            "headers": { "content-type": "application/x-www-form-urlencoded; charset=UTF-8" },
-            "body": `&planCode=${planCode}`,
-            "method": "POST",
-            "credentials": "include"
-        });
-
-        const data = await response.json();
-        
-        if (!data) throw new Error("服务器未返回任何数据");
-        
-        // 严格遵循 dateList 结构解析
-        if (!data.dateList || !Array.isArray(data.dateList)) {
-            console.error("教务返回数据异常:", data);
-            throw new Error("未能获取到课程列表，请确认是否已登录或页面正确");
-        }
-
-        // 解析时间段 (jcsjbs)
-        const timeSlots = (data.jcsjbs || []).map(item => ({
-            number: parseInt(item.jc),
-            startTime: formatTime(item.kssj),
-            endTime: formatTime(item.jssj)
-        }));
-
-        // 解析课程
-        let courses = [];
-        data.dateList.forEach(plan => {
-            if (plan && plan.selectCourseList && Array.isArray(plan.selectCourseList)) {
-                plan.selectCourseList.forEach(c => {
-                    const teacher = (c.attendClassTeacher || "").replace(/\* /g, "").trim();
-                    if (c.timeAndPlaceList && Array.isArray(c.timeAndPlaceList)) {
-                        c.timeAndPlaceList.forEach(tp => {
-                            courses.push({
-                                name: c.courseName,
-                                teacher: teacher,
-                                position: (tp.teachingBuildingName || "") + (tp.classroomName || ""),
-                                day: parseInt(tp.classDay),
-                                startSection: parseInt(tp.classSessions),
-                                endSection: parseInt(tp.classSessions) + parseInt(tp.continuingSession) - 1,
-                                weeks: parseWeekString(tp.classWeek),
-                                isCustomTime: false
-                            });
-                        });
-                    }
-                });
+        if (cleanSegment.includes('-')) {
+            const [start, end] = cleanSegment.split('-').map(Number);
+            if (!isNaN(start) && !isNaN(end)) {
+                for (let i = start; i <= end; i++) {
+                    if (isEven && i % 2 !== 0) continue;
+                    if (isOdd && i % 2 === 0) continue;
+                    weeks.add(i);
+                }
             }
+        } else {
+            const num = Number(cleanSegment);
+            if (!isNaN(num) && num > 0) {
+                weeks.add(num);
+            }
+        }
+    });
+    
+    return Array.from(weeks).sort((a, b) => a - b);
+}
+
+/**
+ * 解析节次文本 
+ */
+function parseSectionText(sectionStr) {
+    let startSection = 1;
+    let endSection = 1;
+    if (!sectionStr) return { startSection, endSection };
+    
+    const match = sectionStr.match(/(\d+)-(\d+)节?/);
+    if (match) {
+        startSection = parseInt(match[1]);
+        endSection = parseInt(match[2]);
+    } else {
+        const singleMatch = sectionStr.match(/(\d+)节?/);
+        if (singleMatch) {
+            startSection = parseInt(singleMatch[1]);
+            endSection = parseInt(singleMatch[1]);
+        }
+    }
+    return { startSection, endSection };
+}
+
+/**
+ * 从表格中动态解析时间段信息 (寻找 id="0_x" 的 th)
+ */
+function parseTimeSlots() {
+    let timeSlots = [];
+    const timeThs = document.querySelectorAll('th[id^="0_"]');
+    
+    timeThs.forEach(th => {
+        const idParts = th.id.split('_');
+        const sectionNumber = parseInt(idParts[1]); // 获取节次序号
+        const text = th.textContent || "";
+        
+        // 匹配格式如 "(08:00-08:45)"
+        const timeMatch = text.match(/\((\d{2}:\d{2})-(\d{2}:\d{2})\)/);
+        if (timeMatch && !isNaN(sectionNumber)) {
+            timeSlots.push({
+                number: sectionNumber,
+                startTime: timeMatch[1],
+                endTime: timeMatch[2]
+            });
+        }
+    });
+    
+    return timeSlots.sort((a, b) => a.number - b.number);
+}
+
+/**
+ * 核心解析：基于 HTML DOM 结构解析课程数据
+ */
+async function fetchAndParseJwData() {
+    try {
+        window.shiguangBridge.showToast("正在解析网页课表...");
+        
+        let courses = [];
+        
+        // 获取所有带有有效 id (格式如 2_5) 且内部包含课程块的单元格
+        const allTds = document.querySelectorAll('td[id*="_"]');
+        
+        allTds.forEach(td => {
+            const idParts = td.id.split('_');
+            if (idParts.length !== 2) return;
+            
+            // _前面从1到7代表星期
+            const day = parseInt(idParts[0]);
+            if (isNaN(day) || day < 1 || day > 7) return; 
+
+            // 找到单元格内所有的课程卡片
+            const classDivs = td.querySelectorAll('.class_div');
+            
+            classDivs.forEach(div => {
+                const pTags = div.querySelectorAll('p');
+                if (pTags.length < 5) return; // 格式不健全的格子直接跳过
+                const name = pTags[0].textContent.trim();
+                const teacher = pTags[2].textContent.replace(/^[\s*]+|[\s*]+$/g, '').replace(/\*/g, ' ').replace(/\s+/g, ' ');
+                const weekStr = pTags[3].textContent.trim();
+                const sectionStr = pTags[4].textContent.trim();
+                const position = pTags[5] ? pTags[5].textContent.trim() : "未知地点";
+                
+                // 解析周次与真实的开始/结束节次
+                const weeks = parseWeekText(weekStr);
+                const { startSection, endSection } = parseSectionText(sectionStr);
+                
+                if (name && weeks.length > 0) {
+                    courses.push({
+                        name: name,
+                        teacher: teacher,
+                        position: position,
+                        day: day,
+                        startSection: startSection,
+                        endSection: endSection,
+                        weeks: weeks
+                    });
+                }
+            });
         });
+
+        // 动态提取时间段
+        const timeSlots = parseTimeSlots();
 
         if (courses.length === 0) {
-            throw new Error("该学期暂无排课数据");
+            throw new Error("未能在当前页面检测到有效的课表数据，请确认是否处于课表视图页面");
         }
 
         return { courses, timeSlots };
     } catch (e) {
-        console.error("解析失败详情:", e);
-        AndroidBridge.showToast("同步失败: " + e.message);
+        console.error("HTML解析失败详情:", e);
+        window.shiguangBridge.showToast("同步失败: " + e.message);
         return null;
     }
 }
 
 /**
- * 保存数据到应用
+ * 辅助：保存数据到外部 APP
  */
 async function saveToApp(result) {
-    const courseSuccess = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(result.courses));
+    const courseSuccess = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(result.courses));
     if (!courseSuccess) return false;
 
     if (result.timeSlots && result.timeSlots.length > 0) {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(result.timeSlots));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(result.timeSlots));
     }
-    
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
-        semesterTotalWeeks: 20 
-    }));
-    
     return true;
 }
 
 /**
- * 流程控制
+ * 流程控制流程
  */
 async function runImportFlow() {
-    const alertResult = await promptUserToStart();
+    const alertResult = await window.shiguangBridgePromise.showAlert(
+        "教务网页课表导入",
+        "请确保您当前的网页已加载出课表视图后再开始导入",
+        "开始同步"
+    );
     if (!alertResult) return;
 
-    const academicYear = await getAcademicYear();
-    if (academicYear === null) {
-        AndroidBridge.showToast("导入已取消");
-        return;
-    }
-
-    const semesterIndex = await selectSemester();
-    if (semesterIndex === null) {
-        AndroidBridge.showToast("导入已取消");
-        return;
-    }
-
-    const result = await fetchAndParseJwData(academicYear, semesterIndex);
+    const result = await fetchAndParseJwData();
     if (!result || result.courses.length === 0) return;
 
     if (await saveToApp(result)) {
-        AndroidBridge.showToast(`成功导入 ${result.courses.length} 个课程时段`);
-        AndroidBridge.notifyTaskCompletion(); 
+        window.shiguangBridge.showToast(`成功从网页导入 ${result.courses.length} 个课程时段`);
+        window.shiguangBridge.notifyTaskCompletion(); 
     }
 }
 
-// 启动
+// 启动导入流程
 runImportFlow();

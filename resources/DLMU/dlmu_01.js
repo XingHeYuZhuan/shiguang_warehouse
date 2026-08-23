@@ -388,7 +388,7 @@ async function fetchCourseTableData(semesterId, ids) {
  * @returns {Promise<boolean>} 用户是否确认
  */
 async function promptUserToStart() {
-  return await window.AndroidBridgePromise.showAlert(
+  return await window.shiguangBridgePromise.showAlert(
     "重要提醒",
     "请确保您已登录服务大厅，并进入海大教务系统内的任意页面(不用点开课表)。\n值得注意的是，教务课表与海大在线的课表并非完全同步，若后期学校调课不规范，可能导致教务课表滞后。\n\n点击确定继续。",
     "确定",
@@ -400,7 +400,7 @@ async function promptUserToStart() {
  * @returns {Promise<string|null>} 用户输入的年份，取消返回null
  */
 async function getAcademicYear() {
-  return await window.AndroidBridgePromise.showPrompt(
+  return await window.shiguangBridgePromise.showPrompt(
     "学年设置",
     "请输入本学年开始的年份\n（例如 2024，代表 2024-2025 学年）",
     "2024",
@@ -414,7 +414,7 @@ async function getAcademicYear() {
  */
 async function selectSemester() {
   const semesterOptions = ["上学期", "下学期", "小学期"];
-  const index = await window.AndroidBridgePromise.showSingleSelection(
+  const index = await window.shiguangBridgePromise.showSingleSelection(
     "选择学期",
     JSON.stringify(semesterOptions),
     0,
@@ -435,19 +435,19 @@ async function run() {
     // 1. 公告
     const confirmed = await promptUserToStart();
     if (!confirmed) {
-      AndroidBridge.showToast("用户取消了导入流程。");
+      window.shiguangBridge.showToast("用户取消了导入流程。");
       return;
     }
 
     // 2. 获取学年
     const yearInput = await getAcademicYear();
     if (yearInput === null) {
-      AndroidBridge.showToast("导入已取消。");
+      window.shiguangBridge.showToast("导入已取消。");
       return;
     }
     const yearNum = parseInt(yearInput);
     if (isNaN(yearNum) || yearNum <= 2000 || yearNum > 2100) {
-      await window.AndroidBridgePromise.showAlert(
+      await window.shiguangBridgePromise.showAlert(
         "错误",
         "学年输入无效，请输入2001-2100之间的数字。",
         "确定",
@@ -459,7 +459,7 @@ async function run() {
     // 3. 获取学期
     const semesterIndex = await selectSemester();
     if (semesterIndex === null) {
-      AndroidBridge.showToast("导入已取消。");
+      window.shiguangBridge.showToast("导入已取消。");
       return;
     }
     const termCode =
@@ -468,14 +468,14 @@ async function run() {
     const semesterId = parseSemesterId(semesterHtml, schoolYear, termCode);
 
     // 4. 请求课表
-    AndroidBridge.showToast("正在获取课表，请稍候...");
+    window.shiguangBridge.showToast("正在获取课表，请稍候...");
     let courseTableDataHtml = "";
     try {
       const idsHtml = await fetchCourseTableForStd();
       const ids = parseStudentIds(idsHtml);
       courseTableDataHtml = await fetchCourseTableData(semesterId, ids);
     } catch (fetchErr) {
-      await window.AndroidBridgePromise.showAlert(
+      await window.shiguangBridgePromise.showAlert(
         "网络请求失败",
         `请求教务系统失败：${fetchErr.message}\n\n请检查网络连接和登录状态。`,
         "确定",
@@ -484,7 +484,7 @@ async function run() {
     }
 
     if (!courseTableDataHtml.length) {
-      await window.AndroidBridgePromise.showAlert(
+      await window.shiguangBridgePromise.showAlert(
         "提示",
         "未获取到任何课程数据。请确认已登录教务系统并选择正确的学年学期。",
         "确定",
@@ -497,14 +497,14 @@ async function run() {
 
     // 6. 保存课程
     try {
-      await window.AndroidBridgePromise.saveImportedCourses(
+      await window.shiguangBridgePromise.saveImportedCourses(
         JSON.stringify(targetCourses),
       );
-      AndroidBridge.showToast(
+      window.shiguangBridge.showToast(
         `课程数据已导入（共 ${targetCourses.length} 条）`,
       );
     } catch (saveErr) {
-      await window.AndroidBridgePromise.showAlert(
+      await window.shiguangBridgePromise.showAlert(
         "保存课程失败",
         saveErr.message,
         "确定",
@@ -515,28 +515,28 @@ async function run() {
     // 7. 保存时间段
     const timeSlots = getTimeSlots();
     try {
-      await window.AndroidBridgePromise.savePresetTimeSlots(
+      await window.shiguangBridgePromise.savePresetTimeSlots(
         JSON.stringify(timeSlots),
       );
-      AndroidBridge.showToast("时间段数据已导入");
+      window.shiguangBridge.showToast("时间段数据已导入");
     } catch (slotErr) {
       // 时间段保存失败不终止流程，只提示
-      AndroidBridge.showToast(`时间段保存失败：${slotErr.message}`);
+      window.shiguangBridge.showToast(`时间段保存失败：${slotErr.message}`);
     }
 
     // 8. 完成通知
-    AndroidBridge.showToast("导入完成！");
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast("导入完成！");
+    window.shiguangBridge.notifyTaskCompletion();
   } catch (err) {
     // 捕获所有未预料的错误
     console.error("run error:", err);
-    await window.AndroidBridgePromise.showAlert(
+    await window.shiguangBridgePromise.showAlert(
       "导入失败",
       `未知错误：${err.message || err}\n\n请联系开发者。`,
       "确定",
     );
     // 仍然通知完成，但可能不会生成有效文件
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
   }
 }
 

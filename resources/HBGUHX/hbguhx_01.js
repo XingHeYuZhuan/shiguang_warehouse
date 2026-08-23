@@ -119,11 +119,16 @@ function parseTimetableToModel(htmlString) {
                     const tempDiv = document.createElement('div');
                     tempDiv.innerHTML = block;
 
-                    // 1. 提取课程名（包含所有文本，包括实验标记）
+                    // 1. 提取课程名（跳过开头的空行，处理 <br> 开头的分隔块）
                     let name = "";
-                    const firstLine = tempDiv.innerHTML.split('<br>')[0].trim();
-                    // 移除HTML标签，保留文本内容
-                    name = firstLine.replace(/<[^>]*>/g, '').trim();
+                    const htmlLines = tempDiv.innerHTML.split('<br>');
+                    for (const line of htmlLines) {
+                        const text = line.replace(/<[^>]*>/g, '').trim();
+                        if (text) {
+                            name = text;
+                            break;
+                        }
+                    }
                     
                     if (!name) return;
 
@@ -251,10 +256,65 @@ function extractTimeSlots(htmlString) {
 }
 
 /**
+ * 根据学期字符串获取学期第一周周一日期
+ * 学期格式如 "2025-2026-2"
+ * 春季学期：3月第二个周一，秋季学期：9月1日所在周的周一
+ */
+function getSemesterStartMonday(semesterId) {
+    if (!semesterId) return null;
+    const parts = semesterId.split('-');
+    if (parts.length < 3) return null;
+    const year1 = parseInt(parts[0], 10);
+    const year2 = parseInt(parts[1], 10);
+    const semester = parseInt(parts[2], 10);
+    if (isNaN(year1) || isNaN(year2) || isNaN(semester)) return null;
+
+    // 估算学期开始日期
+    let startDate;
+    if (semester === 1) {
+        startDate = new Date(year1, 8, 1); // 秋季学期：约9月1日
+    } else {
+        // 春季学期：3月第二个周一
+        const march1Day = new Date(year2, 2, 1).getDay();
+        const firstMondayDate = march1Day === 1 ? 1 : march1Day === 0 ? 2 : 9 - march1Day;
+        startDate = new Date(year2, 2, firstMondayDate + 7); // 第二个周一
+    }
+
+    // 找到学期开始日期所在周的周一
+    const startDay = startDate.getDay(); // 0=周日
+    const monday = new Date(startDate);
+    monday.setDate(startDate.getDate() + (startDay === 0 ? -6 : 1 - startDay));
+    return monday;
+}
+
+/**
+ * 格式化日期为 YYYY-MM-DD
+ */
+function formatDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+/**
+ * 根据学期字符串计算当前周数
+ */
+function calculateCurrentWeek(semesterId) {
+    const monday = getSemesterStartMonday(semesterId);
+    if (!monday) return 1;
+
+    const now = new Date();
+    const diffMs = now.getTime() - monday.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    return Math.max(1, Math.floor(diffDays / 7) + 1);
+}
+
+/**
  * 显示欢迎提示
  */
 async function showWelcomeAlert() {
-    return await window.AndroidBridgePromise.showAlert(
+    return await window.shiguangBridgePromise.showAlert(
         "导入提示",
         "请确保已在学期理论课表页面,（首页课表是本周课表不可导入,请进入学期理论课表页面）",
         "开始导入"
@@ -266,14 +326,14 @@ async function showWelcomeAlert() {
  */
 async function getSemesterParamsFromUser(semesterOptions) {
     if (!semesterOptions || semesterOptions.length === 0) {
-        AndroidBridge.showToast("未获取到学期列表");
+        window.shiguangBridge.showToast("未获取到学期列表");
         return null;
     }
     
     // 直接显示所有学期选项，让用户一次性选择
     const semesterLabels = semesterOptions.map(opt => opt.text);
     
-    const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(semesterLabels),
         0 // 默认选择第一个（最新学期）
@@ -312,20 +372,26 @@ async function fetchCourseHtml() {
 /**
  * 保存课程数据到 App
  */
-async function saveCourseDataToApp(courses, timeSlots) {
+async function saveCourseDataToApp(courses, timeSlots, semesterId) {
+    // 计算学期开始日期和当前周数
+    const startMonday = getSemesterStartMonday(semesterId);
+    const currentWeek = calculateCurrentWeek(semesterId);
+
     // 保存学期配置
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
+        "semesterStartDate": startMonday ? formatDate(startMonday) : null,
+        "currentWeek": currentWeek,
         "semesterTotalWeeks": 20,
         "firstDayOfWeek": 1
     }));
 
     // 保存作息时间（从网页提取）
     if (timeSlots && timeSlots.length > 0) {
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
     }
 
     // 保存课程数据
-    return await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    return await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 }
 
 /**
@@ -378,27 +444,26 @@ async function runImportFlow() {
         const finalCourses = parseTimetableToModel(courseHtml);
 
         if (finalCourses.length === 0) {
-            AndroidBridge.showToast("未发现课程，请检查学期选择或登录状态。");
+            window.shiguangBridge.showToast("未发现课程，请检查学期选择或登录状态。");
             // 尝试直接从初始 HTML 中解析课程
             const initialCourses = parseTimetableToModel(html);
             if (initialCourses.length > 0) {
-                await saveCourseDataToApp(initialCourses, timeSlots);
-                AndroidBridge.showToast(`成功导入 ${initialCourses.length} 门课程`);
-                AndroidBridge.notifyTaskCompletion();
+                await saveCourseDataToApp(initialCourses, timeSlots, semesterId);
+                window.shiguangBridge.showToast(`成功导入 ${initialCourses.length} 门课程`);
+                window.shiguangBridge.notifyTaskCompletion();
             }
             return;
         }
 
         // 8. 保存课程数据
-        await saveCourseDataToApp(finalCourses, timeSlots);
+        await saveCourseDataToApp(finalCourses, timeSlots, semesterId);
 
-        AndroidBridge.showToast(`成功导入 ${finalCourses.length} 门课程`);
-        AndroidBridge.showToast(`请在设置界面手动选择当前周数`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${finalCourses.length} 门课程（当前第 ${calculateCurrentWeek(semesterId)} 周）`);
+        window.shiguangBridge.notifyTaskCompletion();
 
     } catch (error) {
         console.error('导入异常：', error);
-        AndroidBridge.showToast("导入异常：" + error.message);
+        window.shiguangBridge.showToast("导入异常：" + error.message);
     }
 }
 

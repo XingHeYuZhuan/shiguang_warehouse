@@ -2,8 +2,8 @@
 
 (function () {
     function toast(message) {
-        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
-            window.AndroidBridge.showToast(message);
+        if (window.shiguangBridge && typeof window.shiguangBridge.showToast === "function") {
+            window.shiguangBridge.showToast(message);
         }
     }
 
@@ -331,17 +331,17 @@
         }
 
         try {
-            const result = await window.AndroidBridgePromise.saveImportedCourses(
+            const result = await window.shiguangBridgePromise.saveImportedCourses(
                 JSON.stringify(courses)
             );
             if (result === true) {
                 if (timeSlots.length) {
-                    await window.AndroidBridgePromise.savePresetTimeSlots(
+                    await window.shiguangBridgePromise.savePresetTimeSlots(
                         JSON.stringify(timeSlots)
                     );
                 }
                 toast("课表导出成功");
-                window.AndroidBridge.notifyTaskCompletion();
+                window.shiguangBridge.notifyTaskCompletion();
             } else {
                 toast("课表导出失败，请查看控制台日志");
             }

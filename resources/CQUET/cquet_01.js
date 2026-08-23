@@ -1,8 +1,8 @@
 (async function () {
   function toast(msg) {
     try {
-      if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
-        window.AndroidBridge.showToast(String(msg));
+      if (window.shiguangBridge && typeof window.shiguangBridge.showToast === "function") {
+        window.shiguangBridge.showToast(String(msg));
       }
     } catch (_) {}
   }
@@ -16,8 +16,8 @@
       console.error(detail, error || "");
     } catch (_) {}
     try {
-      if (window.AndroidBridgePromise && typeof window.AndroidBridgePromise.showAlert === "function") {
-        await window.AndroidBridgePromise.showAlert("提示", detail, "确定");
+      if (window.shiguangBridgePromise && typeof window.shiguangBridgePromise.showAlert === "function") {
+        await window.shiguangBridgePromise.showAlert("提示", detail, "确定");
       }
     } catch (_) {}
     throw new Error(detail);
@@ -565,7 +565,7 @@
   }
 
   async function main() {
-    if (!window.AndroidBridgePromise || !window.AndroidBridge || typeof window.AndroidBridge.notifyTaskCompletion !== "function") {
+    if (!window.shiguangBridgePromise || !window.shiguangBridge || typeof window.shiguangBridge.notifyTaskCompletion !== "function") {
       throw new Error("桥接接口不可用");
     }
 
@@ -607,18 +607,18 @@
       throw new Error("课程字段转换后为空，无法保存");
     }
 
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
 
     if (parsed.timeSlots && parsed.timeSlots.length) {
-      await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(parsed.timeSlots));
+      await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(parsed.timeSlots));
     }
 
     if (parsed.config) {
-      await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(parsed.config));
+      await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(parsed.config));
     }
 
     toast("课表导入成功，共" + finalCourses.length + "门课程");
-    window.AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
   }
 
   try {

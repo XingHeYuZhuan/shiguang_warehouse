@@ -29,7 +29,7 @@ function formatTime(timeStr) {
 }
 
 async function promptUserToStart() {
-    return await window.AndroidBridgePromise.showAlert(
+    return await window.shiguangBridgePromise.showAlert(
         "教务系统课表导入",
         "导入前请确保您已在浏览器中成功登录教务系统",
         "好的，开始导入"
@@ -40,7 +40,7 @@ async function promptUserToStart() {
  * 获取学年
  */
 async function getAcademicYear() {
-    return await window.AndroidBridgePromise.showPrompt(
+    return await window.shiguangBridgePromise.showPrompt(
         "学年设置",
         "请输入要导入课程的起始学年（例如 2025-2026 应输入2025）:",
         "", 
@@ -53,7 +53,7 @@ async function getAcademicYear() {
  */
 async function selectSemester() {
     const semesters = ["1（第一学期）", "2（第二学期）"];
-    return await window.AndroidBridgePromise.showSingleSelection(
+    return await window.shiguangBridgePromise.showSingleSelection(
         "选择学期", 
         JSON.stringify(semesters),
         -1 
@@ -69,7 +69,7 @@ async function fetchAndParseJwData(academicYear, semesterIndex) {
         const endYear = parseInt(academicYear) + 1;
         const planCode = `${academicYear}-${endYear}-${semesterValue}-1`;
 
-        AndroidBridge.showToast("正在获取教务数据...");
+        window.shiguangBridge.showToast("正在获取教务数据...");
         const response = await fetch("https://jwxs.tcu.edu.cn/student/courseSelect/thisSemesterCurriculum/ajaxStudentSchedule/callback", {
             "headers": { "content-type": "application/x-www-form-urlencoded; charset=UTF-8" },
             "body": `&planCode=${planCode}`,
@@ -123,7 +123,7 @@ async function fetchAndParseJwData(academicYear, semesterIndex) {
 
         return { courses, timeSlots };
     } catch (e) {
-        AndroidBridge.showToast("同步失败: " + e.message);
+        window.shiguangBridge.showToast("同步失败: " + e.message);
         return null;
     }
 }
@@ -132,12 +132,12 @@ async function fetchAndParseJwData(academicYear, semesterIndex) {
  * 保存数据到应用
  */
 async function saveToApp(result) {
-    const courseSuccess = await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(result.courses));
+    const courseSuccess = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(result.courses));
     if (!courseSuccess) return false;
 
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(result.timeSlots));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(result.timeSlots));
     
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
         semesterTotalWeeks: 20 
     }));
     
@@ -155,14 +155,14 @@ async function runImportFlow() {
     // 获取学年
     const academicYear = await getAcademicYear();
     if (academicYear === null) {
-        AndroidBridge.showToast("导入已取消");
+        window.shiguangBridge.showToast("导入已取消");
         return;
     }
 
     // 获取学期
     const semesterIndex = await selectSemester();
     if (semesterIndex === null) {
-        AndroidBridge.showToast("导入已取消");
+        window.shiguangBridge.showToast("导入已取消");
         return;
     }
 
@@ -172,8 +172,8 @@ async function runImportFlow() {
 
     // 保存并结束
     if (await saveToApp(result)) {
-        AndroidBridge.showToast(`成功导入 ${result.courses.length} 个课程时段`);
-        AndroidBridge.notifyTaskCompletion(); 
+        window.shiguangBridge.showToast(`成功导入 ${result.courses.length} 个课程时段`);
+        window.shiguangBridge.notifyTaskCompletion(); 
     }
 }
 

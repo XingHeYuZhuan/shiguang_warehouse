@@ -20,7 +20,7 @@ function validateYearInput(input) {
  */
 async function demoAlert() {
     try {
-        const confirmed = await window.AndroidBridgePromise.showAlert(
+        const confirmed = await window.shiguangBridgePromise.showAlert(
             "公告",
             "欢迎使用教务导入",
             "开始"
@@ -71,20 +71,31 @@ function parseShzqCourseData(rawData) {
                 const rawWeeks = courseItem.zcd;
                 const weeks = [];
                 if (rawWeeks) {
-                    const weekMatchRange = rawWeeks.match(/(\d+)-(\d+)周/);
-                    const weekMatchSingle = rawWeeks.match(/\d+/g);
-                    if (weekMatchRange) {
-                        const startWeek = parseInt(weekMatchRange[1], 10);
-                        const endWeek = parseInt(weekMatchRange[2], 10);
-                        for (let i = startWeek; i <= endWeek; i++) {
-                            if (rawWeeks.includes("(单)") && i % 2 === 0) continue;
-                            if (rawWeeks.includes("(双)") && i % 2 !== 0) continue;
-                            weeks.push(i);
+                    const segments = rawWeeks.split(/[,，;；]/);
+                    
+                    segments.forEach(seg => {
+                        const rangeMatch = seg.match(/(\d+)-(\d+)/);
+                        if (rangeMatch) {
+                            const startWeek = parseInt(rangeMatch[1], 10);
+                            const endWeek = parseInt(rangeMatch[2], 10);
+                            for (let i = startWeek; i <= endWeek; i++) {
+                                if (seg.includes("(单)") && i % 2 === 0) continue;
+                                if (seg.includes("(双)") && i % 2 !== 0) continue;
+                                if (!weeks.includes(i)) weeks.push(i);
+                            }
+                        } else {
+                            const singleMatches = seg.match(/\d+/g);
+                            if (singleMatches) {
+                                singleMatches.forEach(numStr => {
+                                    const w = parseInt(numStr, 10);
+                                    if (!weeks.includes(w)) weeks.push(w);
+                                });
+                            }
                         }
-                    } else if (weekMatchSingle) {
-                        weekMatchSingle.forEach(w => weeks.push(parseInt(w, 10)));
-                    }
+                    });
                 }
+                // 周次排序
+                weeks.sort((a, b) => a - b);
                 importedCourses.push({
                     name: name, teacher: teacher, position: position, day: day,
                     startSection: startLesson, endSection: endLesson, weeks: weeks
@@ -117,22 +128,22 @@ function isLoginPage() {
 async function getYearAndSemester() {
     try {
         let currentYear = new Date().getFullYear();
-        const yearSelection = await AndroidBridgePromise.showPrompt(
+        const yearSelection = await window.shiguangBridgePromise.showPrompt(
             "选择学年", "请输入要导入课程的起始学年（例如 2025-2026 应输入2025）:",
             String(currentYear), "validateYearInput"
         );
         if (yearSelection === null) {
-            AndroidBridge.showToast("导入取消：未选择学年。");
+            window.shiguangBridge.showToast("导入取消：未选择学年。");
             return null;
         }
         const xnm = yearSelection;
 
         const semesters = ["1（第一学期）", "2（第二学期）"];
-        const semesterIndex = await AndroidBridgePromise.showSingleSelection(
+        const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
             "选择学期", JSON.stringify(semesters), -1
         );
         if (semesterIndex === null || semesterIndex === -1) {
-            AndroidBridge.showToast("导入取消：未选择学期。");
+            window.shiguangBridge.showToast("导入取消：未选择学期。");
             return null;
         }
         const xqmMapping = { 0: "3", 1: "12" };
@@ -141,7 +152,7 @@ async function getYearAndSemester() {
         return { xnm, xqm };
     } catch (error) {
         console.error("JS: 获取学年学期时出错:", error);
-        AndroidBridge.showToast("获取学年学期失败：" + error.message);
+        window.shiguangBridge.showToast("获取学年学期失败：" + error.message);
         return null;
     }
 }
@@ -154,7 +165,7 @@ async function getYearAndSemester() {
  */
 async function fetchCourses(xnm, xqm) {
     try {
-        AndroidBridge.showToast(`正在获取学期课程...`);
+        window.shiguangBridge.showToast(`正在获取学期课程...`);
         const requestBody = `xnm=${xnm}&xqm=${xqm}&kzlx=ck&xsdm=`;
         const response = await fetch("https://jw.shzq.edu.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151", {
             method: "POST",
@@ -170,13 +181,13 @@ async function fetchCourses(xnm, xqm) {
         const data = await response.json();
         const courses = parseShzqCourseData(data);
         if (courses.length === 0) {
-            AndroidBridge.showToast("未找到任何课程数据，请检查学年学期或登录状态。");
+            window.shiguangBridge.showToast("未找到任何课程数据，请检查学年学期或登录状态。");
             return null;
         }
         return courses;
     } catch (error) {
         console.error("JS: 获取课程数据时出错:", error);
-        AndroidBridge.showToast(`获取课程失败: ${error.message || error}`);
+        window.shiguangBridge.showToast(`获取课程失败: ${error.message || error}`);
         return null;
     }
 }
@@ -188,12 +199,12 @@ async function fetchCourses(xnm, xqm) {
  */
 async function saveCourses(courses) {
     try {
-        await AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses, null, 2));
-        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程！`);
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses, null, 2));
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程！`);
         return true;
     } catch (error) {
         console.error("JS: 保存课程时出错:", error);
-        AndroidBridge.showToast(`保存失败: ${error.message || error}`);
+        window.shiguangBridge.showToast(`保存失败: ${error.message || error}`);
         return false;
     }
 }
@@ -217,17 +228,17 @@ async function importPresetTimeSlots() {
 
     try {
         console.log("正在尝试导入预设时间段...");
-        const result = await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+        const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
         if (result === true) {
             console.log("预设时间段导入成功！");
-            window.AndroidBridge.showToast("测试时间段导入成功！");
+            window.shiguangBridge.showToast("测试时间段导入成功！");
         } else {
             console.log("预设时间段导入未成功，结果：" + result);
-            window.AndroidBridge.showToast("测试时间段导入失败，请查看日志。");
+            window.shiguangBridge.showToast("测试时间段导入失败，请查看日志。");
         }
     } catch (error) {
         console.error("导入时间段时发生错误:", error);
-        window.AndroidBridge.showToast("导入时间段失败: " + error.message);
+        window.shiguangBridge.showToast("导入时间段失败: " + error.message);
     }
 }
 /**
@@ -235,7 +246,7 @@ async function importPresetTimeSlots() {
  */
 async function runImportShzqCourses() {
     if (isLoginPage()) {
-        AndroidBridge.showToast("导入失败：请先登录教务系统！");
+        window.shiguangBridge.showToast("导入失败：请先登录教务系统！");
         console.log("检测到当前在登录页面，终止导入。");
         return;
     }
@@ -273,7 +284,7 @@ async function runImportShzqCourses() {
     console.log("JS: 所有导入步骤完成。");
 
     // 发送最终的生命周期完成信号
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 启动导入流程

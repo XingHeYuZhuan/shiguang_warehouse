@@ -195,35 +195,35 @@ function findScheduleTable() {
 
 async function runImportFlow() {
     // 1. 开始提示
-    const confirmed = await AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
         "苏大课表导入",
         "请确保当前页面已显示「学生个人课表」\n导入前请先在页面上选好学年和学期",
         "开始导入"
     );
     if (!confirmed) {
-        AndroidBridge.showToast("用户取消了导入。");
+        window.shiguangBridge.showToast("用户取消了导入。");
         return;
     }
     // 2. 查找课表
-    AndroidBridge.showToast("正在查找课表...");
+    window.shiguangBridge.showToast("正在查找课表...");
     const table = findScheduleTable();
     if (!table) {
-        AndroidBridge.showToast("未找到课表，请先打开「学生个人课表」页面。");
+        window.shiguangBridge.showToast("未找到课表，请先打开「学生个人课表」页面。");
         return;
     }
     // 3. 解析课程
-    AndroidBridge.showToast("正在解析课程数据...");
+    window.shiguangBridge.showToast("正在解析课程数据...");
     const courses = parseCourseTable(table);
     if (courses.length === 0) {
-        AndroidBridge.showToast("未解析到任何课程，请确认课表已正确加载。");
+        window.shiguangBridge.showToast("未解析到任何课程，请确认课表已正确加载。");
         return;
     }
     // 4. 保存课程
-    AndroidBridge.showToast(`正在保存 ${courses.length} 条课程...`);
-    await AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    window.shiguangBridge.showToast(`正在保存 ${courses.length} 条课程...`);
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
     // 5. 保存作息时间
-    AndroidBridge.showToast(`正在导入 ${TimeSlots.length} 个时间段...`);
-    await AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TimeSlots));
+    window.shiguangBridge.showToast(`正在导入 ${TimeSlots.length} 个时间段...`);
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TimeSlots));
     // 6. 保存配置（select 在课表同一文档中，用 ownerDocument 确保 iframe 场景正确）
     const semesterStartDate = detectSemesterStartDate(table.ownerDocument);
     const config = {
@@ -231,10 +231,10 @@ async function runImportFlow() {
         semesterTotalWeeks: 20,
         firstDayOfWeek: 1
     };
-    await AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
     // 7. 完成
-    AndroidBridge.showToast(`课程导入成功，共导入 ${courses.length} 条课程！`);
-    AndroidBridge.notifyTaskCompletion();
+    window.shiguangBridge.showToast(`课程导入成功，共导入 ${courses.length} 条课程！`);
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runImportFlow();
