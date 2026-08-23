@@ -732,3 +732,8 @@ schools:
     name: "沈阳科技学院"
     initial: "S"
     resource_folder: "SYIST"
+
+  - id: "QDHHC"
+    name: "青岛黄海学院"
+    initial: "Q"
+    resource_folder: "QDHHC"
