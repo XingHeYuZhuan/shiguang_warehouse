@@ -732,3 +732,8 @@ schools:
     name: "沈阳科技学院"
     initial: "S"
     resource_folder: "SYIST"
+
+  - id: "NTU"
+    name: "南通大学"
+    initial: "N"
+    resource_folder: "NTU"

@@ -1,0 +1,8 @@
+adapters:
+  - adapter_id: "NTU_01"
+    adapter_name: "南通大学正方教务"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "NTU.js"
+    import_url: "https://tdjw.ntu.edu.cn/jwglxt/"
+    maintainer: "MX703DR"
+    description: "读取南通大学正方教务班级课表打印页面中的课程并导入时光课表。"
