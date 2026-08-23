@@ -9,7 +9,7 @@
 // 课表页面地址（selectTableType: ThisTerm=本学期, NextTerm=下学期）
 const COURSE_TABLE_URL = "https://jw.guc.edu.cn/yethan/CourseAction?setAction=userCourseScheduleTable&viewType=studentCourseTableWeek&selectTableType=";
 
-// 默认导入本学期；如需导入下学期请改为 "NextTerm"
+// 默认导入本学期（学校系统仅支持查看本学期课表）；如需下学期请改为 "NextTerm"
 const SELECT_TABLE_TYPE = "ThisTerm";
 
 // 拉取课表请求超时时间（毫秒）
@@ -60,55 +60,127 @@ function parseWeeks(weekStr) {
 /**
  * 解析一行课程文本，如 "B4708 大学英语（4）（李博）"。
  * 返回 { name, teacher }，无法解析时返回 null。
+ * 兼容情况：
+ *   - 未选课前课程可能无教师（如 "B1001 高等数学"），此时 teacher 为空串，课程保留；
+ *   - 课名带版本号括号（如 "体育与健康（4）"）时，纯数字括号视为课名一部分，不会误认成教师。
  */
 function parseCourseLine(line) {
     const text = line.trim();
     if (!text) return null;
-    // 教师为最后一个全角括号内的内容（课程名本身也可能含括号，如 大学英语（4））
+    // 教师为最后一个全角括号内的内容；纯数字括号（如 （4））视为课名版本号而非教师
     const teacherMatch = text.match(/（([^（）]+)）$/);
-    if (!teacherMatch) return null;
-    const teacher = teacherMatch[1].trim();
-    let name = text.substring(0, text.length - teacherMatch[0].length).trim();
+    let teacher = "";
+    let name = text;
+    if (teacherMatch) {
+        const candidate = teacherMatch[1].trim();
+        if (!/^\d+$/.test(candidate)) {
+            teacher = candidate;
+            name = text.substring(0, text.length - teacherMatch[0].length).trim();
+        }
+    }
     // 去除课程编号前缀（如 B2344），仅当首词形如"字母+数字"时去除
     const tokens = name.split(/\s+/);
     if (tokens.length > 1 && /^[A-Za-z]*\d+$/.test(tokens[0])) {
         tokens.shift();
     }
     name = tokens.join(" ").trim();
-    if (!name || !teacher) return null;
+    if (!name) return null;
     return { name, teacher };
 }
 
 /**
- * 合并同一天、课程信息与周次完全相同、且节次相邻的记录。
- * 教务系统把同一门课的多个相邻节次在表格中重复列出，合并后更接近真实课表。
+ * 节次与周次合并去重函数（官方参考实现，来自拾光课程表 wiki《课程合并与去重函数》）
+ * - 节次合并：名称、教师、地点、星期、周次完全相同的连续节次（1-2 + 3-4 -> 1-4）
+ * - 完全去重：删除完全重复的记录
+ * - 周次合并：同节次的单双周/分段周次合并（[15] + [16] -> [15,16]）
+ * - 周次排序去重：weeks 自动升序并去重
  */
-function mergeConsecutiveSections(courses) {
-    if (courses.length <= 1) return courses;
+function mergeAndDistinctCourses(courses) {
+    if (!Array.isArray(courses) || courses.length <= 1) return courses;
 
-    const groups = new Map();
-    for (const c of courses) {
-        const key = `${c.day}|${c.name}|${c.teacher}|${c.position}|${c.weeks.join(",")}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(c);
-    }
+    // 1. 深拷贝并规范周次数据，过滤无效项
+    const list = courses.map(c => ({
+        ...c,
+        name: c.name || '',
+        teacher: c.teacher || '',
+        position: c.position || '',
+        weeks: Array.isArray(c.weeks) ? [...c.weeks].sort((a, b) => a - b) : []
+    }));
 
-    const merged = [];
-    for (const list of groups.values()) {
-        list.sort((a, b) => a.startSection - b.startSection);
-        let current = { ...list[0] };
-        for (let i = 1; i < list.length; i++) {
-            const next = list[i];
-            if (next.startSection === current.endSection + 1) {
-                current.endSection = next.endSection;
-            } else {
-                merged.push(current);
-                current = { ...next };
-            }
+    // 阶段 1：合并连续节次与完全重复记录（前提：名称、教师、地点、星期、周次一致）
+    list.sort((a, b) => {
+        return a.name.localeCompare(b.name) ||
+               a.teacher.localeCompare(b.teacher) ||
+               a.position.localeCompare(b.position) ||
+               (a.day || 0) - (b.day || 0) ||
+               a.weeks.join(',').localeCompare(b.weeks.join(',')) ||
+               (a.startSection || 0) - (b.startSection || 0);
+    });
+
+    const step1Merged = [];
+    let current = list[0];
+
+    for (let i = 1; i < list.length; i++) {
+        const next = list[i];
+
+        const isSameCourseAndWeeks =
+            current.name === next.name &&
+            current.teacher === next.teacher &&
+            current.position === next.position &&
+            current.day === next.day &&
+            current.weeks.join(',') === next.weeks.join(',');
+
+        const isContinuous = current.endSection + 1 === next.startSection;
+        const isDuplicate = current.startSection === next.startSection && current.endSection === next.endSection;
+
+        if (isSameCourseAndWeeks && isContinuous) {
+            // 节次连续：延长结束节次 (如 1-2 节 + 3-4 节 -> 1-4 节)
+            current.endSection = next.endSection;
+        } else if (isSameCourseAndWeeks && isDuplicate) {
+            // 完全重复：跳过
+            continue;
+        } else {
+            step1Merged.push(current);
+            current = next;
         }
-        merged.push(current);
     }
-    return merged;
+    step1Merged.push(current);
+
+    // 阶段 2：合并同节次的周次（前提：名称、教师、地点、星期、开始/结束节次一致）
+    step1Merged.sort((a, b) => {
+        return a.name.localeCompare(b.name) ||
+               a.teacher.localeCompare(b.teacher) ||
+               a.position.localeCompare(b.position) ||
+               (a.day || 0) - (b.day || 0) ||
+               (a.startSection || 0) - (b.startSection || 0) ||
+               (a.endSection || 0) - (b.endSection || 0);
+    });
+
+    const step2Merged = [];
+    let cur = step1Merged[0];
+
+    for (let i = 1; i < step1Merged.length; i++) {
+        const nxt = step1Merged[i];
+
+        const isSameCourseAndSection =
+            cur.name === nxt.name &&
+            cur.teacher === nxt.teacher &&
+            cur.position === nxt.position &&
+            cur.day === nxt.day &&
+            cur.startSection === nxt.startSection &&
+            cur.endSection === nxt.endSection;
+
+        if (isSameCourseAndSection) {
+            // 周次合并去重 (如 1-8 周 + 9-16 周 -> 1-16 周)
+            cur.weeks = Array.from(new Set([...cur.weeks, ...nxt.weeks])).sort((a, b) => a - b);
+        } else {
+            step2Merged.push(cur);
+            cur = nxt;
+        }
+    }
+    step2Merged.push(cur);
+
+    return step2Merged;
 }
 
 /**
@@ -169,16 +241,19 @@ function parseTimetableToCourses(html) {
         }
     }
 
-    return mergeConsecutiveSections(results);
+    return mergeAndDistinctCourses(results);
 }
 
 // ==================== 网络请求 ====================
 
 /**
  * 拉取本学期课表页面并检测登录状态（一次请求完成）。
- * 返回 { loggedIn, html }：
- *   - loggedIn=false：未登录（页面含验证码输入框/登录表单）
- *   - html 为 null：请求失败、超时或页面无课表
+ * 返回：
+ *   - { loggedIn: true, html }  成功
+ *   - { error: "not_logged_in" }   未登录（页面含验证码输入框/登录表单）
+ *   - { error: "network" }         网络异常或超时
+ *   - { error: "request_failed" }  HTTP 请求失败（非 2xx）
+ *   - { error: "no_table" }        已登录但页面无课表
  */
 async function fetchTimetableOnce() {
     const controller = new AbortController();
@@ -188,14 +263,14 @@ async function fetchTimetableOnce() {
             credentials: "include",
             signal: controller.signal
         });
-        if (!resp.ok) return { loggedIn: false, html: null };
+        if (!resp.ok) return { error: "request_failed" };
         const html = await resp.text();
-        const loggedIn = !(html.includes('id="ranstring"') || html.includes("LoginForm"));
-        if (!loggedIn || !html.includes("table_border")) return { loggedIn, html: null };
+        if (html.includes('id="ranstring"') || html.includes("LoginForm")) return { error: "not_logged_in" };
+        if (!html.includes("table_border")) return { error: "no_table" };
         return { loggedIn: true, html };
     } catch (e) {
         console.error("获取课表失败:", e);
-        return { loggedIn: false, html: null };
+        return { error: "network" };
     } finally {
         clearTimeout(timer);
     }
@@ -226,8 +301,8 @@ async function runImportFlow() {
 
     // 2. 拉取本学期课表并检测登录状态
     BRIDGE.showToast("正在获取课表数据...");
-    const { loggedIn, html } = await fetchTimetableOnce();
-    if (!loggedIn) {
+    const result = await fetchTimetableOnce();
+    if (result.error === "not_logged_in") {
         await BRIDGE_P.showAlert(
             "未检测到登录状态",
             "当前会话未登录，请先在页面中完成登录，之后重新发起导入。",
@@ -236,10 +311,15 @@ async function runImportFlow() {
         BRIDGE.showToast("未登录，导入中止");
         return;
     }
-    if (!html) {
-        BRIDGE.showToast("获取课表失败，请确认登录状态后重试");
+    if (result.error === "network" || result.error === "request_failed") {
+        BRIDGE.showToast("获取课表失败（网络异常或超时），请检查网络后重试");
         return;
     }
+    if (result.error === "no_table" || !result.html) {
+        BRIDGE.showToast("未获取到课表数据，请确认登录状态后重试");
+        return;
+    }
+    const html = result.html;
 
     // 3. 解析课程（默认本学期）
     const courses = parseTimetableToCourses(html);
