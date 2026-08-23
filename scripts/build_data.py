@@ -21,7 +21,7 @@ except ImportError:
 
 # --- 2. 工程常量与版本定义 ---
 # 协议版本：结构大改动时手动递增。
-PROTOCOL_VERSION = 1 
+PROTOCOL_VERSION = 2 
 
 # YAML 文件路径常量
 ROOT_INDEX_PATH = Path("index/root_index.yaml")
