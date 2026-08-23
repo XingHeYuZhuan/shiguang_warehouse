@@ -382,7 +382,7 @@ async function selectTimeSlot() {
 
 async function reselectTimeSlot(selectedTimeSlot) {
     const options = ["对的对的，就是这个", "不对不对，应该是另外一个"];
-    const dialogTitle = "当前智能选择结果为: " + (selectedTimeSlot ? "夏令时" : "冬令时") + "，是否更改选择？";
+    const dialogTitle = "当前智能选择结果为: \n  " + (selectedTimeSlot ? "夏令时" : "冬令时") + "\n是否更改选择？";
     const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         dialogTitle,
         JSON.stringify(options),
@@ -891,7 +891,7 @@ async function runImportFlow() {
         "脚本已根据课程所在位置匹配作息时间，部分课程可能与预设时间不符。\n" +
         "请在课表页面核对课程时间，如有错误请手动修改课程所在位置或节次信息。\n\n" +
         "已收录独立作息的楼栋：主A楼、京江各号楼、三江楼、三山楼、讲堂群。\n" +
-        "其余楼栋（学院楼、各实验室、运动场、未排地点等）使用默认作息时间。\n\n" +
+        "其余楼栋（各学院楼、各实验室、运动场、未排地点等）使用默认作息时间。\n\n" +
         "欢迎其他楼栋的同学提供课程时间信息以完善脚本！",
         "我知道了"
     );
