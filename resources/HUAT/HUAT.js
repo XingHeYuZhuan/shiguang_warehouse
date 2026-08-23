@@ -1,4 +1,4 @@
-// 文件: HUAT1_fixed_shift.js - 修复节次偏移 + 季节时间选择 (夏季/秋季)
+// 文件: HUAT1_fixed_shift.js - 修复api调用和弹窗问题
 // ==================== 验证函数 ====================
 function validateDate(dateStr) {
     if (!dateStr || dateStr.trim().length === 0) {
@@ -509,141 +509,266 @@ async function demoAlert() {
         return false;
     }
 }
+/**
+ * 自定义日期选择器（3 列下拉 + 5 行可见 + 触控滑动 + 默认今天）
+ * 不依赖 bridge，直接操作 DOM
+ * @param {string} [defaultDateStr] - 默认日期 "YYYY-MM-DD"，不传则用今天
+ * @returns {Promise<string|null>} "YYYY-MM-DD" 或 null（取消）
+ */
+function showCustomDatePicker(defaultDateStr) {
+    return new Promise((resolve) => {
+        // 解析默认日期
+        let defaultDate;
+        if (defaultDateStr && /^\d{4}-\d{2}-\d{2}$/.test(defaultDateStr)) {
+            const parts = defaultDateStr.split('-');
+            defaultDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+            defaultDate = new Date();
+        }
+        const todayYear  = defaultDate.getFullYear();
+        const todayMonth = defaultDate.getMonth() + 1;
+        const todayDay   = defaultDate.getDate();
+
+        // 候选范围：今年前后各 2 年，共 5 项
+        const years = [];
+        for (let y = todayYear - 2; y <= todayYear + 2; y++) years.push(y);
+
+        let selectedYear  = todayYear;
+        let selectedMonth = todayMonth;
+        let selectedDay   = todayDay;
+
+        // 保存原 body overflow，关闭时还原
+        const prevBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        // 遮罩层
+        const overlay = document.createElement('div');
+        overlay.style.cssText =
+            'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999999;' +
+            'display:flex;align-items:center;justify-content:center;' +
+            'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;';
+
+        // 弹窗主体
+        const modal = document.createElement('div');
+        modal.style.cssText =
+            'background:#fff;border-radius:12px;padding:16px;' +
+            'width:80%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+
+        // 标题
+        const title = document.createElement('div');
+        title.textContent = '📅 选择开学日期';
+        title.style.cssText =
+            'font-size:16px;font-weight:bold;text-align:center;margin-bottom:12px;color:#333;';
+        modal.appendChild(title);
+
+        // 三列容器
+        const cols = document.createElement('div');
+        cols.style.cssText = 'display:flex;gap:8px;';
+        modal.appendChild(cols);
+
+        const ROW_HEIGHT = 40;
+        const VISIBLE_ROWS = 5;
+        const COL_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS;
+
+        // 构造一列
+        function makeColumn(items, defaultIdx, onSelect) {
+            const wrap = document.createElement('div');
+            wrap.style.cssText =
+                'flex:1;height:' + COL_HEIGHT + 'px;overflow-y:auto;' +
+                '-webkit-overflow-scrolling:touch;' +
+                'border:1px solid #eee;border-radius:8px;background:#fafafa;';
+
+            const rows = [];
+            items.forEach((item, i) => {
+                const row = document.createElement('div');
+                row.textContent = item;
+                row.style.cssText =
+                    'height:' + ROW_HEIGHT + 'px;line-height:' + ROW_HEIGHT + 'px;' +
+                    'text-align:center;font-size:14px;cursor:pointer;' +
+                    'transition:background 0.15s,color 0.15s;';
+                if (i === defaultIdx) {
+                    row.style.background = '#409eff';
+                    row.style.color = '#fff';
+                    row.style.fontWeight = 'bold';
+                }
+                row.addEventListener('click', () => {
+                    rows.forEach(r => {
+                        r.style.background = '';
+                        r.style.color = '';
+                        r.style.fontWeight = 'normal';
+                    });
+                    row.style.background = '#409eff';
+                    row.style.color = '#fff';
+                    row.style.fontWeight = 'bold';
+                    onSelect(i);
+                });
+                rows.push(row);
+                wrap.appendChild(row);
+            });
+
+            // 滚动到默认项
+            wrap.scrollTop = defaultIdx * ROW_HEIGHT;
+            return wrap;
+        }
+
+        // 根据年月取本月天数（自动处理闰年/大小月）
+        function getDaysInMonth(y, m) {
+            return new Date(y, m, 0).getDate();
+        }
+
+        // 年列
+        const yearCol = makeColumn(years, years.indexOf(todayYear), (i) => {
+            selectedYear = years[i];
+            rebuildDays();
+        });
+        cols.appendChild(yearCol);
+
+        // 月列
+        const months = [];
+        for (let m = 1; m <= 12; m++) months.push(m);
+        const monthCol = makeColumn(months, todayMonth - 1, (i) => {
+            selectedMonth = months[i];
+            rebuildDays();
+        });
+        cols.appendChild(monthCol);
+
+        // 日列（先用占位，rebuildDays 会替换）
+        let dayCol = document.createElement('div');
+        cols.appendChild(dayCol);
+
+        function rebuildDays() {
+            const daysCount = getDaysInMonth(selectedYear, selectedMonth);
+            const days = [];
+            for (let d = 1; d <= daysCount; d++) days.push(d);
+            if (selectedDay > daysCount) selectedDay = daysCount;
+            const newDayCol = makeColumn(days, selectedDay - 1, (i) => {
+                selectedDay = days[i];
+            });
+            cols.replaceChild(newDayCol, dayCol);
+            dayCol = newDayCol;
+        }
+        rebuildDays();
+
+        // 按钮区
+        const btns = document.createElement('div');
+        btns.style.cssText = 'display:flex;gap:8px;margin-top:16px;';
+        modal.appendChild(btns);
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = '取消';
+        cancelBtn.style.cssText =
+            'flex:1;height:40px;border:1px solid #ddd;background:#fff;' +
+            'border-radius:6px;font-size:14px;cursor:pointer;color:#666;';
+        btns.appendChild(cancelBtn);
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = '确认';
+        okBtn.style.cssText =
+            'flex:1;height:40px;background:#409eff;color:#fff;border:none;' +
+            'border-radius:6px;font-size:14px;cursor:pointer;font-weight:bold;';
+        btns.appendChild(okBtn);
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        // 清理 DOM 与样式
+        function cleanup() {
+            document.body.removeChild(overlay);
+            document.body.style.overflow = prevBodyOverflow;
+        }
+
+        cancelBtn.addEventListener('click', () => {
+            cleanup();
+            resolve(null);
+        });
+
+        okBtn.addEventListener('click', () => {
+            cleanup();
+            const dateStr = selectedYear + '-' +
+                String(selectedMonth).padStart(2, '0') + '-' +
+                String(selectedDay).padStart(2, '0');
+            resolve(dateStr);
+        });
+
+        // 点击遮罩空白区域关闭
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                cleanup();
+                resolve(null);
+            }
+        });
+    });
+}
+
 async function demoPrompt() {
     try {
         const semesterInfo = extractSemesterInfo();
-        const semesterStart = await window.shiguangBridgePromise.showPrompt(
-            "📅 设置开学日期",
-            "请输入本学期开学日期",
-            semesterInfo.semesterStartDate,
-            "validateDate"
-        );
-        return semesterStart || semesterInfo.semesterStartDate;
+        console.log("即将显示自定义日期选择器...");
+        const picked = await showCustomDatePicker(semesterInfo.semesterStartDate);
+        if (picked) {
+            const err = validateDate(picked);
+            if (!err) {
+                console.log("用户选择了开学日期: " + picked);
+                window.shiguangBridge.showToast("开学日期：" + picked);
+                return picked;
+            }
+            console.warn("自选日期校验失败:", err);
+        } else {
+            console.log("用户取消了日期选择。");
+            window.shiguangBridge.showToast("日期选择：用户取消，使用默认值");
+        }
+        // 取消或校验失败，回退到默认
+        return semesterInfo.semesterStartDate;
     } catch (error) {
-        console.error("日期输入错误:", error);
+        console.error("日期选择错误:", error);
         return "2026-03-01";
     }
 }
 
 /**
- * 导入时间段 - 让用户选择夏季或秋季
- * 修复：使用更可靠的方式来处理两个选项
+ * 导入时间段 - 使用单选列表弹窗让用户选择夏季或秋季
+ * 参考 demoSingleSelection 的调用模式
  */
 async function importPresetTimeSlots() {
-    console.log("正在准备预设时间段数据...");
-    
-    // 修复：使用showConfirmDialog而不是showAlert来确保两个按钮都显示
+    const seasons = ["夏季", "秋季"];
     try {
-        // 尝试使用showConfirmDialog（如果有的话）
-        if (window.shiguangBridgePromise && typeof window.shiguangBridgePromise.showConfirmDialog === 'function') {
-            const seasonChoice = await window.shiguangBridgePromise.showConfirmDialog(
-                "⏰ 选择作息时间",
-                "请根据当前学期选择作息时间：\n\n🌞 夏季（5月1日-9月30日）\n🍂 秋季（10月1日-次年4月30日）",
-                "夏季",
-                "秋季"
-            );
-            
-            // showConfirmDialog 点击左侧按钮返回 true，点击右侧按钮返回 false
-            let season = seasonChoice === true ? 'summer' : 'autumn';
-            
+        console.log("即将显示季节选择单选列表弹窗...");
+        const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
+            "选择作息时间",
+            JSON.stringify(seasons),
+            0
+        );
+        if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < seasons.length) {
+            console.log("用户选择了: " + seasons[selectedIndex] + " (索引: " + selectedIndex + ")");
+            window.shiguangBridge.showToast("你选择了 " + seasons[selectedIndex]);
+
+            // 索引 0 -> 夏季，索引 1 -> 秋季
+            const season = selectedIndex === 0 ? 'summer' : 'autumn';
+
             // 获取对应季节的时间段
             const presetTimeSlots = getSeasonTimeSlots(season);
             console.log(`选择的季节: ${season}，时间段:`, presetTimeSlots);
-            
+
             // 导入时间段
             const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
             if (result === true) {
                 console.log("预设时间段导入成功！");
-                window.shiguangBridge.showToast(`✅ ${season === 'summer' ? '夏季' : '秋季'}时间段导入成功！`);
-                return true;
+                window.shiguangBridge.showToast(`✅ ${seasons[selectedIndex]}时间段导入成功！`);
+                return true; // 成功时返回 true
             } else {
                 console.log("预设时间段导入未成功，结果：" + result);
                 window.shiguangBridge.showToast("❌ 时间段导入失败，请查看日志。");
                 return false;
             }
-        } 
-        // 使用showAlert但确保两个按钮都显示
-        else {
-            // 方法1：尝试使用showAlert两个按钮 - 修复按钮显示问题
-            // 注意：有些AndroidBridge实现中，showAlert的第三个参数是左侧按钮，第四个参数是右侧按钮
-            // 确保两个按钮文本都不为空
-            const seasonChoice = await window.shiguangBridgePromise.showAlert(
-                "⏰ 选择作息时间",
-                "请根据当前学期选择作息时间：\n\n🌞 夏季（5月1日-9月30日）\n🍂 秋季（10月1日-次年4月30日）",
-                "夏季",  // 左侧按钮
-                "秋季"   // 右侧按钮
-            );
-            
-            // 根据返回值判断用户点击了哪个按钮
-            // showAlert 点击左侧按钮返回 true，点击右侧按钮返回 false
-            let season = 'summer';
-            
-            // 更精确地判断返回值
-            if (seasonChoice === true || seasonChoice === "true" || seasonChoice === 1) {
-                season = 'summer';
-                console.log("用户选择了夏季");
-            } else if (seasonChoice === false || seasonChoice === "false" || seasonChoice === 0) {
-                season = 'autumn';
-                console.log("用户选择了秋季");
-            } else if (typeof seasonChoice === 'string') {
-                // 如果返回的是按钮文本
-                if (seasonChoice === '夏季') {
-                    season = 'summer';
-                } else {
-                    season = 'autumn';
-                }
-            }
-            
-            // 获取对应季节的时间段
-            const presetTimeSlots = getSeasonTimeSlots(season);
-            console.log(`选择的季节: ${season}，时间段:`, presetTimeSlots);
-            
-            // 导入时间段
-            const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
-            if (result === true) {
-                console.log("预设时间段导入成功！");
-                window.shiguangBridge.showToast(`✅ ${season === 'summer' ? '夏季' : '秋季'}时间段导入成功！`);
-                return true;
-            } else {
-                console.log("预设时间段导入未成功，结果：" + result);
-                window.shiguangBridge.showToast("❌ 时间段导入失败，请查看日志。");
-                return false;
-            }
+        } else {
+            console.log("用户取消了选择。");
+            window.shiguangBridge.showToast("季节选择：用户取消了选择！");
+            return false; // 用户取消时返回 false
         }
     } catch (error) {
-        console.error("导入时间段时发生错误:", error);
-        
-        // 方法2：如果两个按钮的方法失败，尝试使用showPrompt让用户输入
-        try {
-            console.log("尝试使用备用方法选择季节...");
-            const seasonInput = await window.shiguangBridgePromise.showPrompt(
-                "⏰ 选择作息时间",
-                "请输入季节（输入 1 选择夏季，输入 2 选择秋季）：\n\n1 - 夏季 (5月1日-9月30日)\n2 - 秋季 (10月1日-次年4月30日)",
-                "1"
-            );
-            
-            let season = 'summer';
-            if (seasonInput === '2') {
-                season = 'autumn';
-            }
-            
-            const presetTimeSlots = getSeasonTimeSlots(season);
-            const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
-            
-            if (result === true) {
-                window.shiguangBridge.showToast(`✅ ${season === 'summer' ? '夏季' : '秋季'}时间段导入成功！`);
-                return true;
-            }
-        } catch (secondError) {
-            console.error("备用方法也失败:", secondError);
-            window.shiguangBridge.showToast("导入时间段失败，使用默认夏季时间");
-            
-            // 方法3：使用默认夏季
-            const defaultTimeSlots = getSeasonTimeSlots('summer');
-            await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(defaultTimeSlots));
-            window.shiguangBridge.showToast("✅ 默认夏季时间段导入成功");
-            return true;
-        }
+        console.error("显示季节选择单选列表弹窗时发生错误:", error);
+        window.shiguangBridge.showToast("季节选择：显示列表出错！" + error.message);
+        return false; // 出现错误时也返回 false
     }
 }
 
@@ -745,6 +870,8 @@ window.validateName = validateName;
 window.extractCourseData = extractCourseData;
 window.importPresetTimeSlots = importPresetTimeSlots;
 window.getSeasonTimeSlots = getSeasonTimeSlots;
+window.showCustomDatePicker = showCustomDatePicker;
+window.demoPrompt = demoPrompt;
 
 // 启动
 runAllDemosSequentially();
