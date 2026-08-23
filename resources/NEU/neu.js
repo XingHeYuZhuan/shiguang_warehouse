@@ -237,34 +237,48 @@ function parseWeeksString(weeksStr) {
 function convertApiResponseToLessons(arrangedList) {
     const lessons = [];
     for (const item of arrangedList) {
-        // 必要字段检查
         const day = item.dayOfWeek;
         const startSection = item.beginSection;
         const endSection = item.endSection;
         if (!day || !startSection || !endSection) continue;
 
-        const titleDetail = item.titleDetail;
-        if (!Array.isArray(titleDetail) || titleDetail.length < 2) {
-            console.warn("titleDetail 无效，跳过课程:", item);
-            continue;
+        // ---- 1. 获取课程名 ----
+        let name = item.courseName || "";
+        // 如果 courseName 为空（极端情况），从 titleDetail 补全
+        if (!name) {
+            const td = item.titleDetail || [];
+            if (td.length >= 2) {
+                // 实验课 td[0] 通常以 "[实]" 开头，直接使用
+                if (td[0].includes("[实]") || td[0].includes("实验")) {
+                    name = td[0];
+                } else {
+                    // 理论课：取 td[1] 空格前的部分（如 "机器学习"）
+                    const idx = td[1].indexOf(' ');
+                    name = idx !== -1 ? td[1].substring(0, idx) : td[1];
+                }
+            } else if (td.length === 1) {
+                name = td[0];
+            }
         }
 
-        // 1. 课程名：从 titleDetail[0] 的第一个空格前提取
-        const title0 = titleDetail[0] || "";
-        const firstSpaceIdx = title0.indexOf(' ');
-        const name = firstSpaceIdx !== -1 ? title0.substring(0, firstSpaceIdx) : title0;
-        if (!name) continue;
+        // ---- 2. 获取周次-教师-地点字符串 ----
+        let weekTeacherPlace = item.titleWeekTeacherClassroomDetail?.[0] || "";
+        // 若该字段缺失，回退到 titleDetail 的对应项
+        if (!weekTeacherPlace) {
+            const td = item.titleDetail || [];
+            if (td.length >= 3) weekTeacherPlace = td[2];      // 理论课
+            else if (td.length === 2) weekTeacherPlace = td[1]; // 实验课
+        }
+        if (!weekTeacherPlace) continue; // 无有效信息则跳过
 
-        // 2. 解析 titleDetail[1]  => 周次字符串、教师、地点
-        const title1 = titleDetail[1] || "";
-        const tokens = title1.trim().split(/\s+/); // 按空白符分割
+        // ---- 3. 解析 tokens ----
+        const tokens = weekTeacherPlace.trim().split(/\s+/);
         if (tokens.length < 1) continue;
-        const weeksStr = tokens[0];                 // 例如 "1-8周"
+        const weeksStr = tokens[0];               // 如 "1-8周"
         const teacher = tokens[1] || "";
-        // 地点：从第2个token开始到末尾，用空格重新拼接
         const position = tokens.slice(2).join(' ');
 
-        // 3. 解析周次字符串为数字数组
+        // ---- 4. 解析周次数组 ----
         const weeks = parseWeeksString(weeksStr);
         if (weeks.length === 0) {
             console.warn(`周次解析失败: ${weeksStr}, 课程: ${name}`);
@@ -295,7 +309,7 @@ function convertApiResponseToLessons(arrangedList) {
 async function fetchCoursesFromAPI(semesterCode, retries=2) {
     const url = 'https://jwxt.neu.edu.cn/jwapp/sys/kbapp/api/wdkbcx/getMyScheduleDetail.do';
     const xnxqdm = semesterCode;
-    const xqdm = '01';
+    const xqdm = '';//神秘参数，设为空就啥时候都能获得课表数据，尼东教务系统真是神了。
     for (let i=1; i<=retries; i++) {
         try {
             const ctrl = new AbortController();
