@@ -2,12 +2,26 @@
  * 重庆理工大学课表导入脚本
  * author: Dawn Drizzle
  */
+// 隔离所有声明，允许脚本在同一 WebView 中失败或取消后再次执行
+(async () => {
 const API_BASE = 'https://timetable-cfc.cqut.edu.cn/api/courseSchedule';
 const MAX_WEEK_REQUEST_CONCURRENCY = 5;
 const REQUEST_RETRY_COUNT = 1;
 const RETRY_DELAY_MS = 300;
 
 const wait = (duration) => new Promise((resolve) => setTimeout(resolve, duration));
+
+// 用户只看到可操作的提示，原始错误信息保留在 Error 中供控制台排查
+const createImportError = (userMessage, debugMessage, cause) => {
+    const error = new Error(debugMessage || userMessage);
+    error.userMessage = userMessage;
+
+    if (cause !== undefined) {
+        error.cause = cause;
+    }
+
+    return error;
+};
 
 // 仅允许在课表站点内执行，避免跨站点误触发
 const checkLogin = () => window.location.hostname === 'timetable-cfc.cqut.edu.cn';
@@ -34,7 +48,11 @@ const baseFetch = async (path, body, description) => {
                 continue;
             }
 
-            throw new Error(`获取${description}失败: ${error.message}`);
+            throw createImportError(
+                '网络连接异常，请检查网络后重试。',
+                `获取${description}失败: ${error?.message || String(error)}`,
+                error,
+            );
         }
 
         if (!response.ok) {
@@ -45,17 +63,37 @@ const baseFetch = async (path, body, description) => {
                 continue;
             }
 
-            throw new Error(`获取${description}失败: ${response.status} ${response.statusText}`);
+            let userMessage = `获取${description}时出现异常，请稍后重试。`;
+
+            if (response.status === 401 || response.status === 403) {
+                userMessage = '登录状态已失效，请重新登录后重试。';
+            } else if (response.status === 429) {
+                userMessage = '请求过于频繁，请稍后重试。';
+            } else if (response.status >= 500) {
+                userMessage = '教务系统暂时不可用，请稍后重试。';
+            }
+
+            throw createImportError(
+                userMessage,
+                `获取${description}失败: ${response.status} ${response.statusText}`,
+            );
         }
 
         try {
             return await response.json();
         } catch (error) {
-            throw new Error(`解析${description}失败: ${error.message}`);
+            throw createImportError(
+                '教务系统返回的数据异常，请稍后重试。',
+                `解析${description}失败: ${error?.message || String(error)}`,
+                error,
+            );
         }
     }
 
-    throw new Error(`获取${description}失败`);
+    throw createImportError(
+        `获取${description}时出现异常，请稍后重试。`,
+        `获取${description}失败`,
+    );
 };
 
 // 获取当前登录用户信息（包含 username、校区等）
@@ -106,14 +144,20 @@ const assertMatchingYearTerm = (weekData, expectedYearTerm, description, require
 
     if (!actualYearTerm) {
         if (required) {
-            throw new Error(`${description}缺少学期标识`);
+            throw createImportError(
+                '未能确认所选学期，请重新选择后重试。',
+                `${description}缺少学期标识`,
+            );
         }
 
         return;
     }
 
     if (actualYearTerm !== expectedYearTerm) {
-        throw new Error(`${description}返回了错误学期: ${actualYearTerm}`);
+        throw createImportError(
+            '教务系统返回的学期与所选学期不一致，请重新选择后重试。',
+            `${description}返回了错误学期: 期望 ${expectedYearTerm}，实际 ${actualYearTerm}`,
+        );
     }
 };
 
@@ -139,7 +183,10 @@ const selectYearTerm = async (weekData) => {
     }
 
     if (yearTerms.length === 0) {
-        throw new Error('学期列表为空');
+        throw createImportError(
+            '未获取到可选学期，请确认登录状态后重试。',
+            '学期列表为空',
+        );
     }
 
     const currentIndex = yearTerms.indexOf(currentYearTerm);
@@ -157,7 +204,10 @@ const selectYearTerm = async (weekData) => {
     const normalizedIndex = Number(selectedIndex);
 
     if (!Number.isInteger(normalizedIndex) || normalizedIndex < 0 || normalizedIndex >= yearTerms.length) {
-        throw new Error(`无效的学期选项索引: ${selectedIndex}`);
+        throw createImportError(
+            '学期选择结果异常，请重新选择后重试。',
+            `无效的学期选项索引: ${selectedIndex}`,
+        );
     }
 
     return yearTerms[normalizedIndex];
@@ -321,14 +371,23 @@ const mergeCourses = (events) => {
 };
 
 const saveBridgeData = async (description, saveAction) => {
-    try {
-        const result = await saveAction();
+    let result;
 
-        if (result !== true) {
-            throw new Error(`返回值异常: ${String(result)}`);
-        }
+    try {
+        result = await saveAction();
     } catch (error) {
-        throw new Error(`${description}保存失败: ${error?.message || String(error)}`);
+        throw createImportError(
+            `${description}未能成功保存，请重试。`,
+            `${description}保存失败: ${error?.message || String(error)}`,
+            error,
+        );
+    }
+
+    if (result !== true) {
+        throw createImportError(
+            `${description}未能成功保存，请重试。`,
+            `${description}保存返回值异常: ${String(result)}`,
+        );
     }
 };
 
@@ -351,7 +410,10 @@ const saveSchedule = async (parsedSchedule) => {
 // 主流程：校验页面 → 拉取用户/校区 → 获取并选择学期 → 拉取所选学期每周课程 → 合并保存
 const runImportFlow = async () => {
     if (!checkLogin()) {
-        throw new Error('当前不在重庆理工大学课表页面');
+        throw createImportError(
+            '请先打开重庆理工大学课表页面并登录后重试。',
+            `当前页面不受支持: ${window.location.hostname}`,
+        );
     }
 
     const userInfo = await getUserInfo();
@@ -359,7 +421,10 @@ const runImportFlow = async () => {
     const campusName = userInfo?.userCustomSetting?.campusName;
 
     if (!userID || !campusName) {
-        throw new Error('用户信息不完整');
+        throw createImportError(
+            '未获取到完整的账号或校区信息，请重新登录后重试。',
+            `用户信息不完整: userID=${Boolean(userID)}, campusName=${Boolean(campusName)}`,
+        );
     }
 
     const [timeSlotData, semesterOverview] = await Promise.all([
@@ -373,35 +438,38 @@ const runImportFlow = async () => {
         return;
     }
 
-    // 选择当前学期时复用首次请求；选择其他学期时重新获取其周次和日期信息
-    const selectedWeekData = String(semesterOverview?.yearTerm ?? '').trim() === yearTerm
-        ? semesterOverview
-        : await getWeekEvents(userID, null, yearTerm, `${formatYearTerm(yearTerm)}信息`);
-    assertMatchingYearTerm(selectedWeekData, yearTerm, '所选学期信息', true);
-    const weekList = normalizeWeekList(selectedWeekData?.weekList);
+    // weekNum 为空时接口会优先返回当前学期，因此必须显式请求所选学期第 1 周
+    const firstWeekNum = 1;
+    const firstWeekData = await getWeekEvents(
+        userID,
+        String(firstWeekNum),
+        yearTerm,
+        `${formatYearTerm(yearTerm)}第${firstWeekNum}周课程`,
+    );
+    assertMatchingYearTerm(firstWeekData, yearTerm, '所选学期信息', true);
+    const availableWeekList = normalizeWeekList(firstWeekData?.weekList);
     const timeSlots = parseTimeSlots(timeSlotData);
 
-    if (weekList.length === 0) {
-        throw new Error(`学期信息不完整: ${yearTerm}`);
+    if (availableWeekList.length === 0) {
+        throw createImportError(
+            '未获取到所选学期的完整周次信息，请稍后重试。',
+            `学期信息不完整: ${yearTerm}`,
+        );
     }
+
+    // 防御性补入第 1 周，确保首次请求中的课程不会因接口周次列表异常而被遗漏
+    const weekList = normalizeWeekList([...availableWeekList, firstWeekNum]);
 
     if (timeSlots.length === 0) {
-        throw new Error('未获取到有效的节次时间');
+        throw createImportError(
+            '未获取到有效作息时间，请确认校区信息后重试。',
+            `未获取到有效的节次时间: campusName=${campusName}`,
+        );
     }
 
-    // semesterStartDate 必须取自第一周；首次接口可能返回的是当前周，不能直接使用其中的日期
-    const firstWeekNum = weekList[0];
-    const selectedWeekNum = Number(selectedWeekData?.weekNum);
-    const firstWeekData = selectedWeekNum === firstWeekNum
-        ? selectedWeekData
-        : await getWeekEvents(userID, String(firstWeekNum), yearTerm, `第${firstWeekNum}周课程`);
-    assertMatchingYearTerm(firstWeekData, yearTerm, `第${firstWeekNum}周课程`);
+    // semesterStartDate 取自上面显式请求的第 1 周
     const semesterStartDate = parseSemesterStartDate(yearTerm, firstWeekData?.weekDayList);
     const preloadedWeekData = new Map([[String(firstWeekNum), firstWeekData]]);
-
-    if (weekList.includes(selectedWeekNum)) {
-        preloadedWeekData.set(String(selectedWeekNum), selectedWeekData);
-    }
 
     const weekResults = await mapWithConcurrency(
         weekList,
@@ -418,7 +486,7 @@ const runImportFlow = async () => {
     const courses = mergeCourses(events);
 
     if (courses.length === 0) {
-        window.shiguangBridge.showToast(`${formatYearTerm(yearTerm)}未找到课程，未修改现有课表`);
+        window.shiguangBridge.showToast(`该学期（${formatYearTerm(yearTerm)}）暂无可导入的课程，请确认所选学期后重试。`);
         return;
     }
 
@@ -431,6 +499,7 @@ const runImportFlow = async () => {
         courses,
     });
 
+    window.shiguangBridge.showToast(`已成功导入${formatYearTerm(yearTerm)}课表。`);
     window.shiguangBridge.notifyTaskCompletion();
 };
 
@@ -439,10 +508,11 @@ const runImportFlowSafely = async () => {
     try {
         await runImportFlow();
     } catch (error) {
-        const message = error?.message || String(error);
-        console.error(`[课程导入失败] ${message}`);
-        window.shiguangBridge.showToast(`课程导入失败：${message}`);
+        const userMessage = error?.userMessage || '发生未知异常，请稍后重试。';
+        console.error('[课程导入失败]', error);
+        window.shiguangBridge.showToast(`导入未完成：${userMessage}`);
     }
 };
 
-runImportFlowSafely();
+await runImportFlowSafely();
+})();
