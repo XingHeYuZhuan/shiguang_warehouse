@@ -737,3 +737,8 @@ schools:
     name: "青岛黄海学院"
     initial: "Q"
     resource_folder: "QDHHC"
+
+  - id: "NTU"
+    name: "南通大学"
+    initial: "N"
+    resource_folder: "NTU"
