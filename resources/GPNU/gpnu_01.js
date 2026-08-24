@@ -248,7 +248,9 @@ function parseJsonData(jsonData) {
     );
 
     console.log(`JS: JSON 数据解析完成，共找到 ${finalCourseList.length} 门课程。`);
-    return mergeAndDistinctCourses(finalCourseList);
+    const merged = mergeAndDistinctCourses(finalCourseList);
+    window.shiguangBridge.showToast(`去重前：${finalCourseList.length} 门，去重后：${merged.length} 门`);
+    return merged;
 }
 /**
  * 根据课程周次数组推断学期总周数。
