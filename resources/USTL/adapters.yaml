@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "ustl.js"
     import_url: "https://ustl.jw.chaoxing.com/admin/login"
     maintainer: "Cure"
-    description: "辽宁科技大学适配教务,登录后需要进入'信息查询-我的课表'才可以点击导入,本校毕业生适配,如果有误建议提交issues"
+    description: "辽宁科技大学适配教务, 登陆后点击【信息查询】, 再点击【我的课表】, 最后点击【执行导入】即可,本校毕业生适配, 如果有误建议提交issues"
