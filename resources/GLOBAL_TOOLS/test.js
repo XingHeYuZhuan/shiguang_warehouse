@@ -4,7 +4,6 @@
 const API_URL = "/jwxt/timetable-search/stuTimeTabPrint/studentQuery";
 let ACAD_YEAR = "2026-1";
 
-const AVAILABLE_YEARS = [2026, 2027];
 const AVAILABLE_SEMESTERS = [1, 2];
 
 // 中山大学各学期实际开课日期。
@@ -15,37 +14,55 @@ const SEMESTER_START_DATES = {
     "2026-1": "2026-09-07"
 };
 
+function validateYearInput(input) {
+    if (/^[0-9]{4}$/.test(input)) {
+        return false;
+    }
+    return "请输入四位数字的学年！";
+}
+
+async function getAcademicYear() {
+    const [defaultYear] = ACAD_YEAR.split("-");
+
+    const yearSelection = await window.AndroidBridgePromise.showPrompt(
+        "选择学年",
+        "请输入要导入课程的学年（如 2026）：",
+        defaultYear || "2026",
+        "validateYearInput"
+    );
+
+    return yearSelection;
+}
+
 async function selectSemester() {
-    if (!window.AndroidBridgePromise || typeof window.AndroidBridgePromise.showSingleSelection !== "function") {
+    if (!window.AndroidBridgePromise || typeof window.AndroidBridgePromise.showPrompt !== "function") {
+        throw new Error("AndroidBridgePromise.showPrompt 不可用，请在时光课程表 App 内运行此适配器。");
+    }
+
+    if (typeof window.AndroidBridgePromise.showSingleSelection !== "function") {
         throw new Error("AndroidBridgePromise.showSingleSelection 不可用，请在时光课程表 App 内运行此适配器。");
     }
 
-    const semesters = ["1（第一学期）", "2（第二学期）"];
-
-    const [defaultYear, defaultSemester] = ACAD_YEAR.split("-").map(Number);
-    const defaultYearIndex = AVAILABLE_YEARS.indexOf(defaultYear);
-
-    const yearIndex = await window.AndroidBridgePromise.showSingleSelection(
-        "选择学年",
-        JSON.stringify(AVAILABLE_YEARS.map(year => String(year))),
-        defaultYearIndex >= 0 ? defaultYearIndex : 0
-    );
-
-    if (yearIndex === null || yearIndex < 0 || yearIndex >= AVAILABLE_YEARS.length) {
+    const yearSelection = await getAcademicYear();
+    if (yearSelection === null) {
         return null;
     }
+
+    const year = String(yearSelection).trim();
+    const semesters = ["1（第一学期）", "2（第二学期）"];
+    const [, defaultSemester] = ACAD_YEAR.split("-");
 
     const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(semesters),
-        defaultSemester === 2 ? 1 : 0
+        defaultSemester === "2" ? 1 : 0
     );
 
     if (semesterIndex === null || semesterIndex < 0 || semesterIndex >= semesters.length) {
         return null;
     }
 
-    ACAD_YEAR = `${AVAILABLE_YEARS[yearIndex]}-${semesterIndex + 1}`;
+    ACAD_YEAR = `${year}-${semesterIndex + 1}`;
     return ACAD_YEAR;
 }
 
