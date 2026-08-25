@@ -150,6 +150,28 @@ const CONFIG_BASE = {
     defaultBreakDuration: 10
 };
 
+function getSemesterStartDate() {
+    const [yearText, semesterText] = ACAD_YEAR.split("-");
+    const year = Number(yearText);
+    const semester = Number(semesterText);
+
+    if (!Number.isInteger(year) || !Number.isInteger(semester)) {
+        throw new Error("学年学期格式错误。请重新选择学年和学期。");
+    }
+
+    // 第一学期：当年 9 月 7 日
+    if (semester === 1) {
+        return `${year}-09-07`;
+    }
+
+    // 第二学期：次年 3 月 2 日
+    if (semester === 2) {
+        return `${year + 1}-03-02`;
+    }
+
+    throw new Error("不支持的学期：" + semester);
+}
+
 
 // ==================== 获取课程 ====================
 
@@ -224,7 +246,8 @@ async function fetchCourses() {
         courses,
         timeSlots: TIME_SLOTS,
         config: {
-            ...CONFIG_BASE
+            ...CONFIG_BASE,
+            semesterStartDate: getSemesterStartDate()
         }
     };
 }
