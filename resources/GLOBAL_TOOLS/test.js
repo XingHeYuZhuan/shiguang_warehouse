@@ -22,13 +22,6 @@ function validateAcademicYear(input) {
     return "请输入 2026 或 2027。";
 }
 
-function validateSemester(input) {
-    if (/^[12]$/.test(String(input).trim())) {
-        return false;
-    }
-    return "请输入 1（第一学期）或 2（第二学期）。";
-}
-
 async function selectSemester() {
     if (!window.AndroidBridgePromise || typeof window.AndroidBridgePromise.showPrompt !== "function") {
         throw new Error("AndroidBridgePromise.showPrompt 不可用，请在时光课程表 App 内运行此适配器。");
@@ -49,20 +42,24 @@ async function selectSemester() {
 
     const year = String(yearInput).trim();
 
-    const semesterInput = await window.AndroidBridgePromise.showPrompt(
+    if (typeof window.AndroidBridgePromise.showSingleSelection !== "function") {
+        throw new Error("AndroidBridgePromise.showSingleSelection 不可用，请在时光课程表 App 内运行此适配器。");
+    }
+
+    const semesters = ["1（第一学期）", "2（第二学期）"];
+    const defaultSemesterIndex = defaultSemester === "2" ? 1 : 0;
+
+    const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
         "选择学期",
-        "请输入学期：1（第一学期）或 2（第二学期）",
-        defaultSemester || "1",
-        "validateSemester"
+        JSON.stringify(semesters),
+        defaultSemesterIndex
     );
 
-    if (semesterInput === null) {
+    if (semesterIndex === null || semesterIndex < 0 || semesterIndex >= semesters.length) {
         return null;
     }
 
-    const semester = String(semesterInput).trim();
-    ACAD_YEAR = `${year}-${semester}`;
-
+    ACAD_YEAR = `${year}-${semesterIndex + 1}`;
     return ACAD_YEAR;
 }
 
@@ -291,12 +288,6 @@ async function runImportFlow() {
         if (!window.AndroidBridgePromise || typeof window.AndroidBridgePromise.showAlert !== "function") {
             throw new Error("AndroidBridgePromise.showAlert 不可用，请在时光课程表 App 内运行此适配器。");
         }
-
-        const confirmed = await window.AndroidBridgePromise.showAlert(
-            "导入课表",
-            "点击右上角三个点，选择“切换到电脑模式”。登陆，点击课表查询，即可导入。",
-            "好的"
-        );
 
         if (!confirmed) {
             if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
