@@ -16,7 +16,7 @@ function validateAcademicYear(input) {
     if (/^\d{4}$/.test(year) && Number(year) >= 1900 && Number(year) <= 2100) {
         return false;
     }
-    return "请输入四位数字的学年（1900-2100）。";
+    return "请输入四位数字的学年。";
 }
 
 async function selectSemester() {
