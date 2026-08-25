@@ -1,8 +1,8 @@
-adapters: #固定字段
-  - adapter_id: "SYSU" # id加上序号
-    adapter_name: "中山大学" #中文名称
+adapters: 
+  - adapter_id: "SYSU" 
+    adapter_name: "中山大学" 
     category: "BACHELOR_AND_ASSOCIATE"
-    asset_js_path: "sysu.js" #相对路径
+    asset_js_path: "sysu.js" 
     import_url: "https://jwxt.sysu.edu.cn/jwxt/#/login"
     maintainer: "JXCZ"
     description: "中山大学NetID版本教务系统课程表导入"
