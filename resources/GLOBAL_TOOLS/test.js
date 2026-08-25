@@ -4,27 +4,34 @@
 const API_URL = "/jwxt/timetable-search/stuTimeTabPrint/studentQuery";
 let ACAD_YEAR = "2026-1";
 
-const AVAILABLE_YEARS = [2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060,2061, 2062, 2063, 2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079, 2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2093, 2094, 2095, 2096, 2097, 2098, 2099];
+const AVAILABLE_YEARS = [2026, 2027];
 const AVAILABLE_SEMESTERS = [1, 2];
+
+// 中山大学各学期实际开课日期。
+// 日期以中山大学官方校历为准；尚未公布的学期暂不填写，避免错误导入。
+const SEMESTER_START_DATES = {
+    "2025-1": "2025-09-08",
+    "2025-2": "2026-03-02",
+    "2026-1": "2026-09-07"
+};
 
 async function selectSemester() {
     if (!window.AndroidBridgePromise || typeof window.AndroidBridgePromise.showSingleSelection !== "function") {
         throw new Error("AndroidBridgePromise.showSingleSelection 不可用，请在时光课程表 App 内运行此适配器。");
     }
 
-    const years = [2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079, 2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2093, 2094, 2095, 2096, 2097, 2098, 2099];
     const semesters = ["1（第一学期）", "2（第二学期）"];
 
     const [defaultYear, defaultSemester] = ACAD_YEAR.split("-").map(Number);
-    const defaultYearIndex = years.indexOf(defaultYear);
+    const defaultYearIndex = AVAILABLE_YEARS.indexOf(defaultYear);
 
     const yearIndex = await window.AndroidBridgePromise.showSingleSelection(
         "选择学年",
-        JSON.stringify(years.map(year => String(year))),
+        JSON.stringify(AVAILABLE_YEARS.map(year => String(year))),
         defaultYearIndex >= 0 ? defaultYearIndex : 0
     );
 
-    if (yearIndex === null || yearIndex < 0 || yearIndex >= years.length) {
+    if (yearIndex === null || yearIndex < 0 || yearIndex >= AVAILABLE_YEARS.length) {
         return null;
     }
 
@@ -38,7 +45,7 @@ async function selectSemester() {
         return null;
     }
 
-    ACAD_YEAR = `${years[yearIndex]}-${semesterIndex + 1}`;
+    ACAD_YEAR = `${AVAILABLE_YEARS[yearIndex]}-${semesterIndex + 1}`;
     return ACAD_YEAR;
 }
 
@@ -58,12 +65,28 @@ const TIME_SLOTS = [
 ];
 
 // 课表配置（学期开始日期需要根据所选学期调整）
-const CONFIG = {
-    semesterStartDate: "2026-03-02",
+const CONFIG_BASE = {
     semesterTotalWeeks: 20,
     defaultClassDuration: 45,
     defaultBreakDuration: 10
 };
+
+function getSemesterStartDate() {
+    const startDate = SEMESTER_START_DATES[ACAD_YEAR];
+
+    if (!startDate) {
+        throw new Error(`暂未配置 ${ACAD_YEAR} 的实际开课日期，请根据中山大学官方校历更新 SEMESTER_START_DATES。`);
+    }
+
+    return startDate;
+}
+
+function buildCourseConfig() {
+    return {
+        semesterStartDate: getSemesterStartDate(),
+        ...CONFIG_BASE
+    };
+}
 
 async function fetchCourses() {
     console.log("========================================");
@@ -130,7 +153,7 @@ async function fetchCourses() {
     const result = {
         courses,
         timeSlots: TIME_SLOTS,
-        config: CONFIG
+        config: buildCourseConfig()
     };
 
     console.log("========================================");
@@ -261,6 +284,7 @@ async function runImportFlow() {
         }
 
         console.log(`已选择学期：${ACAD_YEAR}`);
+        console.log(`学期实际开课日期：${getSemesterStartDate()}`);
 
         const data = await fetchCourses();
         if (!data || !Array.isArray(data.courses)) {
