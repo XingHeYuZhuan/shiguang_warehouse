@@ -748,4 +748,7 @@ schools:
     initial: "L"
     resource_folder: "USTL"
 
-  
+  - id: "SYSU" # id 唯一值
+    name: "中山大学" # 名称
+    initial: "S" # 排序首字母
+    resource_folder: "SYSU" # 资源文件夹名称
