@@ -5,4 +5,4 @@ adapters:
     asset_js_path: "sysu.js" 
     import_url: "https://jwxt.sysu.edu.cn/"
     maintainer: "JXCZ"
-    description: "中山大学NetID版本教务系统课程表导入"
+    description: "中山大学NetID版本教务系统课程表导入,注：右上角切换电脑模式再登陆"
