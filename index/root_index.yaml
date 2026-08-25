@@ -748,4 +748,7 @@ schools:
     initial: "L"
     resource_folder: "USTL"
 
-  
+  - id: "SYSU"
+    name: "中山大学"
+    initial: "Z"
+    resource_folder: "SYSU"
