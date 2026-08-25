@@ -7,158 +7,39 @@ let ACAD_YEAR = "2026-1";
 const AVAILABLE_YEARS = [2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060,2061, 2062, 2063, 2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079, 2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2093, 2094, 2095, 2096, 2097, 2098, 2099];
 const AVAILABLE_SEMESTERS = [1, 2];
 
-function selectSemester() {
-    return new Promise(resolve => {
-        const existing = document.getElementById("sysu-semester-selector");
-        if (existing) {
-            existing.remove();
-        }
+async function selectSemester() {
+    if (!window.AndroidBridgePromise || typeof window.AndroidBridgePromise.showSingleSelection !== "function") {
+        throw new Error("AndroidBridgePromise.showSingleSelection 不可用，请在时光课程表 App 内运行此适配器。");
+    }
 
-        const overlay = document.createElement("div");
-        overlay.id = "sysu-semester-selector";
-        overlay.style.cssText = `
-            position: fixed;
-            inset: 0;
-            z-index: 2147483647;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0, 0, 0, 0.45);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        `;
+    const years = [2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079, 2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2093, 2094, 2095, 2096, 2097, 2098, 2099];
+    const semesters = ["1（第一学期）", "2（第二学期）"];
 
-        const panel = document.createElement("div");
-        panel.style.cssText = `
-            width: 360px;
-            padding: 24px;
-            border-radius: 16px;
-            background: #fff;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
-            color: #222;
-        `;
+    const [defaultYear, defaultSemester] = ACAD_YEAR.split("-").map(Number);
+    const defaultYearIndex = years.indexOf(defaultYear);
 
-        const title = document.createElement("div");
-        title.textContent = "选择学期";
-        title.style.cssText = "font-size: 20px; font-weight: 600; margin-bottom: 20px; text-align: center;";
+    const yearIndex = await window.AndroidBridgePromise.showSingleSelection(
+        "选择学年",
+        JSON.stringify(years.map(year => String(year))),
+        defaultYearIndex >= 0 ? defaultYearIndex : 0
+    );
 
-        const subtitle = document.createElement("div");
-        subtitle.textContent = "选择后将自动请求对应学期课表并生成 JSON";
-        subtitle.style.cssText = "font-size: 13px; color: #777; margin-bottom: 18px; text-align: center;";
+    if (yearIndex === null || yearIndex < 0 || yearIndex >= years.length) {
+        return null;
+    }
 
-        const selectors = document.createElement("div");
-        selectors.style.cssText = "display: flex; gap: 12px; justify-content: center; align-items: center;";
+    const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+        "选择学期",
+        JSON.stringify(semesters),
+        defaultSemester === 2 ? 1 : 0
+    );
 
-        const yearSelect = document.createElement("select");
-        yearSelect.setAttribute("aria-label", "学年");
-        yearSelect.style.cssText = `
-            width: 130px;
-            height: 44px;
-            padding: 0 12px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 16px;
-            background: #fff;
-        `;
+    if (semesterIndex === null || semesterIndex < 0 || semesterIndex >= semesters.length) {
+        return null;
+    }
 
-        AVAILABLE_YEARS.forEach(year => {
-            const option = document.createElement("option");
-            option.value = String(year);
-            option.textContent = `${year} 年`;
-            yearSelect.appendChild(option);
-        });
-
-        const semesterSelect = document.createElement("select");
-        semesterSelect.setAttribute("aria-label", "学期");
-        semesterSelect.style.cssText = `
-            width: 110px;
-            height: 44px;
-            padding: 0 12px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 16px;
-            background: #fff;
-        `;
-
-        AVAILABLE_SEMESTERS.forEach(semester => {
-            const option = document.createElement("option");
-            option.value = String(semester);
-            option.textContent = `第 ${semester} 学期`;
-            semesterSelect.appendChild(option);
-        });
-
-        const [defaultYear, defaultSemester] = ACAD_YEAR.split("-").map(Number);
-        if (AVAILABLE_YEARS.includes(defaultYear)) {
-            yearSelect.value = String(defaultYear);
-        }
-        if (AVAILABLE_SEMESTERS.includes(defaultSemester)) {
-            semesterSelect.value = String(defaultSemester);
-        }
-
-        selectors.appendChild(yearSelect);
-        selectors.appendChild(semesterSelect);
-
-        const preview = document.createElement("div");
-        preview.style.cssText = "margin-top: 16px; text-align: center; font-size: 14px; color: #555;";
-
-        const updatePreview = () => {
-            preview.textContent = `将请求：${yearSelect.value}-${semesterSelect.value}`;
-        };
-        yearSelect.addEventListener("change", updatePreview);
-        semesterSelect.addEventListener("change", updatePreview);
-        updatePreview();
-
-        const buttons = document.createElement("div");
-        buttons.style.cssText = "display: flex; gap: 10px; margin-top: 22px;";
-
-        const cancelButton = document.createElement("button");
-        cancelButton.textContent = "取消";
-        cancelButton.style.cssText = `
-            flex: 1;
-            height: 42px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            background: #fff;
-            cursor: pointer;
-            font-size: 15px;
-        `;
-
-        const confirmButton = document.createElement("button");
-        confirmButton.textContent = "获取课表并下载";
-        confirmButton.style.cssText = `
-            flex: 1.5;
-            height: 42px;
-            border: 0;
-            border-radius: 8px;
-            background: #1677ff;
-            color: #fff;
-            cursor: pointer;
-            font-size: 15px;
-        `;
-
-        cancelButton.onclick = () => {
-            overlay.remove();
-            resolve(null);
-        };
-
-        confirmButton.onclick = () => {
-            const year = Number(yearSelect.value);
-            const semester = Number(semesterSelect.value);
-            ACAD_YEAR = `${year}-${semester}`;
-            overlay.remove();
-            resolve(ACAD_YEAR);
-        };
-
-        buttons.appendChild(cancelButton);
-        buttons.appendChild(confirmButton);
-
-        panel.appendChild(title);
-        panel.appendChild(subtitle);
-        panel.appendChild(selectors);
-        panel.appendChild(preview);
-        panel.appendChild(buttons);
-        overlay.appendChild(panel);
-        document.body.appendChild(overlay);
-    });
+    ACAD_YEAR = `${years[yearIndex]}-${semesterIndex + 1}`;
+    return ACAD_YEAR;
 }
 
 // 目标课表时间段
@@ -176,7 +57,7 @@ const TIME_SLOTS = [
     { number: 11, startTime: "20:50", endTime: "21:35" }
 ];
 
-// 2026-1 学期配置
+// 课表配置（学期开始日期需要根据所选学期调整）
 const CONFIG = {
     semesterStartDate: "2026-03-02",
     semesterTotalWeeks: 20,
@@ -365,64 +246,77 @@ function getCourseColor(name) {
     return Math.abs(hash) % colorCount + 1;
 }
 
-function downloadCoursesJson(data) {
-    const jsonString = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonString], {
-        type: "application/json;charset=utf-8"
-    });
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = `sysu-${ACAD_YEAR}.json`;
-    link.style.display = "none";
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-    console.log("========================================");
-    console.log(`JSON 下载完成：sysu-${ACAD_YEAR}.json`);
-    console.log(`课程数量：${data.courses.length}`);
-    console.log(`时间段数量：${data.timeSlots.length}`);
-    console.log(`学期总周数：${data.config.semesterTotalWeeks}`);
-    console.log("========================================");
-}
-
-selectSemester()
-    .then(selectedSemester => {
-        if (!selectedSemester) {
-            console.log("用户取消了学期选择，未请求课表。");
-            return null;
+async function runImportFlow() {
+    try {
+        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
+            window.AndroidBridge.showToast("请选择要导入的学期...");
         }
 
-        console.log(`已选择学期：${ACAD_YEAR}`);
-        return fetchCourses();
-    })
-    .then(data => {
-        if (!data) {
+        const selectedSemester = await selectSemester();
+        if (!selectedSemester) {
+            if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
+                window.AndroidBridge.showToast("已取消导入。");
+            }
             return;
         }
 
-        // 暴露最终 JSON，方便控制台检查。
+        console.log(`已选择学期：${ACAD_YEAR}`);
+
+        const data = await fetchCourses();
+        if (!data || !Array.isArray(data.courses)) {
+            throw new Error("课程数据为空或格式不正确。");
+        }
+
         window.__SYSU_COURSE_JSON__ = data;
         window.__SYSU_COURSES__ = data.courses;
 
         console.log("window.__SYSU_COURSE_JSON__ 已更新。");
-        console.log("可以执行 JSON.stringify(window.__SYSU_COURSE_JSON__, null, 2) 查看完整 JSON。");
+        console.log("准备通过 AndroidBridgePromise 向应用提交数据。");
 
-        if (data.courses.length > 0) {
-            downloadCoursesJson(data);
-        } else {
-            console.warn("没有可下载的课程数据，因此未生成 JSON 文件。");
+        if (!window.AndroidBridgePromise) {
+            throw new Error("AndroidBridgePromise 不可用，请在时光课程表 App 内运行此适配器。");
         }
-    })
-    .catch(error => {
+
+        if (typeof window.AndroidBridgePromise.saveImportedCourses !== "function") {
+            throw new Error("saveImportedCourses API 不可用。");
+        }
+        if (typeof window.AndroidBridgePromise.savePresetTimeSlots !== "function") {
+            throw new Error("savePresetTimeSlots API 不可用。");
+        }
+        if (typeof window.AndroidBridgePromise.saveCourseConfig !== "function") {
+            throw new Error("saveCourseConfig API 不可用。");
+        }
+
+        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
+            window.AndroidBridge.showToast(`正在导入 ${data.courses.length} 条课程记录...`);
+        }
+
+        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(data.courses));
+        console.log("课程数据提交成功。");
+
+        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(data.timeSlots));
+        console.log("时间段数据提交成功。");
+
+        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(data.config));
+        console.log("课表配置提交成功。");
+
+        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
+            window.AndroidBridge.showToast(`成功导入 ${data.courses.length} 条课程记录！`);
+        }
+
+        if (window.AndroidBridge && typeof window.AndroidBridge.notifyTaskCompletion === "function") {
+            window.AndroidBridge.notifyTaskCompletion();
+        }
+    } catch (error) {
         console.error("========================================");
-        console.error("中山大学课表获取失败：", error);
+        console.error("中山大学课表导入失败：", error);
         console.error(error.stack);
         console.error("========================================");
-    });
+
+        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
+            window.AndroidBridge.showToast(`导入失败：${error.message}`);
+        }
+    }
+}
+
+runImportFlow();
