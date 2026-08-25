@@ -742,3 +742,10 @@ schools:
     name: "南通大学"
     initial: "N"
     resource_folder: "NTU"
+  
+  - id: "USTL"
+    name: "辽宁科技大学"
+    initial: "L"
+    resource_folder: "USTL"
+
+  
