@@ -1,10 +1,12 @@
 // 中山大学教务系统课表导入器
-// 功能：获取教务系统课表 -> 转换为目标 JSON -> 通过时光课程表 V2 Bridge 导入
+// 功能：选择学年/学期 -> 获取教务系统课表 -> 转换 -> 导入时光课程表
 
 const API_URL = "/jwxt/timetable-search/stuTimeTabPrint/studentQuery";
+
 let ACAD_YEAR = "2026-1";
 
-const AVAILABLE_SEMESTERS = [1, 2];
+
+// ==================== 学年 / 学期 ====================
 
 function validateYearInput(input) {
     if (/^[0-9]{4}$/.test(String(input).trim())) {
@@ -17,35 +19,32 @@ function validateYearInput(input) {
 async function getAcademicYear() {
     const [defaultYear] = ACAD_YEAR.split("-");
 
-    const yearSelection = await window.shiguangBridgePromise.showPrompt(
+    return await window.AndroidBridgePromise.showPrompt(
         "选择学年",
         "请输入要导入课程的学年（如 2026）：",
         defaultYear || "2026",
         "validateYearInput"
     );
-
-    return yearSelection;
 }
 
 async function selectSemester() {
     if (
-        !window.shiguangBridgePromise ||
-        typeof window.shiguangBridgePromise.showPrompt !== "function"
+        !window.AndroidBridgePromise ||
+        typeof window.AndroidBridgePromise.showPrompt !== "function"
     ) {
         throw new Error(
-            "shiguangBridgePromise.showPrompt 不可用，请在时光课程表 App 内运行此适配器。"
+            "AndroidBridgePromise.showPrompt 不可用，请在时光课程表 App 内运行此适配器。"
         );
     }
 
     if (
-        typeof window.shiguangBridgePromise.showSingleSelection !== "function"
+        typeof window.AndroidBridgePromise.showSingleSelection !== "function"
     ) {
         throw new Error(
-            "shiguangBridgePromise.showSingleSelection 不可用，请在时光课程表 App 内运行此适配器。"
+            "AndroidBridgePromise.showSingleSelection 不可用，请在时光课程表 App 内运行此适配器。"
         );
     }
 
-    // 先输入学年
     const yearSelection = await getAcademicYear();
 
     if (yearSelection === null) {
@@ -54,7 +53,6 @@ async function selectSemester() {
 
     const year = String(yearSelection).trim();
 
-    // 再选择学期
     const semesters = [
         "1（第一学期）",
         "2（第二学期）"
@@ -63,7 +61,7 @@ async function selectSemester() {
     const [, defaultSemester] = ACAD_YEAR.split("-");
 
     const semesterIndex =
-        await window.shiguangBridgePromise.showSingleSelection(
+        await window.AndroidBridgePromise.showSingleSelection(
             "选择学期",
             JSON.stringify(semesters),
             defaultSemester === "2" ? 1 : 0
@@ -83,9 +81,7 @@ async function selectSemester() {
 }
 
 
-// ========================================
-// 目标课表时间段
-// ========================================
+// ==================== 时间段 ====================
 
 const TIME_SLOTS = [
     {
@@ -146,9 +142,7 @@ const TIME_SLOTS = [
 ];
 
 
-// ========================================
-// 课表配置
-// ========================================
+// ==================== 课表配置 ====================
 
 const CONFIG_BASE = {
     semesterTotalWeeks: 20,
@@ -157,174 +151,17 @@ const CONFIG_BASE = {
 };
 
 
-// ========================================
-// 自动获取学期实际开学日期
-// ========================================
-
-function findSemesterStartDate(data) {
-    const candidates = [];
-
-    function collect(value, path = "") {
-        if (value === null || value === undefined) {
-            return;
-        }
-
-        // 字符串
-        if (typeof value === "string") {
-            const text = value.trim();
-
-            const dateMatch = text.match(
-                /(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})/
-            );
-
-            if (dateMatch) {
-                candidates.push({
-                    date:
-                        `${dateMatch[1]}-` +
-                        `${String(dateMatch[2]).padStart(2, "0")}-` +
-                        `${String(dateMatch[3]).padStart(2, "0")}`,
-                    path,
-                    text
-                });
-            }
-
-            return;
-        }
-
-        // 数组
-        if (Array.isArray(value)) {
-            value.forEach((item, index) => {
-                collect(item, `${path}[${index}]`);
-            });
-
-            return;
-        }
-
-        // 对象
-        if (typeof value === "object") {
-            for (const [key, child] of Object.entries(value)) {
-                collect(
-                    child,
-                    path ? `${path}.${key}` : key
-                );
-            }
-        }
-    }
-
-    collect(data);
-
-    // 优先寻找明确表示“学期开始 / 开学 / 上课”的字段
-    const priorityKeywords = [
-        "semesterStartDate",
-        "semesterStart",
-        "termStartDate",
-        "termStart",
-        "startDate",
-        "schoolStartDate",
-        "classStartDate",
-        "firstDay",
-        "开学",
-        "上课",
-        "开始"
-    ];
-
-    const prioritized = candidates.find(candidate =>
-        priorityKeywords.some(keyword =>
-            candidate.path.includes(keyword)
-        )
-    );
-
-    if (prioritized) {
-        return prioritized.date;
-    }
-
-    // 不猜测日期
-    return null;
-}
-
-
-async function fetchSemesterStartDate() {
-    console.log("========================================");
-    console.log("尝试从中山大学教务系统获取实际开学日期...");
-    console.log("当前学期:", ACAD_YEAR);
-    console.log("========================================");
-
-    const response = await fetch(
-        `${API_URL}?_t=${Date.now()}`,
-        {
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json"
-            },
-
-            credentials: "include",
-
-            body: JSON.stringify({
-                acadYear: ACAD_YEAR,
-                submitFlag: "1",
-                nothroughCourseFlag: "1"
-            })
-        }
-    );
-
-    if (!response.ok) {
-        throw new Error(
-            `获取学期信息失败：HTTP ${response.status}`
-        );
-    }
-
-    const json = await response.json();
-
-    const startDate = findSemesterStartDate(json);
-
-    if (startDate) {
-        console.log(
-            `从教务系统获取到学期开始日期：${startDate}`
-        );
-
-        return startDate;
-    }
-
-    throw new Error(
-        `教务系统当前响应中未找到 ${ACAD_YEAR} 的实际开学日期。`
-    );
-}
-
-
-async function buildCourseConfig() {
-    const semesterStartDate =
-        await fetchSemesterStartDate();
-
-    return {
-        semesterStartDate,
-        ...CONFIG_BASE
-    };
-}
-
-
-// ========================================
-// 请求课程数据
-// ========================================
+// ==================== 获取课程 ====================
 
 async function fetchCourses() {
-    console.log("========================================");
-    console.log("开始请求中山大学教务系统 API...");
-    console.log("API:", API_URL);
-    console.log("学期:", ACAD_YEAR);
-    console.log("========================================");
-
     const response = await fetch(
         `${API_URL}?_t=${Date.now()}`,
         {
             method: "POST",
-
             headers: {
                 "Content-Type": "application/json"
             },
-
             credentials: "include",
-
             body: JSON.stringify({
                 acadYear: ACAD_YEAR,
                 submitFlag: "1",
@@ -332,14 +169,12 @@ async function fetchCourses() {
             })
         }
     );
-
-    console.log("HTTP 状态码:", response.status);
 
     const responseText = await response.text();
 
     if (!response.ok) {
         throw new Error(
-            `API 请求失败：HTTP ${response.status}\n${responseText}`
+            `API 请求失败：HTTP ${response.status}`
         );
     }
 
@@ -347,15 +182,8 @@ async function fetchCourses() {
 
     try {
         json = JSON.parse(responseText);
-    } catch (error) {
-        console.error("响应不是合法 JSON：", error);
-        console.error("原始响应：", responseText);
-
-        return {
-            courses: [],
-            timeSlots: TIME_SLOTS,
-            config: null
-        };
+    } catch {
+        throw new Error("教务系统返回的数据不是有效 JSON。");
     }
 
     if (json?.code !== 200) {
@@ -372,20 +200,11 @@ async function fetchCourses() {
         Array.isArray(timetable)
     ) {
         throw new Error(
-            "API 返回中不存在有效的 data.timetable"
+            "教务系统返回中不存在有效的课程表数据。"
         );
     }
 
     const courses = [];
-
-    // timetable 的 key：
-    // 第一位 = 星期
-    // 后两位 = 起始节次
-    //
-    // 例如：
-    // 11 -> 周一第1节
-    // 13 -> 周一第3节
-    // 21 -> 周二第1节
 
     for (const entries of Object.values(timetable)) {
         if (!Array.isArray(entries) || entries.length === 0) {
@@ -401,62 +220,36 @@ async function fetchCourses() {
         }
     }
 
-    console.log("课程数据转换完成。");
-
-    // 自动获取学期配置
-    const config = await buildCourseConfig();
-
-    const result = {
+    return {
         courses,
         timeSlots: TIME_SLOTS,
-        config
+        config: {
+            ...CONFIG_BASE
+        }
     };
-
-    console.log("========================================");
-    console.log(
-        `课程转换完成，共 ${courses.length} 条记录`
-    );
-    console.log("最终 JSON：");
-    console.log(result);
-    console.table(courses);
-    console.log("========================================");
-
-    return result;
 }
 
 
-// ========================================
-// 课程数据转换
-// ========================================
+// ==================== 课程转换 ====================
 
 function normalizeCourse(item) {
     if (!item || typeof item !== "object") {
         return null;
     }
 
-    const name =
-        cleanCourseName(item.courseName);
+    const name = cleanCourseName(item.courseName);
+    const teacher = cleanText(item.teachingStaffName);
+    const position = cleanText(item.classPlace);
 
-    const teacher =
-        cleanText(item.teachingStaffName);
+    const day = toNumber(item.week);
+    const startSection = toNumber(item.startClassTimes);
+    const endSection = toNumber(item.endClassTimes);
+    const startWeek = toNumber(item.startWeek);
 
-    const position =
-        cleanText(item.classPlace);
-
-    const day =
-        toNumber(item.week);
-
-    const startSection =
-        toNumber(item.startClassTimes);
-
-    const endSection =
-        toNumber(item.endClassTimes);
-
-    const startWeek =
-        toNumber(item.startWeek);
-
-    const weeks =
-        parseWeeks(item.timeDetail, startWeek);
+    const weeks = parseWeeks(
+        item.timeDetail,
+        startWeek
+    );
 
     if (
         !name ||
@@ -465,88 +258,53 @@ function normalizeCourse(item) {
         !endSection ||
         weeks.length === 0
     ) {
-        console.warn(
-            "跳过字段不完整的课程记录：",
-            item
-        );
-
         return null;
     }
 
     return {
         id: crypto.randomUUID(),
-
         name,
-
         teacher,
-
         position,
-
         day,
-
         startSection,
-
         endSection,
-
         color: getCourseColor(name),
-
         weeks
     };
 }
 
 
-// ========================================
-// 清理课程名称
-// ========================================
-
 function cleanCourseName(value) {
     const text = cleanText(value);
 
     // 去掉中山大学 API 返回的课程类别前缀
-    //
+    // 例如：
     // 本(专必)高等数学一（I）
-    // ↓
+    // ->
     // 高等数学一（I）
-    //
-    // 本(公必)劳动教育
-    // ↓
-    // 劳动教育
-
     return text
         .replace(/^本\([^)]*\)/, "")
         .trim();
 }
 
 
-// ========================================
-// 解析上课周次
-// ========================================
-
-function parseWeeks(
-    timeDetail,
-    startWeek = 1
-) {
-    const text =
-        cleanText(timeDetail);
+function parseWeeks(timeDetail, startWeek = 1) {
+    const text = cleanText(timeDetail);
 
     if (!text) {
-        return startWeek
-            ? [startWeek]
-            : [];
+        return startWeek ? [startWeek] : [];
     }
 
     // 例如：
     // 1-17每周
-
-    const rangeMatch =
-        text.match(/(\d+)\s*-\s*(\d+)/);
+    const rangeMatch = text.match(
+        /(\d+)\s*-\s*(\d+)/
+    );
 
     if (rangeMatch) {
-        const start =
-            Number(rangeMatch[1]);
-
-        const end =
-            Number(rangeMatch[2]);
+        const start = Number(rangeMatch[1]);
+        const end = Number(rangeMatch[2]);
 
         if (
             Number.isFinite(start) &&
@@ -555,20 +313,16 @@ function parseWeeks(
         ) {
             return Array.from(
                 {
-                    length:
-                        end - start + 1
+                    length: end - start + 1
                 },
-                (_, index) =>
-                    start + index
+                (_, index) => start + index
             );
         }
     }
 
     // 兼容：
-    //
     // 1,3,5周
     // 1、3、5周
-
     const numbers =
         text
             .match(/\d+/g)
@@ -578,20 +332,12 @@ function parseWeeks(
     if (numbers.length > 0) {
         return [
             ...new Set(numbers)
-        ].sort(
-            (a, b) => a - b
-        );
+        ].sort((a, b) => a - b);
     }
 
-    return startWeek
-        ? [startWeek]
-        : [];
+    return startWeek ? [startWeek] : [];
 }
 
-
-// ========================================
-// 清理字符串
-// ========================================
 
 function cleanText(value) {
     if (
@@ -607,13 +353,8 @@ function cleanText(value) {
 }
 
 
-// ========================================
-// 数字转换
-// ========================================
-
 function toNumber(value) {
-    const number =
-        Number(value);
+    const number = Number(value);
 
     return Number.isFinite(number)
         ? number
@@ -621,20 +362,14 @@ function toNumber(value) {
 }
 
 
-// ========================================
-// 根据课程名称生成稳定颜色
-// ========================================
+// ==================== 课程颜色 ====================
 
 function getCourseColor(name) {
     const colorCount = 8;
 
     let hash = 0;
 
-    for (
-        let i = 0;
-        i < name.length;
-        i++
-    ) {
+    for (let i = 0; i < name.length; i++) {
         hash =
             ((hash << 5) - hash) +
             name.charCodeAt(i);
@@ -642,27 +377,19 @@ function getCourseColor(name) {
         hash |= 0;
     }
 
-    return (
-        Math.abs(hash) %
-        colorCount
-    ) + 1;
+    return Math.abs(hash) % colorCount + 1;
 }
 
 
-// ========================================
-// 主导入流程
-// ========================================
+// ==================== 导入 ====================
 
 async function runImportFlow() {
     try {
-        // 提示用户选择学期
-
         if (
-            window.shiguangBridge &&
-            typeof window.shiguangBridge.showToast ===
-                "function"
+            window.AndroidBridge &&
+            typeof window.AndroidBridge.showToast === "function"
         ) {
-            window.shiguangBridge.showToast(
+            window.AndroidBridge.showToast(
                 "请选择要导入的学期..."
             );
         }
@@ -672,11 +399,10 @@ async function runImportFlow() {
 
         if (!selectedSemester) {
             if (
-                window.shiguangBridge &&
-                typeof window.shiguangBridge.showToast ===
-                    "function"
+                window.AndroidBridge &&
+                typeof window.AndroidBridge.showToast === "function"
             ) {
-                window.shiguangBridge.showToast(
+                window.AndroidBridge.showToast(
                     "已取消导入。"
                 );
             }
@@ -684,16 +410,7 @@ async function runImportFlow() {
             return;
         }
 
-        console.log(
-            `已选择学期：${ACAD_YEAR}`
-        );
-
-        // ========================================
-        // 获取课程
-        // ========================================
-
-        const data =
-            await fetchCourses();
+        const data = await fetchCourses();
 
         if (
             !data ||
@@ -704,39 +421,20 @@ async function runImportFlow() {
             );
         }
 
-        // 保存到全局变量，方便调试
+        // 保留给调试/适配器测试使用，
+        // 不主动输出任何 console 日志。
+        window.__SYSU_COURSE_JSON__ = data;
+        window.__SYSU_COURSES__ = data.courses;
 
-        window.__SYSU_COURSE_JSON__ =
-            data;
-
-        window.__SYSU_COURSES__ =
-            data.courses;
-
-        console.log(
-            "window.__SYSU_COURSE_JSON__ 已更新。"
-        );
-
-        console.log(
-            "准备通过 shiguangBridgePromise 向应用提交数据。"
-        );
-
-
-        // ========================================
-        // 检查 V2 Bridge
-        // ========================================
-
-        if (
-            !window.shiguangBridgePromise
-        ) {
+        if (!window.AndroidBridgePromise) {
             throw new Error(
-                "shiguangBridgePromise 不可用，请在时光课程表 App 内运行此适配器。"
+                "AndroidBridgePromise 不可用，请在时光课程表 App 内运行此适配器。"
             );
         }
 
         if (
-            typeof window.shiguangBridgePromise
-                .saveImportedCourses !==
-            "function"
+            typeof window.AndroidBridgePromise
+                .saveImportedCourses !== "function"
         ) {
             throw new Error(
                 "saveImportedCourses API 不可用。"
@@ -744,9 +442,8 @@ async function runImportFlow() {
         }
 
         if (
-            typeof window.shiguangBridgePromise
-                .savePresetTimeSlots !==
-            "function"
+            typeof window.AndroidBridgePromise
+                .savePresetTimeSlots !== "function"
         ) {
             throw new Error(
                 "savePresetTimeSlots API 不可用。"
@@ -754,138 +451,66 @@ async function runImportFlow() {
         }
 
         if (
-            typeof window.shiguangBridgePromise
-                .saveCourseConfig !==
-            "function"
+            typeof window.AndroidBridgePromise
+                .saveCourseConfig !== "function"
         ) {
             throw new Error(
                 "saveCourseConfig API 不可用。"
             );
         }
 
-
-        // ========================================
-        // 开始导入
-        // ========================================
-
         if (
-            window.shiguangBridge &&
-            typeof window.shiguangBridge.showToast ===
-                "function"
+            window.AndroidBridge &&
+            typeof window.AndroidBridge.showToast === "function"
         ) {
-            window.shiguangBridge.showToast(
+            window.AndroidBridge.showToast(
                 `正在导入 ${data.courses.length} 条课程记录...`
             );
         }
 
-
-        // ========================================
-        // 保存课程
-        // ========================================
-
-        await window.shiguangBridgePromise
+        await window.AndroidBridgePromise
             .saveImportedCourses(
-                JSON.stringify(
-                    data.courses
-                )
+                JSON.stringify(data.courses)
             );
 
-        console.log(
-            "课程数据提交成功。"
-        );
-
-
-        // ========================================
-        // 保存时间段
-        // ========================================
-
-        await window.shiguangBridgePromise
+        await window.AndroidBridgePromise
             .savePresetTimeSlots(
-                JSON.stringify(
-                    data.timeSlots
-                )
+                JSON.stringify(data.timeSlots)
             );
 
-        console.log(
-            "时间段数据提交成功。"
-        );
-
-
-        // ========================================
-        // 保存课表配置
-        // ========================================
-
-        await window.shiguangBridgePromise
+        await window.AndroidBridgePromise
             .saveCourseConfig(
-                JSON.stringify(
-                    data.config
-                )
+                JSON.stringify(data.config)
             );
-
-        console.log(
-            "课表配置提交成功。"
-        );
-
-
-        // ========================================
-        // 导入完成
-        // ========================================
 
         if (
-            window.shiguangBridge &&
-            typeof window.shiguangBridge.showToast ===
-                "function"
+            window.AndroidBridge &&
+            typeof window.AndroidBridge.showToast === "function"
         ) {
-            window.shiguangBridge.showToast(
+            window.AndroidBridge.showToast(
                 `成功导入 ${data.courses.length} 条课程记录！`
             );
         }
 
-        // 通知 App 导入流程结束
-
         if (
-            window.shiguangBridge &&
-            typeof window.shiguangBridge
-                .notifyTaskCompletion ===
-                "function"
+            window.AndroidBridge &&
+            typeof window.AndroidBridge
+                .notifyTaskCompletion === "function"
         ) {
-            window.shiguangBridge
-                .notifyTaskCompletion();
+            window.AndroidBridge.notifyTaskCompletion();
         }
 
     } catch (error) {
-        console.error(
-            "========================================"
-        );
-
-        console.error(
-            "中山大学课表导入失败：",
-            error
-        );
-
-        console.error(
-            error.stack
-        );
-
-        console.error(
-            "========================================"
-        );
-
         if (
-            window.shiguangBridge &&
-            typeof window.shiguangBridge.showToast ===
-                "function"
+            window.AndroidBridge &&
+            typeof window.AndroidBridge.showToast === "function"
         ) {
-            window.shiguangBridge.showToast(
+            window.AndroidBridge.showToast(
                 `导入失败：${error.message}`
             );
         }
     }
 }
 
-
-// ========================================
-// 启动
-// ========================================
 
 runImportFlow();
