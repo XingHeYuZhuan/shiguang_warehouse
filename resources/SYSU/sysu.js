@@ -24,7 +24,7 @@ function validateYearInput(input) {
 async function getAcademicYear() {
     const [defaultYear] = ACAD_YEAR.split("-");
 
-    const yearSelection = await window.AndroidBridgePromise.showPrompt(
+    const yearSelection = await window.shiguangBridgePromise.showPrompt(
         "选择学年",
         "请输入要导入课程的学年（如 2026）：",
         defaultYear || "2026",
@@ -35,12 +35,12 @@ async function getAcademicYear() {
 }
 
 async function selectSemester() {
-    if (!window.AndroidBridgePromise || typeof window.AndroidBridgePromise.showPrompt !== "function") {
-        throw new Error("AndroidBridgePromise.showPrompt 不可用，请在时光课程表 App 内运行此适配器。");
+    if (!window.shiguangBridgePromise || typeof window.shiguangBridgePromise.showPrompt !== "function") {
+        throw new Error("shiguangBridgePromise.showPrompt 不可用，请在时光课程表 App 内运行此适配器。");
     }
 
-    if (typeof window.AndroidBridgePromise.showSingleSelection !== "function") {
-        throw new Error("AndroidBridgePromise.showSingleSelection 不可用，请在时光课程表 App 内运行此适配器。");
+    if (typeof window.shiguangBridgePromise.showSingleSelection !== "function") {
+        throw new Error("shiguangBridgePromise.showSingleSelection 不可用，请在时光课程表 App 内运行此适配器。");
     }
 
     const yearSelection = await getAcademicYear();
@@ -52,7 +52,7 @@ async function selectSemester() {
     const semesters = ["1（第一学期）", "2（第二学期）"];
     const [, defaultSemester] = ACAD_YEAR.split("-");
 
-    const semesterIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(semesters),
         defaultSemester === "2" ? 1 : 0
@@ -288,14 +288,14 @@ function getCourseColor(name) {
 
 async function runImportFlow() {
     try {
-        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
-            window.AndroidBridge.showToast("请选择要导入的学期...");
+        if (window.shiguangBridge && typeof window.shiguangBridge.showToast === "function") {
+            window.shiguangBridge.showToast("请选择要导入的学期...");
         }
 
         const selectedSemester = await selectSemester();
         if (!selectedSemester) {
-            if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
-                window.AndroidBridge.showToast("已取消导入。");
+            if (window.shiguangBridge && typeof window.shiguangBridge.showToast === "function") {
+                window.shiguangBridge.showToast("已取消导入。");
             }
             return;
         }
@@ -312,41 +312,41 @@ async function runImportFlow() {
         window.__SYSU_COURSES__ = data.courses;
 
         console.log("window.__SYSU_COURSE_JSON__ 已更新。");
-        console.log("准备通过 AndroidBridgePromise 向应用提交数据。");
+        console.log("准备通过 shiguangBridgePromise 向应用提交数据。");
 
-        if (!window.AndroidBridgePromise) {
-            throw new Error("AndroidBridgePromise 不可用，请在时光课程表 App 内运行此适配器。");
+        if (!window.shiguangBridgePromise) {
+            throw new Error("shiguangBridgePromise 不可用，请在时光课程表 App 内运行此适配器。");
         }
 
-        if (typeof window.AndroidBridgePromise.saveImportedCourses !== "function") {
+        if (typeof window.shiguangBridgePromise.saveImportedCourses !== "function") {
             throw new Error("saveImportedCourses API 不可用。");
         }
-        if (typeof window.AndroidBridgePromise.savePresetTimeSlots !== "function") {
+        if (typeof window.shiguangBridgePromise.savePresetTimeSlots !== "function") {
             throw new Error("savePresetTimeSlots API 不可用。");
         }
-        if (typeof window.AndroidBridgePromise.saveCourseConfig !== "function") {
+        if (typeof window.shiguangBridgePromise.saveCourseConfig !== "function") {
             throw new Error("saveCourseConfig API 不可用。");
         }
 
-        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
-            window.AndroidBridge.showToast(`正在导入 ${data.courses.length} 条课程记录...`);
+        if (window.shiguangBridge && typeof window.shiguangBridge.showToast === "function") {
+            window.shiguangBridge.showToast(`正在导入 ${data.courses.length} 条课程记录...`);
         }
 
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(data.courses));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(data.courses));
         console.log("课程数据提交成功。");
 
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(data.timeSlots));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(data.timeSlots));
         console.log("时间段数据提交成功。");
 
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(data.config));
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(data.config));
         console.log("课表配置提交成功。");
 
-        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
-            window.AndroidBridge.showToast(`成功导入 ${data.courses.length} 条课程记录！`);
+        if (window.shiguangBridge && typeof window.shiguangBridge.showToast === "function") {
+            window.shiguangBridge.showToast(`成功导入 ${data.courses.length} 条课程记录！`);
         }
 
-        if (window.AndroidBridge && typeof window.AndroidBridge.notifyTaskCompletion === "function") {
-            window.AndroidBridge.notifyTaskCompletion();
+        if (window.shiguangBridge && typeof window.shiguangBridge.notifyTaskCompletion === "function") {
+            window.shiguangBridge.notifyTaskCompletion();
         }
     } catch (error) {
         console.error("========================================");
@@ -354,8 +354,8 @@ async function runImportFlow() {
         console.error(error.stack);
         console.error("========================================");
 
-        if (window.AndroidBridge && typeof window.AndroidBridge.showToast === "function") {
-            window.AndroidBridge.showToast(`导入失败：${error.message}`);
+        if (window.shiguangBridge && typeof window.shiguangBridge.showToast === "function") {
+            window.shiguangBridge.showToast(`导入失败：${error.message}`);
         }
     }
 }
