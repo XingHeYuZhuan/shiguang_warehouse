@@ -1,25 +1,22 @@
 // 中山大学教务系统课表导入器
-// 功能：获取教务系统课表 -> 转换为目标 JSON -> 自动下载
+// 功能：获取教务系统课表 -> 转换为目标数据 -> 通过 AndroidBridge 导入
 
 const API_URL = "/jwxt/timetable-search/stuTimeTabPrint/studentQuery";
 let ACAD_YEAR = "2026-1";
 
-const AVAILABLE_YEARS = [2026, 2027];
+const AVAILABLE_YEARS = Array.from({ length: 20 }, (_, index) => 2026 + index);
 const AVAILABLE_SEMESTERS = [1, 2];
 
 // 中山大学各学期实际开课日期。
 // 日期以中山大学官方校历为准；尚未公布的学期暂不填写，避免错误导入。
-const SEMESTER_START_DATES = {
-    "2025-1": "2025-09-08",
-    "2025-2": "2026-03-02",
-    "2026-1": "2026-09-07"
-};
+const SEMESTER_START_DATES = {};
 
 function validateAcademicYear(input) {
-    if (/^(2026|2027)$/.test(String(input).trim())) {
+    const year = String(input).trim();
+    if (/^\d{4}$/.test(year) && Number(year) >= 1900 && Number(year) <= 2100) {
         return false;
     }
-    return "请输入 2026 或 2027。";
+    return "请输入四位数字的学年（1900-2100）。";
 }
 
 async function selectSemester() {
@@ -86,13 +83,26 @@ const CONFIG_BASE = {
 };
 
 function getSemesterStartDate() {
-    const startDate = SEMESTER_START_DATES[ACAD_YEAR];
+    const [yearText, semesterText] = ACAD_YEAR.split("-");
+    const year = Number(yearText);
+    const semester = Number(semesterText);
 
-    if (!startDate) {
-        throw new Error(`暂未配置 ${ACAD_YEAR} 的实际开课日期，请根据中山大学官方校历更新 SEMESTER_START_DATES。`);
+    const configuredDate = SEMESTER_START_DATES[ACAD_YEAR];
+    if (configuredDate) {
+        return configuredDate;
     }
 
-    return startDate;
+    if (!Number.isInteger(year) || ![1, 2].includes(semester)) {
+        throw new Error(`无效的学期：${ACAD_YEAR}`);
+    }
+
+    // 默认日期：第一学期 9 月 1 日，第二学期次年 3 月 20 日。
+    // 如果之后取得中山大学官方校历，可在 SEMESTER_START_DATES 中覆盖具体学期。
+    if (semester === 1) {
+        return `${year}-09-01`;
+    }
+
+    return `${year + 1}-03-20`;
 }
 
 function buildCourseConfig() {
