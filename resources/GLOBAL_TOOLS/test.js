@@ -15,7 +15,7 @@ const SEMESTER_START_DATES = {
 };
 
 function validateYearInput(input) {
-    if (/^[0-9]{4}$/.test(input)) {
+    if (/^[0-9]{4}$/.test(String(input).trim())) {
         return false;
     }
     return "请输入四位数字的学年！";
