@@ -44,6 +44,7 @@
     // ================================================================
 
     const SCHEDULE_API = "/start-class/classTableInfo/selectStudentClassTable";
+    const CALENDAR_API = "/base-info/school-calender"; // 校历
     const MENU_CODE = "byytxsd_xskbcx_week_query"; // 学生课表查询菜单 code
 
     // 响应 JSON 里的星期字段名 -> 拾光 day(1=周一..7=周日)
@@ -130,7 +131,29 @@
         if (json.code !== 200) {
             throw new Error("接口返回异常: code=" + json.code + (json.message ? " " + json.message : ""));
         }
-        return json.data || [];
+        if (!Array.isArray(json.data)) {
+            throw new Error("接口返回的 data 不是数组");
+        }
+        return json.data;
+    }
+
+    /** 拉第 1 周周一作为开学日 */
+    async function fetchSemesterStartDate(academicYear) {
+        const url = CALENDAR_API +
+            "?academicYear=" + encodeURIComponent(academicYear) +
+            "&weekly=1&_t=" + Date.now();
+        const resp = await fetch(url, {
+            method: "GET",
+            credentials: "include",
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+        });
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const json = await resp.json();
+        const start = json && json.data && json.data.startTime;
+        if (json.code !== 200 || !start || !/^\d{4}-\d{2}-\d{2}$/.test(String(start))) {
+            throw new Error("校历未返回有效 startTime");
+        }
+        return String(start);
     }
 
     /**
@@ -152,17 +175,34 @@
 
         // 周次范围: 取 zs(如 "1-12周"); 个别学期 zs 缺失时回退到 sksj(如 "1-12每周（2-4节）")
         // 中同样的 "x-y周" 片段。
-        const zsMatch = String(fields.zs || fields.sksj || "").match(/(\d+)\s*-\s*(\d+)\s*周/);
-        if (!zsMatch) return null;
+        const zsText = String(fields.zs || fields.sksj || "");
+        const zsMatch = zsText.match(/(\d+)\s*-\s*(\d+)\s*每?周/) || zsText.match(/(\d+)\s*每?周/);
+        if (!zsMatch) {
+            console.warn("[SYSU] 无法解析周次:", zsText || "(空)", "字段:", fieldText);
+            return null;
+        }
+        const weekStart = parseInt(zsMatch[1], 10);
+        const weekEnd = zsMatch[2] ? parseInt(zsMatch[2], 10) : weekStart;
         const weeks = [];
-        for (let w = parseInt(zsMatch[1], 10); w <= parseInt(zsMatch[2], 10); w++) weeks.push(w);
+        for (let w = weekStart; w <= weekEnd; w++) weeks.push(w);
+        if (!weeks.length) {
+            console.warn("[SYSU] 周次区间为空:", zsText);
+            return null;
+        }
 
-        // 节次范围: js 形如 "周二 2-4节", 星期由外层 JSON 键(tuesday→2)决定且已用上,
-        // 因此这里只提取节次段(2-4)。
-        const jsMatch = String(fields.js || "").match(/(\d+)\s*-\s*(\d+)\s*节/);
-        if (!jsMatch) return null;
+        // 节次: js 形如 "周二 2-4节" 或 "周二 3节"; 星期由外层 JSON 键决定。
+        const jsText = String(fields.js || "");
+        const jsMatch = jsText.match(/(\d+)\s*-\s*(\d+)\s*节/) || jsText.match(/(\d+)\s*节/);
+        if (!jsMatch) {
+            console.warn("[SYSU] 无法解析节次:", jsText || "(空)", "字段:", fieldText);
+            return null;
+        }
         const startSection = parseInt(jsMatch[1], 10);
-        const endSection = parseInt(jsMatch[2], 10);
+        const endSection = jsMatch[2] ? parseInt(jsMatch[2], 10) : startSection;
+        if (!startSection || !endSection || endSection < startSection) {
+            console.warn("[SYSU] 节次区间无效:", jsText);
+            return null;
+        }
 
         return {
             name: name,
@@ -180,13 +220,16 @@
         let maxWeek = 0;
 
         data.forEach(function (entry) {
-            if (entry && entry.weekly > maxWeek) maxWeek = entry.weekly;
             if (!entry) return;
+            if (entry.weekly > maxWeek) maxWeek = entry.weekly;
             Object.keys(DAY_KEYS).forEach(function (dayKey) {
                 const field = entry[dayKey];
                 if (!field || typeof field !== "string" || field.length < 4) return;
                 const course = parseCourseField(field);
                 if (!course) return;
+                course.weeks.forEach(function (w) {
+                    if (w > maxWeek) maxWeek = w;
+                });
                 meetings.push({
                     name: course.name,
                     teacher: course.teacher,
@@ -218,13 +261,14 @@
 
     // ---------- 保存 ----------
 
-    async function saveToApp(courses, timeSlots, maxWeek) {
+    async function saveToApp(courses, timeSlots, maxWeek, startDate) {
         const config = {
             semesterTotalWeeks: maxWeek > 0 ? maxWeek : 17,
             firstDayOfWeek: 1,
             defaultClassDuration: 45,
             defaultBreakDuration: 10
         };
+        if (startDate) config.semesterStartDate = startDate;
         if (window.shiguangBridgePromise && window.shiguangBridgePromise.saveCourseConfig) {
             await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
         }
@@ -283,11 +327,22 @@
                 return;
             }
 
-            // 3. 保存
-            const saved = await saveToApp(courses, TIME_SLOTS, maxWeek);
+            // 3. 校历
+            let startDate = null;
+            try {
+                startDate = await fetchSemesterStartDate(academicYear);
+                toast("已获取开学日 " + startDate);
+            } catch (e) {
+                console.warn("[SYSU] 校历获取失败, 跳过开学日:", e);
+            }
+
+            // 4. 保存
+            const saved = await saveToApp(courses, TIME_SLOTS, maxWeek, startDate);
             if (!saved) { toast("课程保存失败, 请重试"); return; }
 
-            toast("导入成功: " + courses.length + " 个课程时段, 已同步作息时间");
+            toast("导入成功: " + courses.length + " 个课程时段" +
+                (startDate ? ", 开学日 " + startDate : "") +
+                ", 已同步作息时间");
             if (window.shiguangBridge && window.shiguangBridge.notifyTaskCompletion) {
                 window.shiguangBridge.notifyTaskCompletion();
             }
