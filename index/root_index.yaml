@@ -745,7 +745,7 @@ schools:
   
   - id: "USTL"
     name: "辽宁科技大学"
-    initial: "U"
+    initial: "L"
     resource_folder: "USTL"
 
   
