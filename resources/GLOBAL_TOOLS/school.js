@@ -1,424 +1,428 @@
-// 文件: school.js
+// 中山大学教务系统课表导入器
+// 功能：获取教务系统课表 -> 转换为目标 JSON -> 自动下载
 
-// 1. 显示一个公告信息弹窗
-async function demoAlert() {
-    try {
-        console.log("即将显示公告弹窗...");
-        const confirmed = await window.shiguangBridgePromise.showAlert(
-            "重要通知",
-            "这是一个弹窗示例。",
-            "好的"
-        );
-        if (confirmed) {
-            console.log("用户点击了确认按钮。Alert Promise Resolved: " + confirmed);
-            shiguangBridge.showToast("Alert：用户点击了确认！");
-            return true; // 成功时返回 true
-        } else {
-            console.log("用户点击了取消按钮或关闭了弹窗。Alert Promise Resolved: " + confirmed);
-            shiguangBridge.showToast("Alert：用户取消了！");
-            return false; // 用户取消时返回 false
+const API_URL = "/jwxt/timetable-search/stuTimeTabPrint/studentQuery";
+let ACAD_YEAR = "2026-1";
+
+const AVAILABLE_YEARS = [2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047, 2048, 2049, 2050, 2051, 2052, 2053, 2054, 2055, 2056, 2057, 2058, 2059, 2060,2061, 2062, 2063, 2064, 2065, 2066, 2067, 2068, 2069, 2070, 2071, 2072, 2073, 2074, 2075, 2076, 2077, 2078, 2079, 2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090, 2091, 2092, 2093, 2094, 2095, 2096, 2097, 2098, 2099];
+const AVAILABLE_SEMESTERS = [1, 2];
+
+function selectSemester() {
+    return new Promise(resolve => {
+        const existing = document.getElementById("sysu-semester-selector");
+        if (existing) {
+            existing.remove();
         }
-    } catch (error) {
-        console.error("显示公告弹窗时发生错误:", error);
-        shiguangBridge.showToast("Alert：显示弹窗出错！" + error.message);
-        return false; // 出现错误时也返回 false
-    }
-}
 
-// 2. 显示带输入框的弹窗，并进行简单验证
-function validateName(name) {
-    if (name === null || name.trim().length === 0) {
-        return "输入不能为空！";
-    }
-    if (name.length < 2) {
-        return "姓名至少需要2个字符！";
-    }
-    return false;
-}
+        const overlay = document.createElement("div");
+        overlay.id = "sysu-semester-selector";
+        overlay.style.cssText = `
+            position: fixed;
+            inset: 0;
+            z-index: 2147483647;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.45);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        `;
 
-async function demoPrompt() {
-    try {
-        console.log("即将显示输入框弹窗...");
-        const name = await window.shiguangBridgePromise.showPrompt(
-            "输入你的姓名",
-            "请输入至少2个字符",
-            "测试用户",
-            "validateName"
-        );
-        if (name !== null) {
-            console.log("用户输入的姓名是: " + name);
-            shiguangBridge.showToast("欢迎你，" + name + "！");
-            return true; // 成功时返回 true
-        } else {
-            console.log("用户取消了输入。");
-            shiguangBridge.showToast("Prompt：用户取消了输入！");
-            return false; // 用户取消时返回 false
+        const panel = document.createElement("div");
+        panel.style.cssText = `
+            width: 360px;
+            padding: 24px;
+            border-radius: 16px;
+            background: #fff;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+            color: #222;
+        `;
+
+        const title = document.createElement("div");
+        title.textContent = "选择学期";
+        title.style.cssText = "font-size: 20px; font-weight: 600; margin-bottom: 20px; text-align: center;";
+
+        const subtitle = document.createElement("div");
+        subtitle.textContent = "选择后将自动请求对应学期课表并生成 JSON";
+        subtitle.style.cssText = "font-size: 13px; color: #777; margin-bottom: 18px; text-align: center;";
+
+        const selectors = document.createElement("div");
+        selectors.style.cssText = "display: flex; gap: 12px; justify-content: center; align-items: center;";
+
+        const yearSelect = document.createElement("select");
+        yearSelect.setAttribute("aria-label", "学年");
+        yearSelect.style.cssText = `
+            width: 130px;
+            height: 44px;
+            padding: 0 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+            background: #fff;
+        `;
+
+        AVAILABLE_YEARS.forEach(year => {
+            const option = document.createElement("option");
+            option.value = String(year);
+            option.textContent = `${year} 年`;
+            yearSelect.appendChild(option);
+        });
+
+        const semesterSelect = document.createElement("select");
+        semesterSelect.setAttribute("aria-label", "学期");
+        semesterSelect.style.cssText = `
+            width: 110px;
+            height: 44px;
+            padding: 0 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+            background: #fff;
+        `;
+
+        AVAILABLE_SEMESTERS.forEach(semester => {
+            const option = document.createElement("option");
+            option.value = String(semester);
+            option.textContent = `第 ${semester} 学期`;
+            semesterSelect.appendChild(option);
+        });
+
+        const [defaultYear, defaultSemester] = ACAD_YEAR.split("-").map(Number);
+        if (AVAILABLE_YEARS.includes(defaultYear)) {
+            yearSelect.value = String(defaultYear);
         }
-    } catch (error) {
-        console.error("显示输入框弹窗时发生错误:", error);
-        shiguangBridge.showToast("Prompt：显示输入框出错！" + error.message);
-        return false; // 出现错误时也返回 false
-    }
-}
-
-// 3. 显示一个单选列表弹窗
-async function demoSingleSelection() {
-    const fruits = ["苹果", "香蕉", "橙子", "葡萄", "西瓜", "芒果"];
-    try {
-        console.log("即将显示单选列表弹窗...");
-        const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
-            "选择你喜欢的水果",
-            JSON.stringify(fruits),
-            2
-        );
-        if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < fruits.length) {
-            console.log("用户选择了: " + fruits[selectedIndex] + " (索引: " + selectedIndex + ")");
-            shiguangBridge.showToast("你选择了 " + fruits[selectedIndex]);
-            return true; // 成功时返回 true
-        } else {
-            console.log("用户取消了选择。");
-            shiguangBridge.showToast("Single Selection：用户取消了选择！");
-            return false; // 用户取消时返回 false
+        if (AVAILABLE_SEMESTERS.includes(defaultSemester)) {
+            semesterSelect.value = String(defaultSemester);
         }
-    } catch (error) {
-        console.error("显示单选列表弹窗时发生错误:", error);
-        shiguangBridge.showToast("Single Selection：显示列表出错！" + error.message);
-        return false; // 出现错误时也返回 false
-    }
+
+        selectors.appendChild(yearSelect);
+        selectors.appendChild(semesterSelect);
+
+        const preview = document.createElement("div");
+        preview.style.cssText = "margin-top: 16px; text-align: center; font-size: 14px; color: #555;";
+
+        const updatePreview = () => {
+            preview.textContent = `将请求：${yearSelect.value}-${semesterSelect.value}`;
+        };
+        yearSelect.addEventListener("change", updatePreview);
+        semesterSelect.addEventListener("change", updatePreview);
+        updatePreview();
+
+        const buttons = document.createElement("div");
+        buttons.style.cssText = "display: flex; gap: 10px; margin-top: 22px;";
+
+        const cancelButton = document.createElement("button");
+        cancelButton.textContent = "取消";
+        cancelButton.style.cssText = `
+            flex: 1;
+            height: 42px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 15px;
+        `;
+
+        const confirmButton = document.createElement("button");
+        confirmButton.textContent = "获取课表并下载";
+        confirmButton.style.cssText = `
+            flex: 1.5;
+            height: 42px;
+            border: 0;
+            border-radius: 8px;
+            background: #1677ff;
+            color: #fff;
+            cursor: pointer;
+            font-size: 15px;
+        `;
+
+        cancelButton.onclick = () => {
+            overlay.remove();
+            resolve(null);
+        };
+
+        confirmButton.onclick = () => {
+            const year = Number(yearSelect.value);
+            const semester = Number(semesterSelect.value);
+            ACAD_YEAR = `${year}-${semester}`;
+            overlay.remove();
+            resolve(ACAD_YEAR);
+        };
+
+        buttons.appendChild(cancelButton);
+        buttons.appendChild(confirmButton);
+
+        panel.appendChild(title);
+        panel.appendChild(subtitle);
+        panel.appendChild(selectors);
+        panel.appendChild(preview);
+        panel.appendChild(buttons);
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+    });
 }
 
-// 4. 导入课程数据
-async function demoSaveCourses() {
-    console.log("正在准备测试课程数据...");
-    const testCourses = [
-    {
-        "name": "高等数学",
-        "teacher": "张教授",
-        "position": "教101",
-        "day": 1,
-        "startSection": 1,
-        "endSection": 2,
-        "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    },
-    {
-        "name": "测试自定义课程1",
-        "teacher": "测试老师1",
-        "position": "测试教室1",
-        "day": 1,
-        "isCustomTime": true,
-        "customStartTime": "08:00",
-        "customEndTime": "09:00",
-        "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    },
-    {
-        "name": "测试自定义课程2",
-        "teacher": "测试老师2",
-        "position": "测试教室2",
-        "day": 3,
-        "isCustomTime": true,
-        "customStartTime": "06:00",
-        "customEndTime": "12:00",
-        "weeks": [3, 5, 7, 9, 11, 13, 15]
-    },
-    {
-        "name": "大学英语",
-        "teacher": "李老师",
-        "position": "文史楼203",
-        "day": 1,
-        "startSection": 2,
-        "endSection": 4,
-        "weeks": [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
-    },
-    {
-        "name": "数据结构",
-        "teacher": "王副教授",
-        "position": "信息楼B301",
-        "day": 7,
-        "startSection": 2,
-        "endSection": 2,
-        "weeks": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-    },
-    {
-        "name": "数据结构",
-        "teacher": "王副教授",
-        "position": "信息楼B301",
-        "day": 7,
-        "startSection": 3,
-        "endSection": 3,
-        "weeks": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-    },
-    {
-        "name": "数据结构",
-        "teacher": "王副教授",
-        "position": "信息楼B301",
-        "day": 7,
-        "startSection": 4,
-        "endSection": 4,
-        "weeks": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-    },
-    {
-        "name": "数据结构",
-        "teacher": "王副教授",
-        "position": "信息楼B301",
-        "day": 7,
-        "startSection": 5,
-        "endSection": 5,
-        "weeks": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-    },
-    {
-        "name": "数据结构",
-        "teacher": "王副教授",
-        "position": "信息楼B301",
-        "day": 7,
-        "startSection": 6,
-        "endSection": 6,
-        "weeks": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-    },
-    {
-        "name": "计算机组成原理",
-        "teacher": "赵教授",
-        "position": "实验楼401",
-        "day": 4,
-        "startSection": 4,
-        "endSection": 4,
-        "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    },
-    {
-        "name": "操作系统",
-        "teacher": "钱副教授",
-        "position": "信息楼C205",
-        "day": 5,
-        "startSection": 5,
-        "endSection": 5,
-        "weeks": [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
-    },
-    {
-        "name": "计算机网络",
-        "teacher": "孙教授",
-        "position": "信息楼D103",
-        "day": 6,
-        "startSection": 6,
-        "endSection": 6,
-        "weeks": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-    },
-    {
-        "name": "软件工程",
-        "teacher": "周副教授",
-        "position": "创新楼301",
-        "day": 7,
-        "startSection": 7,
-        "endSection": 7,
-        "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    },
-    {
-        "name": "数据库原理",
-        "teacher": "吴教授",
-        "position": "信息楼E201",
-        "day": 1,
-        "startSection": 8,
-        "endSection": 8,
-        "weeks": [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
-    },
-    {
-        "name": "人工智能",
-        "teacher": "郑副教授",
-        "position": "智能楼101",
-        "day": 2,
-        "startSection": 9,
-        "endSection": 9,
-        "weeks": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-    },
-    {
-        "name": "机器学习",
-        "teacher": "冯教授",
-        "position": "智能楼203",
-        "day": 3,
-        "startSection": 10,
-        "endSection": 10,
-        "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    },
-    {
-        "name": "编译原理",
-        "teacher": "陈副教授",
-        "position": "信息楼F105",
-        "day": 4,
-        "startSection": 11,
-        "endSection": 11,
-        "weeks": [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
-    },
-    {
-        "name": "计算机图形学",
-        "teacher": "褚教授",
-        "position": "图形楼301",
-        "day": 5,
-        "startSection": 12,
-        "endSection": 12,
-        "weeks": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-    },
-    {
-        "name": "网络安全",
-        "teacher": "卫副教授",
-        "position": "安全楼201",
-        "day": 6,
-        "startSection": 13,
-        "endSection": 13,
-        "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    },
-    {
-        "name": "分布式系统",
-        "teacher": "蒋教授",
-        "position": "云楼101",
-        "day": 7,
-        "startSection": 14,
-        "endSection": 14,
-        "weeks": [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
-    },
-    {
-        "name": "大数据技术",
-        "teacher": "沈副教授",
-        "position": "数据楼301",
-        "day": 1,
-        "startSection": 15,
-        "endSection": 15,
-        "weeks": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-    },
-    {
-        "name": "物联网技术",
-        "teacher": "韩教授",
-        "position": "物联楼201",
-        "day": 2,
-        "startSection": 16,
-        "endSection": 16,
-        "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    }
-    ];
+// 目标课表时间段
+const TIME_SLOTS = [
+    { number: 1, startTime: "08:00", endTime: "08:45" },
+    { number: 2, startTime: "08:55", endTime: "09:40" },
+    { number: 3, startTime: "10:10", endTime: "10:55" },
+    { number: 4, startTime: "11:05", endTime: "11:50" },
+    { number: 5, startTime: "14:20", endTime: "15:05" },
+    { number: 6, startTime: "15:15", endTime: "16:00" },
+    { number: 7, startTime: "16:30", endTime: "17:15" },
+    { number: 8, startTime: "17:25", endTime: "18:10" },
+    { number: 9, startTime: "19:00", endTime: "19:45" },
+    { number: 10, startTime: "19:55", endTime: "20:40" },
+    { number: 11, startTime: "20:50", endTime: "21:35" }
+];
 
+// 2026-1 学期配置
+const CONFIG = {
+    semesterStartDate: "2026-03-02",
+    semesterTotalWeeks: 20,
+    defaultClassDuration: 45,
+    defaultBreakDuration: 10
+};
+
+async function fetchCourses() {
+    console.log("========================================");
+    console.log("开始请求中山大学教务系统 API...");
+    console.log("API:", API_URL);
+    console.log("学期:", ACAD_YEAR);
+    console.log("========================================");
+
+    const response = await fetch(`${API_URL}?_t=${Date.now()}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        credentials: "include",
+        body: JSON.stringify({
+            acadYear: ACAD_YEAR,
+            submitFlag: "1",
+            nothroughCourseFlag: "1"
+        })
+    });
+
+    console.log("HTTP 状态码:", response.status);
+
+    const responseText = await response.text();
+
+    if (!response.ok) {
+        throw new Error(`API 请求失败：HTTP ${response.status}\n${responseText}`);
+    }
+
+    let json;
     try {
-        console.log("正在尝试导入课程...");
-        const result = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(testCourses));
-        if (result === true) {
-            console.log("课程导入成功！");
-            shiguangBridge.showToast("测试课程导入成功！");
-        } else {
-            console.log("课程导入未成功，结果：" + result);
-            shiguangBridge.showToast("测试课程导入失败，请查看日志。");
-        }
+        json = JSON.parse(responseText);
     } catch (error) {
-        console.error("导入课程时发生错误:", error);
-        shiguangBridge.showToast("导入课程失败: " + error.message);
+        console.error("响应不是合法 JSON：", error);
+        console.error("原始响应：", responseText);
+        return [];
     }
-}
 
-// 5. 导入预设时间段
-async function importPresetTimeSlots() {
-    console.log("正在准备预设时间段数据...");
-    const presetTimeSlots = [
-        { "number": 1, "startTime": "07:00", "endTime": "07:40" },
-        { "number": 2, "startTime": "07:45", "endTime": "08:25" },
-        { "number": 3, "startTime": "08:30", "endTime": "09:10" },
-        { "number": 4, "startTime": "09:15", "endTime": "09:55" },
-        { "number": 5, "startTime": "10:15", "endTime": "10:55" },
-        { "number": 6, "startTime": "11:00", "endTime": "11:40" },
-        { "number": 7, "startTime": "11:45", "endTime": "12:25" },
-        { "number": 8, "startTime": "12:30", "endTime": "13:10" },
-        { "number": 9, "startTime": "13:30", "endTime": "14:10" },
-        { "number": 10, "startTime": "14:15", "endTime": "14:55" },
-        { "number": 11, "startTime": "15:00", "endTime": "15:40" },
-        { "number": 12, "startTime": "15:45", "endTime": "16:25" },
-        { "number": 13, "startTime": "16:45", "endTime": "17:25" },
-        { "number": 14, "startTime": "17:30", "endTime": "18:10" },
-        { "number": 15, "startTime": "18:15", "endTime": "18:55" },
-        { "number": 16, "startTime": "19:00", "endTime": "19:40" }
-    ];
+    if (json?.code !== 200) {
+        throw new Error(`API 返回异常 code：${json?.code}`);
+    }
 
-    try {
-        console.log("正在尝试导入预设时间段...");
-        const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
-        if (result === true) {
-            console.log("预设时间段导入成功！");
-            window.shiguangBridge.showToast("测试时间段导入成功！");
-        } else {
-            console.log("预设时间段导入未成功，结果：" + result);
-            window.shiguangBridge.showToast("测试时间段导入失败，请查看日志。");
+    const timetable = json?.data?.timetable;
+
+    if (!timetable || typeof timetable !== "object" || Array.isArray(timetable)) {
+        throw new Error("API 返回中不存在有效的 data.timetable");
+    }
+
+    const courses = [];
+
+    for (const entries of Object.values(timetable)) {
+        if (!Array.isArray(entries) || entries.length === 0) {
+            continue;
         }
-    } catch (error) {
-        console.error("导入时间段时发生错误:", error);
-        window.shiguangBridge.showToast("导入时间段失败: " + error.message);
-    }
-}
 
-// 6. 导入课表配置
-async function demoSaveConfig() {
-    console.log("正在准备配置数据...");
-    // 注意：只传入要修改的字段，其他字段（如 semesterTotalWeeks）会使用 Kotlin 模型中的默认值
-    const courseConfigData = {
-        "semesterStartDate": null,
-        "semesterTotalWeeks": 18,
-        "defaultClassDuration": 50,
-        "defaultBreakDuration": 5,
-        "firstDayOfWeek": 7
+        for (const item of entries) {
+            const course = normalizeCourse(item);
+            if (course) {
+                courses.push(course);
+            }
+        }
+    }
+
+    const result = {
+        courses,
+        timeSlots: TIME_SLOTS,
+        config: CONFIG
     };
 
-    try {
-        console.log("正在尝试导入课表配置...");
-        const configJsonString = JSON.stringify(courseConfigData);
+    console.log("========================================");
+    console.log(`课程转换完成，共 ${courses.length} 条记录`);
+    console.log("最终 JSON：");
+    console.log(result);
+    console.table(courses);
+    console.log("========================================");
 
-        const result = await window.shiguangBridgePromise.saveCourseConfig(configJsonString);
+    return result;
+}
 
-        if (result === true) {
-            console.log("课表配置导入成功！");
-            shiguangBridge.showToast("测试配置导入成功");
-        } else {
-            console.log("课表配置导入未成功，结果：" + result);
-            shiguangBridge.showToast("测试配置导入失败，请查看日志。");
+function normalizeCourse(item) {
+    if (!item || typeof item !== "object") {
+        return null;
+    }
+
+    const name = cleanCourseName(item.courseName);
+    const teacher = cleanText(item.teachingStaffName);
+    const position = cleanText(item.classPlace);
+    const day = toNumber(item.week);
+    const startSection = toNumber(item.startClassTimes);
+    const endSection = toNumber(item.endClassTimes);
+    const startWeek = toNumber(item.startWeek);
+    const weeks = parseWeeks(item.timeDetail, startWeek);
+
+    if (!name || !day || !startSection || !endSection || weeks.length === 0) {
+        console.warn("跳过字段不完整的课程记录：", item);
+        return null;
+    }
+
+    return {
+        id: crypto.randomUUID(),
+        name,
+        teacher,
+        position,
+        day,
+        startSection,
+        endSection,
+        color: getCourseColor(name),
+        weeks
+    };
+}
+
+function cleanCourseName(value) {
+    const text = cleanText(value);
+
+    // 去掉中山大学 API 返回的课程类别前缀：
+    // "本(专必)高等数学一（I）" -> "高等数学一（I）"
+    // "本(公必)劳动教育" -> "劳动教育"
+    return text.replace(/^本\([^)]*\)/, "").trim();
+}
+
+function parseWeeks(timeDetail, startWeek = 1) {
+    const text = cleanText(timeDetail);
+
+    if (!text) {
+        return startWeek ? [startWeek] : [];
+    }
+
+    // 例如："1-17每周"
+    const rangeMatch = text.match(/(\d+)\s*-\s*(\d+)/);
+    if (rangeMatch) {
+        const start = Number(rangeMatch[1]);
+        const end = Number(rangeMatch[2]);
+
+        if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+            return Array.from(
+                { length: end - start + 1 },
+                (_, index) => start + index
+            );
         }
-    } catch (error) {
-        console.error("导入配置时发生错误:", error);
-        shiguangBridge.showToast("导入配置失败: " + error.message);
     }
+
+    // 兼容单双周或离散周次，例如："1,3,5周"、"1、3、5周"
+    const numbers = text
+        .match(/\d+/g)
+        ?.map(Number)
+        .filter(Number.isFinite) || [];
+
+    if (numbers.length > 0) {
+        return [...new Set(numbers)].sort((a, b) => a - b);
+    }
+
+    return startWeek ? [startWeek] : [];
 }
 
-
-shiguangBridge.showToast("这是一个来自 JS 的 Toast 消息，会很快消失！");
-
-/**
- * 编排这些异步操作，并在用户取消时停止后续执行。
- */
-async function runAllDemosSequentially() {
-    shiguangBridge.showToast("所有演示将按顺序开始...");
-
-    // 1. 运行第一个演示：Alert
-    const alertResult = await demoAlert();
-    if (!alertResult) {
-        console.log("用户取消了 Alert 演示，停止后续执行。");
-        return; // 用户取消，立即退出函数
+function cleanText(value) {
+    if (value === null || value === undefined) {
+        return "";
     }
 
-    // 2. 运行第二个演示：Prompt
-    const promptResult = await demoPrompt();
-    if (!promptResult) {
-        console.log("用户取消了 Prompt 演示，停止后续执行。");
-        return; // 用户取消，立即退出函数
-    }
-
-    // 3. 运行第三个演示：SingleSelection
-    const selectionResult = await demoSingleSelection();
-    if (!selectionResult) {
-        console.log("用户取消了 Single Selection 演示，停止后续执行。");
-        return; // 用户取消，立即退出函数
-    }
-
-    console.log("所有弹窗演示已完成。");
-    shiguangBridge.showToast("所有弹窗演示已完成！");
-
-    // 以下是数据导入，与用户交互无关，可以继续
-    await demoSaveCourses();
-    await importPresetTimeSlots();
-    await demoSaveConfig();
-
-    // 发送最终的生命周期完成信号
-    shiguangBridge.notifyTaskCompletion();
+    return String(value)
+        .replace(/\/+$/g, "")
+        .trim();
 }
 
-// 启动所有演示
-runAllDemosSequentially();
+function toNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+}
+
+// 根据课程名称生成稳定的颜色编号，避免同一课程每次导出颜色变化。
+function getCourseColor(name) {
+    const colorCount = 8;
+    let hash = 0;
+
+    for (let i = 0; i < name.length; i++) {
+        hash = ((hash << 5) - hash) + name.charCodeAt(i);
+        hash |= 0;
+    }
+
+    return Math.abs(hash) % colorCount + 1;
+}
+
+function downloadCoursesJson(data) {
+    const jsonString = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonString], {
+        type: "application/json;charset=utf-8"
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `sysu-${ACAD_YEAR}.json`;
+    link.style.display = "none";
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    console.log("========================================");
+    console.log(`JSON 下载完成：sysu-${ACAD_YEAR}.json`);
+    console.log(`课程数量：${data.courses.length}`);
+    console.log(`时间段数量：${data.timeSlots.length}`);
+    console.log(`学期总周数：${data.config.semesterTotalWeeks}`);
+    console.log("========================================");
+}
+
+selectSemester()
+    .then(selectedSemester => {
+        if (!selectedSemester) {
+            console.log("用户取消了学期选择，未请求课表。");
+            return null;
+        }
+
+        console.log(`已选择学期：${ACAD_YEAR}`);
+        return fetchCourses();
+    })
+    .then(data => {
+        if (!data) {
+            return;
+        }
+
+        // 暴露最终 JSON，方便控制台检查。
+        window.__SYSU_COURSE_JSON__ = data;
+        window.__SYSU_COURSES__ = data.courses;
+
+        console.log("window.__SYSU_COURSE_JSON__ 已更新。");
+        console.log("可以执行 JSON.stringify(window.__SYSU_COURSE_JSON__, null, 2) 查看完整 JSON。");
+
+        if (data.courses.length > 0) {
+            downloadCoursesJson(data);
+        } else {
+            console.warn("没有可下载的课程数据，因此未生成 JSON 文件。");
+        }
+    })
+    .catch(error => {
+        console.error("========================================");
+        console.error("中山大学课表获取失败：", error);
+        console.error(error.stack);
+        console.error("========================================");
+    });
