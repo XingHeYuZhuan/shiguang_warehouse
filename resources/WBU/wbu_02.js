@@ -9,7 +9,7 @@
 // 2) 课程 JSON 复刻页面逻辑：同格同课程合并周次 -> 相邻节次同内容合并（rowspan）
 // 3) 接口失败且当前在课表页时，回退解析页面已渲染的 DOM（td.cell + <a onclick> 链接）
 // 4) 教师姓名带工号（如“王老师（20240999）”）时，弹窗询问是否去除，默认保留
-// 5) 按 课程/教师/教室/星期/周次 合并连续节次，经 AndroidBridgePromise 保存课程与时间段
+// 5) 按 课程/教师/教室/星期/周次 合并连续节次，经 shiguangBridgePromise 保存课程与时间段
 // 6) 从 /admin/api/getZclistByXnxq 取周次列表：导出开学日期（第 1 周开始日）与总周数到 config
 // 7) 任意弹窗步骤用户点“取消”：立即终止，不解析、不保存、不触发下载
 // 8) 检测重复课程（同课程/同教室/同节次/同周次）：完全相同→弹“只保留一门”，
@@ -293,6 +293,98 @@
         return merged;
     }
 
+
+    // 官方参考：节次与周次合并去重函数
+    // 来源：拾光课程表适配教程《课程合并与去重函数》
+    // 放在现有去重/合并流程之后，作为最后一道清洗，确保单双周、连续节次、完全重复都收敛。
+    function mergeAndDistinctCourses(courses) {
+        if (!Array.isArray(courses) || courses.length <= 1) return courses;
+
+        // 1. 深拷贝并规范周次数据，过滤无效项
+        const list = courses.map(c => ({
+            ...c,
+            name: c.name || '',
+            teacher: c.teacher || '',
+            position: c.position || '',
+            weeks: Array.isArray(c.weeks) ? [...c.weeks].sort((a, b) => a - b) : []
+        }));
+
+        // 阶段 1：合并连续节次与完全重复记录（前提：名称、教师、地点、星期、周次一致）
+        list.sort((a, b) => {
+            return a.name.localeCompare(b.name) ||
+                   a.teacher.localeCompare(b.teacher) ||
+                   a.position.localeCompare(b.position) ||
+                   (a.day || 0) - (b.day || 0) ||
+                   a.weeks.join(',').localeCompare(b.weeks.join(',')) ||
+                   (a.startSection || 0) - (b.startSection || 0);
+        });
+
+        const step1Merged = [];
+        let current = list[0];
+
+        for (let i = 1; i < list.length; i++) {
+            const next = list[i];
+
+            const isSameCourseAndWeeks =
+                current.name === next.name &&
+                current.teacher === next.teacher &&
+                current.position === next.position &&
+                current.day === next.day &&
+                current.weeks.join(',') === next.weeks.join(',');
+
+            const isContinuous = current.endSection + 1 === next.startSection;
+            const isDuplicate = current.startSection === next.startSection && current.endSection === next.endSection;
+
+            if (isSameCourseAndWeeks && isContinuous) {
+                // 节次连续：延长结束节次 (如 1-2 节 + 3-4 节 -> 1-4 节)
+                current.endSection = next.endSection;
+            } else if (isSameCourseAndWeeks && isDuplicate) {
+                // 完全重复：跳过
+                continue;
+            } else {
+                step1Merged.push(current);
+                current = next;
+            }
+        }
+        step1Merged.push(current);
+
+        // 阶段 2：合并同节次的周次（前提：名称、教师、地点、星期、开始/结束节次一致）
+        step1Merged.sort((a, b) => {
+            return a.name.localeCompare(b.name) ||
+                   a.teacher.localeCompare(b.teacher) ||
+                   a.position.localeCompare(b.position) ||
+                   (a.day || 0) - (b.day || 0) ||
+                   (a.startSection || 0) - (b.startSection || 0) ||
+                   (a.endSection || 0) - (b.endSection || 0);
+        });
+
+        const step2Merged = [];
+        let cur = step1Merged[0];
+
+        for (let i = 1; i < step1Merged.length; i++) {
+            const nxt = step1Merged[i];
+
+            const isSameCourseAndSection =
+                cur.name === nxt.name &&
+                cur.teacher === nxt.teacher &&
+                cur.position === nxt.position &&
+                cur.day === nxt.day &&
+                cur.startSection === nxt.startSection &&
+                cur.endSection === nxt.endSection;
+
+            if (isSameCourseAndSection) {
+                // 周次合并去重 (如 1-8 周 + 9-16 周 -> 1-16 周)
+                cur.weeks = Array.from(new Set([...cur.weeks, ...nxt.weeks])).sort((a, b) => a - b);
+            } else {
+                step2Merged.push(cur);
+                cur = nxt;
+            }
+        }
+        step2Merged.push(cur);
+
+        return step2Merged;
+    }
+
     function parseScheduleFromDocument(doc) {
         const cells = Array.from(doc.querySelectorAll("td.cell"));
         const fallbackCells = cells.length ? [] : Array.from(doc.querySelectorAll("td[id^='Cell']"));
@@ -399,7 +491,7 @@
         const withId = courses.filter((c) => hasTeacherId(c.teacher));
         if (!withId.length) return "keep";
         if (!canShowSingleSelection()) {
-            console.warn("AndroidBridgePromise.showSingleSelection 不可用，教师工号默认保留");
+            console.warn("shiguangBridgePromise.showSingleSelection 不可用，教师工号默认保留");
             return "keep";
         }
 
@@ -468,7 +560,7 @@
         const groups = findDuplicateCourseGroups(courses);
         if (!groups.length) return "keep";
         if (!canShowSingleSelection()) {
-            console.warn("AndroidBridgePromise.showSingleSelection 不可用，重复课程默认全部保留");
+            console.warn("shiguangBridgePromise.showSingleSelection 不可用，重复课程默认全部保留");
             return "keep";
         }
 
@@ -594,7 +686,7 @@
             return null;
         }
         if (!canShowSingleSelection()) {
-            console.warn("AndroidBridgePromise.showSingleSelection 不可用，跳过学期选择");
+            console.warn("shiguangBridgePromise.showSingleSelection 不可用，跳过学期选择");
             return null;
         }
 
@@ -917,7 +1009,7 @@
 
         console.log("各校区作息不一致，弹出校区选择...");
         if (!canShowSingleSelection()) {
-            console.warn("AndroidBridgePromise.showSingleSelection 不可用，使用默认校区");
+            console.warn("shiguangBridgePromise.showSingleSelection 不可用，使用默认校区");
             return defaultId;
         }
         const labels = campuses.map((c) => c.name);
@@ -987,27 +1079,66 @@
         return { xhid, xqdm, xnxq, semesterOptions };
     }
 
-    async function fetchSchedulePageSession() {
-        const url = "/admin/xsd/pkgl/xskb/queryKbForXsd";
-        console.log("自动抓取课表页参数:", url);
+    // 首页上没有“当前学年学期”输入框时，从校区接口拿到当前学年学期（dataXnxq）。
+    // 直接请求无参 queryKbForXsd 时，若当前学期未发布会返回“当前学年学期课表未发布”，
+    // 但加上 xnxq 参数后仍能打开课表页并拿到 xhid/xqdm/历史学期下拉框。
+    async function fetchCurrentDataXnxq() {
         try {
-            const resp = await fetch(url, { credentials: "same-origin" });
-            if (!resp.ok) return null;
-            const html = await resp.text();
-            const session = parseSchedulePageSessionFromHtml(html);
-            if (session) {
-                console.log(
-                    "已获取课表页参数: 当前学期=",
-                    session.xnxq,
-                    "学期数=",
-                    session.semesterOptions.length
-                );
-            }
-            return session;
+            const resp = await fetch("/admin/api/jcsj/xqsj/getXqList", {
+                credentials: "same-origin",
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            if (!resp.ok) return "";
+            const json = await resp.json();
+            if (json.ret !== 0) return "";
+            const xnxq = (json.data || [])
+                .map((c) => c && c.dataXnxq)
+                .find(Boolean) || "";
+            if (xnxq) console.log("从校区接口获取当前学年学期:", xnxq);
+            return xnxq;
         } catch (error) {
-            console.error("自动抓取课表页参数失败:", error);
-            return null;
+            console.warn("获取当前学年学期失败:", error);
+            return "";
         }
+    }
+
+    async function fetchSchedulePageSession() {
+        const base = "/admin/xsd/pkgl/xskb/queryKbForXsd";
+        const candidates = [];
+        const urlXnxq = new URLSearchParams(location.search).get("xnxq");
+        if (urlXnxq) candidates.push(base + "?xnxq=" + encodeURIComponent(urlXnxq));
+
+        const currentXnxq = await fetchCurrentDataXnxq();
+        if (currentXnxq) {
+            candidates.push(base + "?xnxq=" + encodeURIComponent(currentXnxq));
+        }
+        // 最后兜底尝试无参（若本学期已发布，无参页面也能正常打开）
+        candidates.push(base);
+
+        const seen = new Set();
+        for (const url of candidates) {
+            if (seen.has(url)) continue;
+            seen.add(url);
+            console.log("自动抓取课表页参数:", url);
+            try {
+                const resp = await fetch(url, { credentials: "same-origin" });
+                if (!resp.ok) continue;
+                const html = await resp.text();
+                const session = parseSchedulePageSessionFromHtml(html);
+                if (session) {
+                    console.log(
+                        "已获取课表页参数: 当前学期=",
+                        session.xnxq,
+                        "学期数=",
+                        session.semesterOptions.length
+                    );
+                    return session;
+                }
+            } catch (error) {
+                console.error("自动抓取课表页参数失败:", url, error);
+            }
+        }
+        return null;
     }
 
     // 用抓取到的参数构造一个最小“页面对象”，复用现有读学期/读 xhid/xqdm 的逻辑
@@ -1055,6 +1186,11 @@
             toast("已合并重复课程的教师");
         }
 
+        // 最后走一层官方参考的合并去重函数：
+        // 合并连续节次、合并同节次单双周、清理完全重复记录。
+        courses = mergeAndDistinctCourses(courses);
+        console.log("官方合并去重后课程数:", courses.length);
+
         try {
             const result = await window.shiguangBridgePromise.saveImportedCourses(
                 JSON.stringify(courses)
@@ -1074,6 +1210,7 @@
                         JSON.stringify({
                             semesterStartDate: semesterConfig.semesterStartDate,
                             semesterTotalWeeks: semesterConfig.semesterTotalWeeks,
+                            firstDayOfWeek: 1,
                         })
                     );
                 }
@@ -1088,7 +1225,7 @@
     }
 
     async function run() {
-        const doc = await getTargetDocument();
+        let doc = await getTargetDocument();
         let session = null;
 
         if (!doc) {
@@ -1097,6 +1234,14 @@
             if (!session) {
                 toast("未找到课表页面，请手动打开“我的课表”后重试");
                 return;
+            }
+        } else if (!doc.querySelector("#xnxq1")) {
+            // 当前课表页无学期下拉框（例如无参打开时报“当前学年学期课表未发布”）：
+            // 自动带 xnxq 参数重新抓一份含历史学期列表的课表页，改用接口导出。
+            session = await fetchSchedulePageSession();
+            if (session) {
+                console.log("当前课表页无学期下拉框，改用自动抓取的课表页参数（含历史学期）");
+                doc = null;
             }
         }
 
