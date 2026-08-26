@@ -203,7 +203,7 @@ async function promptUserToStart() {
     console.log("JS: 流程开始：显示公告。");
     return await window.shiguangBridgePromise.showAlert(
         "广东海洋大学阳江校区教务系统课表导入",
-        "导入前请确保您已在浏览器中成功登录广东海洋大学教务系统（jw.gdou.edu.cn）。\n本脚本将通过接口直接获取阳江校区课表，无需停留在特定页面。",
+        "请先登录广东海洋大学教务系统（jw.gdou.edu.cn），并手动打开个人课表页面。\n脚本会优先读取当前页面学年学期，读取不到时再手动选择。",
         "好的，开始导入"
     );
 }
@@ -236,6 +236,67 @@ async function selectSemester() {
  */
 function getSemesterCode(semesterIndex) {
     return semesterIndex === 0 ? "3" : "12";
+}
+
+/**
+ * 从当前页面读取当前选中的学年和学期。
+ * 不请求页面、不改变当前 URL；如果当前页面不是课表页则返回 null。
+ */
+function readCurrentPageTerm() {
+    if (typeof document === "undefined" || !document.querySelector) {
+        return null;
+    }
+
+    const yearSelect = document.querySelector("#xnm");
+    const semesterSelect = document.querySelector("#xqm");
+    if (!yearSelect || !semesterSelect) return null;
+
+    const academicYear = String(yearSelect.value || "").trim();
+    const semesterCode = String(semesterSelect.value || "").trim();
+    const semesterIndex = semesterCode === "3" ? 0 : semesterCode === "12" ? 1 : -1;
+    if (!/^\d{4}$/.test(academicYear) || semesterIndex < 0) {
+        return null;
+    }
+
+    const yearOption = yearSelect.options && yearSelect.options[yearSelect.selectedIndex];
+    const semesterOption = semesterSelect.options && semesterSelect.options[semesterSelect.selectedIndex];
+    return {
+        academicYear,
+        semesterIndex,
+        academicYearText: yearOption
+            ? String(yearOption.textContent || yearOption.innerText || "").trim() || academicYear
+            : academicYear,
+        semesterText: semesterOption
+            ? String(semesterOption.textContent || semesterOption.innerText || "").trim() || semesterCode
+            : semesterCode
+    };
+}
+
+/**
+ * 自动读取当前课表页学期，失败后保留原有手动选择流程。
+ */
+async function resolveTerm() {
+    const currentTerm = readCurrentPageTerm();
+    if (currentTerm) {
+        window.shiguangBridge.showToast(
+            `已读取当前课表页：${currentTerm.academicYearText} 第${currentTerm.semesterText}学期。`
+        );
+        return currentTerm;
+    }
+
+    window.shiguangBridge.showToast("未读取到课表页学年学期，改为手动选择。");
+    const academicYear = await getAcademicYear();
+    if (academicYear === null) return null;
+
+    const semesterIndex = await selectSemester();
+    if (semesterIndex === null || semesterIndex === -1) return null;
+
+    return {
+        academicYear: String(academicYear).trim(),
+        semesterIndex,
+        academicYearText: `${academicYear}-${Number(academicYear) + 1}`,
+        semesterText: semesterIndex === 0 ? "1" : "2"
+    };
 }
 
 /**
@@ -348,23 +409,15 @@ async function runImportFlow() {
         return;
     }
 
-    const academicYear = await getAcademicYear();
-    if (academicYear === null) {
+    const term = await resolveTerm();
+    if (term === null) {
         window.shiguangBridge.showToast("导入已取消。");
-        console.log("JS: 获取学年失败/取消，流程终止。");
+        console.log("JS: 获取学年学期失败/取消，流程终止。");
         return;
     }
-    console.log(`JS: 已选择学年: ${academicYear}`);
+    console.log(`JS: 已确定学年学期: ${term.academicYearText} 第${term.semesterText}学期`);
 
-    const semesterIndex = await selectSemester();
-    if (semesterIndex === null || semesterIndex === -1) {
-        window.shiguangBridge.showToast("导入已取消。");
-        console.log("JS: 选择学期失败/取消，流程终止。");
-        return;
-    }
-    console.log(`JS: 已选择学期索引: ${semesterIndex}`);
-
-    const result = await fetchAndParseCourses(academicYear, semesterIndex);
+    const result = await fetchAndParseCourses(term.academicYear, term.semesterIndex);
     if (result === null) {
         console.log("JS: 课程获取或解析失败，流程终止。");
         return;
