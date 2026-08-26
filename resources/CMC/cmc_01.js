@@ -79,8 +79,10 @@ function parseCourseList(apiJson, slotMap) {
             }
             
             const key = [course.name, teacher, position, day,
-                course.isCustomTime ? actualStart + actualEnd : `${startSection}-${endSection}`, weeks.join(",")].join("__");
-            if (!courseMap.has(key)) courseMap.set(key, course);
+                course.isCustomTime ? actualStart + actualEnd : `${startSection}-${endSection}`].join("__");
+            const existing = courseMap.get(key);
+            if (existing) existing.weeks = [...new Set([...existing.weeks, ...course.weeks])].sort((a, b) => a - b);
+            else courseMap.set(key, course);
         });
     });
 
