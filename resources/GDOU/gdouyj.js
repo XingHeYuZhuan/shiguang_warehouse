@@ -6,6 +6,98 @@
  * @version 1.1
  */
 
+(function () {
+
+/**
+ * 节次与周次合并去重函数。
+ * @param {Array<Object>} courses 原始解析课程数组
+ * @returns {Array<Object>} 合并去重后的课程数组
+ */
+function mergeAndDistinctCourses(courses) {
+    if (!Array.isArray(courses) || courses.length <= 1) return courses;
+
+    const list = courses.map(course => ({
+        ...course,
+        name: course.name || '',
+        teacher: course.teacher || '',
+        position: course.position || '',
+        weeks: Array.isArray(course.weeks) ? [...course.weeks].sort((a, b) => a - b) : []
+    }));
+
+    // 阶段 1：合并相同课程、星期、周次下的连续节次和重复记录。
+    list.sort((a, b) =>
+        a.name.localeCompare(b.name) ||
+        a.teacher.localeCompare(b.teacher) ||
+        a.position.localeCompare(b.position) ||
+        (a.day || 0) - (b.day || 0) ||
+        a.weeks.join(',').localeCompare(b.weeks.join(',')) ||
+        (a.startSection || 0) - (b.startSection || 0)
+    );
+
+    const sectionMerged = [];
+    let current = list[0];
+
+    for (let i = 1; i < list.length; i++) {
+        const next = list[i];
+        const sameCourseAndWeeks =
+            current.name === next.name &&
+            current.teacher === next.teacher &&
+            current.position === next.position &&
+            current.day === next.day &&
+            current.weeks.join(',') === next.weeks.join(',');
+        const isContinuous = current.endSection + 1 === next.startSection;
+        const isDuplicate = current.startSection === next.startSection &&
+            current.endSection === next.endSection;
+
+        if (sameCourseAndWeeks && isContinuous) {
+            current.endSection = next.endSection;
+        } else if (sameCourseAndWeeks && isDuplicate) {
+            continue;
+        } else {
+            sectionMerged.push(current);
+            current = next;
+        }
+    }
+    sectionMerged.push(current);
+
+    // 阶段 2：合并相同节次下分段返回的周次。
+    sectionMerged.sort((a, b) =>
+        a.name.localeCompare(b.name) ||
+        a.teacher.localeCompare(b.teacher) ||
+        a.position.localeCompare(b.position) ||
+        (a.day || 0) - (b.day || 0) ||
+        (a.startSection || 0) - (b.startSection || 0) ||
+        (a.endSection || 0) - (b.endSection || 0)
+    );
+
+    const result = [];
+    let currentCourse = sectionMerged[0];
+
+    for (let i = 1; i < sectionMerged.length; i++) {
+        const nextCourse = sectionMerged[i];
+        const sameCourseAndSection =
+            currentCourse.name === nextCourse.name &&
+            currentCourse.teacher === nextCourse.teacher &&
+            currentCourse.position === nextCourse.position &&
+            currentCourse.day === nextCourse.day &&
+            currentCourse.startSection === nextCourse.startSection &&
+            currentCourse.endSection === nextCourse.endSection;
+
+        if (sameCourseAndSection) {
+            currentCourse.weeks = Array.from(new Set([
+                ...currentCourse.weeks,
+                ...nextCourse.weeks
+            ])).sort((a, b) => a - b);
+        } else {
+            result.push(currentCourse);
+            currentCourse = nextCourse;
+        }
+    }
+    result.push(currentCourse);
+
+    return result;
+}
+
 /**
  * 解析周次字符串，处理单双周和周次范围。
  * 兼容格式："1-16周"、"6周"、"1-8周(单)"、"1-10周(双)"、"1-5周,9周"
@@ -95,6 +187,24 @@ function getOtherVenueCustomTime(position, startSection, endSection) {
     return OTHER_VENUE_SECTION_3_4_TIME;
 }
 
+function applyOtherVenueCustomTime(courses) {
+    return courses.map(course => {
+        const customTime = getOtherVenueCustomTime(
+            course.position,
+            course.startSection,
+            course.endSection
+        );
+        if (!customTime) return course;
+
+        return {
+            ...course,
+            isCustomTime: true,
+            customStartTime: customTime.startTime,
+            customEndTime: customTime.endTime
+        };
+    });
+}
+
 /**
  * 解析正方 v9 课表查询接口返回的 JSON 数据。
  */
@@ -108,7 +218,7 @@ function parseJsonData(jsonData) {
     }
 
     const rawCourseList = jsonData.kbList;
-    const finalCourseList = [];
+    const initialCourseList = [];
 
     for (const rawCourse of rawCourseList) {
         if (!rawCourse || typeof rawCourse !== 'object') {
@@ -141,7 +251,7 @@ function parseJsonData(jsonData) {
             continue;
         }
 
-        const course = {
+        initialCourseList.push({
             name: String(rawCourse.kcmc).trim(),
             teacher: rawCourse.xm == null ? '' : String(rawCourse.xm).trim(),
             position: rawCourse.cdmc == null ? '' : String(rawCourse.cdmc).trim(),
@@ -149,21 +259,11 @@ function parseJsonData(jsonData) {
             startSection: sectionRange.startSection,
             endSection: sectionRange.endSection,
             weeks: weeksArray
-        };
-
-        const customTime = getOtherVenueCustomTime(
-            course.position,
-            course.startSection,
-            course.endSection
-        );
-        if (customTime) {
-            course.isCustomTime = true;
-            course.customStartTime = customTime.startTime;
-            course.customEndTime = customTime.endTime;
-        }
-
-        finalCourseList.push(course);
+        });
     }
+
+    const mergedCourses = mergeAndDistinctCourses(initialCourseList);
+    const finalCourseList = applyOtherVenueCustomTime(mergedCourses);
 
     finalCourseList.sort((a, b) =>
         a.day - b.day ||
@@ -171,100 +271,275 @@ function parseJsonData(jsonData) {
         a.name.localeCompare(b.name)
     );
 
-    console.log(`JS: JSON 数据解析完成，共找到 ${finalCourseList.length} 门课程。`);
+    console.log(`JS: JSON 数据解析与合并完成，共找到 ${finalCourseList.length} 门课程。`);
     return finalCourseList;
-}
-
-/**
- * showPrompt 的校验函数：限定四位数字学年。
- */
-function validateYearInput(input) {
-    console.log("JS: validateYearInput 被调用，输入: " + input);
-    if (/^[0-9]{4}$/.test(input)) {
-        console.log("JS: validateYearInput 验证通过。");
-        return false;
-    } else {
-        console.log("JS: validateYearInput 验证失败。");
-        return "请输入四位数字的学年！";
-    }
-}
-
-/**
- * 根据当前日期推断学年起始年份。
- * 中国高校通常在 9 月开始新学年，因此 1-8 月默认使用上一年。
- */
-function getDefaultAcademicYear(date = new Date()) {
-    const currentYear = date.getFullYear();
-    const academicYearStart = date.getMonth() >= 8 ? currentYear : currentYear - 1;
-    return academicYearStart.toString();
 }
 
 async function promptUserToStart() {
     console.log("JS: 流程开始：显示公告。");
     return await window.shiguangBridgePromise.showAlert(
         "广东海洋大学阳江校区教务系统课表导入",
-        "导入前请确保您已在浏览器中成功登录广东海洋大学教务系统（jw.gdou.edu.cn）。\n本脚本将通过接口直接获取阳江校区课表，无需停留在特定页面。",
+        "请先登录广东海洋大学教务系统（jw.gdou.edu.cn），并在个人课表页选择要导入的学年学期。点击确认后按提示继续即可。",
         "好的，开始导入"
     );
 }
 
-async function getAcademicYear() {
-    const currentYear = getDefaultAcademicYear();
-    console.log("JS: 提示用户输入学年。");
-    return await window.shiguangBridgePromise.showPrompt(
-        "选择学年",
-        "请输入要导入课程的起始学年（例如 2025-2026 应输入 2025）:",
-        currentYear,
-        "validateYearInput"
-    );
+/**
+ * 从 select 元素解析学年和学期选项。
+ * 默认索引优先使用当前 select.value，确保跟随用户在页面上的实际选择。
+ */
+function parseSelectOptions(selectElement) {
+    if (!selectElement || typeof selectElement.querySelectorAll !== "function") {
+        return { options: [], defaultIndex: 0 };
+    }
+
+    const options = [];
+    let defaultIndex = 0;
+    Array.from(selectElement.querySelectorAll("option")).forEach(option => {
+        const value = String(option.value || "").trim();
+        if (!value) return;
+
+        const text = String(option.textContent || "").trim() || value;
+        if (option.selected) defaultIndex = options.length;
+        options.push({ value, text });
+    });
+
+    const currentValue = String(selectElement.value || "").trim();
+    const currentIndex = options.findIndex(option => option.value === currentValue);
+    if (currentIndex !== -1) defaultIndex = currentIndex;
+
+    return { options, defaultIndex };
 }
 
-async function selectSemester() {
-    const semesters = ["第一学期", "第二学期"];
-    console.log("JS: 提示用户选择学期。");
-    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
-        "选择学期",
-        JSON.stringify(semesters),
-        0
-    );
-    return semesterIndex;
+function parseAcademicOptionsFromDocument(doc) {
+    if (!doc || typeof doc.querySelector !== "function") return null;
+
+    const yearData = parseSelectOptions(doc.querySelector("#xnm"));
+    const semesterData = parseSelectOptions(doc.querySelector("#xqm"));
+    if (yearData.options.length === 0 || semesterData.options.length === 0) return null;
+
+    return {
+        yearOptions: yearData.options,
+        semesterOptions: semesterData.options,
+        defaultYearIndex: yearData.defaultIndex,
+        defaultSemesterIndex: semesterData.defaultIndex
+    };
+}
+
+function isOnTimetablePage() {
+    const pathname = typeof window !== "undefined" && window.location
+        ? window.location.pathname
+        : "";
+    return typeof pathname === "string" && pathname.includes("xskbcx_cxXskbcxIndex.html");
+}
+
+function getCurrentPageAcademicOptions() {
+    if (!isOnTimetablePage() || typeof document === "undefined" || !document.querySelector) {
+        return null;
+    }
+
+    return parseAcademicOptionsFromDocument(document);
 }
 
 /**
- * 将选择索引转换为正方教务接口所需的学期码。
- * 正方 v9：第一学期 = "3"，第二学期 = "12"
+ * 从正方课表页读取学年和学期选项。
+ * 学期码直接使用教务系统返回的 value，例如第一学期为 3、第二学期为 12。
  */
-function getSemesterCode(semesterIndex) {
-    return semesterIndex === 0 ? "3" : "12";
-}
+async function fetchAcademicOptions() {
+    const currentPageOptions = getCurrentPageAcademicOptions();
+    if (currentPageOptions) {
+        console.log("JS: 使用当前课表页的学年学期选项。");
+        return currentPageOptions;
+    }
 
-/**
- * 请求正方 v9 课表接口并解析课程数据。
- */
-async function fetchAndParseCourses(academicYear, semesterIndex) {
-    const semesterCode = getSemesterCode(semesterIndex);
-    const requestBody = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=`;
-
-    // 广东海洋大学正方教务 v9 个人课表查询接口
-    const targetUrl = "https://jw.gdou.edu.cn/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151";
+    const url = "https://jw.gdou.edu.cn/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default";
 
     try {
-        const response = await fetch(targetUrl, {
+        const response = await fetch(url, {
+            method: "GET",
+            credentials: "include"
+        });
+        if (!response.ok) return null;
+
+        const htmlText = await response.text();
+        const doc = new DOMParser().parseFromString(htmlText, "text/html");
+        const optionsData = parseAcademicOptionsFromDocument(doc);
+        if (!optionsData) return null;
+
+        const selectedYearIndex = optionsData.defaultYearIndex;
+        const start = Math.max(0, selectedYearIndex - 2);
+        const end = Math.min(optionsData.yearOptions.length, selectedYearIndex + 3);
+
+        return {
+            ...optionsData,
+            yearOptions: optionsData.yearOptions.slice(start, end),
+            defaultYearIndex: selectedYearIndex - start
+        };
+    } catch (error) {
+        console.warn("JS: 读取学年学期选项失败:", error);
+        return null;
+    }
+}
+
+/**
+ * 使用教务系统返回的选项让用户选择学年和学期。
+ * 学年和学期码直接使用 option 的 value，避免本地手动映射。
+ */
+async function selectAcademicYearAndSemester() {
+    const optionsData = await fetchAcademicOptions();
+    if (!optionsData) {
+        window.shiguangBridge.showToast("从教务系统读取学年学期失败，请确保登录状态。");
+        return null;
+    }
+
+    const { yearOptions, semesterOptions, defaultYearIndex, defaultSemesterIndex } = optionsData;
+    const yearTexts = yearOptions.map(option => option.text);
+    const yearIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择学年",
+        JSON.stringify(yearTexts),
+        defaultYearIndex
+    );
+    if (yearIndex === null || yearIndex === -1 || !yearOptions[yearIndex]) return null;
+    const selectedYearCode = yearOptions[yearIndex].value;
+
+    const semesterTexts = semesterOptions.map(option => option.text);
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择学期",
+        JSON.stringify(semesterTexts),
+        defaultSemesterIndex
+    );
+    if (semesterIndex === null || semesterIndex === -1 || !semesterOptions[semesterIndex]) return null;
+    const selectedSemesterCode = semesterOptions[semesterIndex].value;
+
+    return {
+        academicYear: selectedYearCode,
+        semesterCode: selectedSemesterCode
+    };
+}
+
+/**
+ * 将正方返回的日期字段规范为 yyyy-MM-dd。
+ */
+function normalizeStartDate(value) {
+    const match = String(value || "").match(/(\d{4})[-\/.年](\d{1,2})[-\/.月](\d{1,2})/);
+    if (!match) return null;
+
+    return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+}
+
+/**
+ * 从正方校历响应中查找第一周日期。
+ * 兼容顶层数组、data/list/rows 等包装对象，以及 zrq/zcrq/rq/ksrq 字段。
+ */
+function findSemesterStartDate(value) {
+    if (value == null) return null;
+
+    if (typeof value !== "object") {
+        return normalizeStartDate(value);
+    }
+
+    if (Array.isArray(value)) {
+        const firstWeek = value.find(item =>
+            item && typeof item === "object" &&
+            (String(item.zs) === "1" || String(item.zsmc) === "1")
+        ) || value[0];
+        const firstWeekDate = findSemesterStartDate(firstWeek);
+        if (firstWeekDate) return firstWeekDate;
+
+        for (const item of value) {
+            const date = findSemesterStartDate(item);
+            if (date) return date;
+        }
+        return null;
+    }
+
+    for (const field of ["zrq", "zcrq", "rq", "ksrq"]) {
+        const date = normalizeStartDate(value[field]);
+        if (date) return date;
+    }
+
+    for (const item of Object.values(value)) {
+        const date = findSemesterStartDate(item);
+        if (date) return date;
+    }
+
+    return null;
+}
+
+/**
+ * 获取所选学期的第一周开学日期。
+ * 日期接口失败时返回 null，不阻断课表导入。
+ */
+async function fetchSemesterStartDate(academicYear, semesterCode) {
+    const url = "https://jw.gdou.edu.cn/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
+    const requestBody = `xnm=${encodeURIComponent(academicYear)}&xqm=${encodeURIComponent(semesterCode)}`;
+
+    try {
+        const response = await fetch(url, {
             method: "POST",
             headers: {
-                "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+                "accept": "application/json, text/javascript, */*; q=0.01",
+                "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+                "x-requested-with": "XMLHttpRequest"
             },
             body: requestBody,
             credentials: "include"
         });
 
         if (!response.ok) {
-            window.shiguangBridge.showToast(`课表请求失败：HTTP ${response.status}`);
-            console.error(`JS: 接口返回非 200 状态码：${response.status}`);
+            console.warn(`JS: 开学日期接口请求失败：HTTP ${response.status}`);
             return null;
         }
 
-        const jsonText = await response.text();
+        const responseText = await response.text();
+        let json;
+        try {
+            json = JSON.parse(responseText);
+        } catch (error) {
+            console.warn("JS: 开学日期接口未返回 JSON，可能登录已过期。", error);
+            return null;
+        }
+
+        const startDate = findSemesterStartDate(json);
+        if (!startDate) console.warn("JS: 校历响应中未找到第 1 周开学日期。");
+        return startDate;
+    } catch (error) {
+        console.warn("JS: 获取学期开学日期失败:", error);
+    }
+
+    return null;
+}
+
+/**
+ * 请求正方 v9 课表接口并解析课程数据。
+ */
+async function fetchAndParseCourses(academicYear, semesterCode) {
+    const requestBody = `xnm=${encodeURIComponent(academicYear)}&xqm=${encodeURIComponent(semesterCode)}&kzlx=ck&xsdm=&kclbdm=`;
+
+    // 广东海洋大学正方教务 v9 个人课表查询接口
+    const targetUrl = "https://jw.gdou.edu.cn/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151";
+
+    try {
+        // 课表和校历互不依赖，并行请求以减少导入等待时间。
+        const [courseResponse, semesterStartDate] = await Promise.all([
+            fetch(targetUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+                },
+                body: requestBody,
+                credentials: "include"
+            }),
+            fetchSemesterStartDate(academicYear, semesterCode)
+        ]);
+
+        if (!courseResponse.ok) {
+            window.shiguangBridge.showToast(`课表请求失败：HTTP ${courseResponse.status}`);
+            console.error(`JS: 接口返回非 200 状态码：${courseResponse.status}`);
+            return null;
+        }
+
+        const jsonText = await courseResponse.text();
         const jsonData = JSON.parse(jsonText);
 
         if (!jsonData || !Array.isArray(jsonData.kbList) || jsonData.kbList.length === 0) {
@@ -281,10 +556,10 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
         return {
             courses: parsedCourses,
             // CourseConfigJsonModel（wiki 1.3）：所有字段可选，未提供则用默认值。
-            // GDOU 各节课间隔不统一，因此用 TimeSlot 节次表达时间，此处仅设置总周数。
+            // GDOU 各节课间隔不统一，因此用 TimeSlot 节次表达时间。
             config: {
-                semesterStartDate: null,       // 未提供校历日期，App 不会按日期计算当前周
-                semesterTotalWeeks: 20          // 本学期总周数
+                semesterStartDate,
+                semesterTotalWeeks: 20
             }
         };
     } catch (e) {
@@ -348,23 +623,16 @@ async function runImportFlow() {
         return;
     }
 
-    const academicYear = await getAcademicYear();
-    if (academicYear === null) {
+    const selection = await selectAcademicYearAndSemester();
+    if (!selection) {
         window.shiguangBridge.showToast("导入已取消。");
-        console.log("JS: 获取学年失败/取消，流程终止。");
+        console.log("JS: 获取学年学期失败/取消，流程终止。");
         return;
     }
-    console.log(`JS: 已选择学年: ${academicYear}`);
+    const { academicYear, semesterCode } = selection;
+    console.log(`JS: 已确定学年学期：${academicYear}，学期码：${semesterCode}`);
 
-    const semesterIndex = await selectSemester();
-    if (semesterIndex === null || semesterIndex === -1) {
-        window.shiguangBridge.showToast("导入已取消。");
-        console.log("JS: 选择学期失败/取消，流程终止。");
-        return;
-    }
-    console.log(`JS: 已选择学期索引: ${semesterIndex}`);
-
-    const result = await fetchAndParseCourses(academicYear, semesterIndex);
+    const result = await fetchAndParseCourses(academicYear, semesterCode);
     if (result === null) {
         console.log("JS: 课程获取或解析失败，流程终止。");
         return;
@@ -379,7 +647,10 @@ async function runImportFlow() {
 
     try {
         await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
-        window.shiguangBridge.showToast(`课表配置更新成功！总周数：${config.semesterTotalWeeks}周。`);
+        const configMessage = config.semesterStartDate
+            ? `课表配置更新成功！总周数：${config.semesterTotalWeeks}周，开学日期：${config.semesterStartDate}。`
+            : `课表配置更新成功！总周数：${config.semesterTotalWeeks}周，未获取到开学日期，已继续导入。`;
+        window.shiguangBridge.showToast(configMessage);
     } catch (error) {
         window.shiguangBridge.showToast(`课表配置保存失败: ${error.message}`);
         console.error('JS: Save Config Error:', error);
@@ -395,4 +666,5 @@ async function runImportFlow() {
 
 // 脚本执行入口
 runImportFlow();
+})();
 
