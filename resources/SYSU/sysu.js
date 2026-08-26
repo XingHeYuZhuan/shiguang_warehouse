@@ -336,8 +336,6 @@ function normalizeCourse(item) {
 
         endSection,
 
-        color: getCourseColor(name),
-
         weeks
     };
 }
@@ -452,19 +450,7 @@ function toNumber(value) {
 }
 
 
-// 根据课程名称生成稳定颜色
 
-function getCourseColor(name) {
-    const colorCount = 8;
-    let hash = 0;
-
-    for (let i = 0; i < name.length; i++) {
-        hash = ((hash << 5) - hash) + name.charCodeAt(i);
-        hash |= 0;
-    }
-
-    return (Math.abs(hash) % colorCount) + 1;
-}
 
 
 // 主导入流程
