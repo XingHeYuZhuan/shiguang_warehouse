@@ -987,27 +987,66 @@
         return { xhid, xqdm, xnxq, semesterOptions };
     }
 
-    async function fetchSchedulePageSession() {
-        const url = "/admin/xsd/pkgl/xskb/queryKbForXsd";
-        console.log("自动抓取课表页参数:", url);
+    // 首页上没有“当前学年学期”输入框时，从校区接口拿到当前学年学期（dataXnxq）。
+    // 直接请求无参 queryKbForXsd 时，若当前学期未发布会返回“当前学年学期课表未发布”，
+    // 但加上 xnxq 参数后仍能打开课表页并拿到 xhid/xqdm/历史学期下拉框。
+    async function fetchCurrentDataXnxq() {
         try {
-            const resp = await fetch(url, { credentials: "same-origin" });
-            if (!resp.ok) return null;
-            const html = await resp.text();
-            const session = parseSchedulePageSessionFromHtml(html);
-            if (session) {
-                console.log(
-                    "已获取课表页参数: 当前学期=",
-                    session.xnxq,
-                    "学期数=",
-                    session.semesterOptions.length
-                );
-            }
-            return session;
+            const resp = await fetch("/admin/api/jcsj/xqsj/getXqList", {
+                credentials: "same-origin",
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            if (!resp.ok) return "";
+            const json = await resp.json();
+            if (json.ret !== 0) return "";
+            const xnxq = (json.data || [])
+                .map((c) => c && c.dataXnxq)
+                .find(Boolean) || "";
+            if (xnxq) console.log("从校区接口获取当前学年学期:", xnxq);
+            return xnxq;
         } catch (error) {
-            console.error("自动抓取课表页参数失败:", error);
-            return null;
+            console.warn("获取当前学年学期失败:", error);
+            return "";
         }
+    }
+
+    async function fetchSchedulePageSession() {
+        const base = "/admin/xsd/pkgl/xskb/queryKbForXsd";
+        const candidates = [];
+        const urlXnxq = new URLSearchParams(location.search).get("xnxq");
+        if (urlXnxq) candidates.push(base + "?xnxq=" + encodeURIComponent(urlXnxq));
+
+        const currentXnxq = await fetchCurrentDataXnxq();
+        if (currentXnxq) {
+            candidates.push(base + "?xnxq=" + encodeURIComponent(currentXnxq));
+        }
+        // 最后兜底尝试无参（若本学期已发布，无参页面也能正常打开）
+        candidates.push(base);
+
+        const seen = new Set();
+        for (const url of candidates) {
+            if (seen.has(url)) continue;
+            seen.add(url);
+            console.log("自动抓取课表页参数:", url);
+            try {
+                const resp = await fetch(url, { credentials: "same-origin" });
+                if (!resp.ok) continue;
+                const html = await resp.text();
+                const session = parseSchedulePageSessionFromHtml(html);
+                if (session) {
+                    console.log(
+                        "已获取课表页参数: 当前学期=",
+                        session.xnxq,
+                        "学期数=",
+                        session.semesterOptions.length
+                    );
+                    return session;
+                }
+            } catch (error) {
+                console.error("自动抓取课表页参数失败:", url, error);
+            }
+        }
+        return null;
     }
 
     // 用抓取到的参数构造一个最小“页面对象”，复用现有读学期/读 xhid/xqdm 的逻辑
@@ -1088,7 +1127,7 @@
     }
 
     async function run() {
-        const doc = await getTargetDocument();
+        let doc = await getTargetDocument();
         let session = null;
 
         if (!doc) {
@@ -1097,6 +1136,14 @@
             if (!session) {
                 toast("未找到课表页面，请手动打开“我的课表”后重试");
                 return;
+            }
+        } else if (!doc.querySelector("#xnxq1")) {
+            // 当前课表页无学期下拉框（例如无参打开时报“当前学年学期课表未发布”）：
+            // 自动带 xnxq 参数重新抓一份含历史学期列表的课表页，改用接口导出。
+            session = await fetchSchedulePageSession();
+            if (session) {
+                console.log("当前课表页无学期下拉框，改用自动抓取的课表页参数（含历史学期）");
+                doc = null;
             }
         }
 
