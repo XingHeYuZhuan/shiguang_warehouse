@@ -136,8 +136,7 @@ function buildCourseConfig(courses) {
  */
 function isLoginPage() {
     var url = window.location.href;
-    var loginUrl = "http://jxgl.qut.edu.cn/jwglxt/xtgl/login_slogin.html";
-    return url === loginUrl;
+    return url.indexOf("/jwglxt/xtgl/login_slogin.html") !== -1;
 }
 
 function validateYearInput(input) {
@@ -195,8 +194,8 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
     var requestBody = "xnm=" + encodeURIComponent(academicYear) +
                       "&xqm=" + encodeURIComponent(semesterCode) +
                       "&kzlx=ck&xsdm=&kclbdm=&kclxdm=";
-    var url = "http://jxgl.qut.edu.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N253508";
-    var refererUrl = "http://jxgl.qut.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default";
+    var url = "https://jxgl.qut.edu.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N253508";
+    var refererUrl = "https://jxgl.qut.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default";
 
     console.log("JS: 发送请求到 " + url + ", body: " + requestBody);
 
@@ -213,25 +212,44 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
 
     try {
         var response = await fetch(url, requestOptions);
+        var jsonText = await response.text();
+        var responseType = response.headers && response.headers.get
+            ? response.headers.get("content-type") || "未知"
+            : "未知";
+        var responsePreview = jsonText.replace(/\s+/g, " ").trim().slice(0, 200) || "<空响应>";
 
         if (!response.ok) {
-            throw new Error("网络请求失败。状态码: " + response.status + " (" + response.statusText + ")");
+            var sessionHint = response.status === 901
+                ? "；QUT 教务系统通常用 901 表示登录会话无效或已过期，请重新登录后停留在教务系统页面再测试"
+                : "";
+            throw new Error(
+                "QUT 课表接口请求失败：HTTP " + response.status +
+                (response.statusText ? " " + response.statusText : "") +
+                sessionHint +
+                "；响应类型=" + responseType +
+                "；最终地址=" + (response.url || url) +
+                "；响应摘要=" + responsePreview
+            );
         }
 
-        var jsonText = await response.text();
+        if (jsonText.indexOf("登录") !== -1 && jsonText.indexOf("密码") !== -1) {
+            throw new Error(
+                "QUT 课表接口返回了登录页面，当前登录会话已失效。" +
+                "请重新登录教务系统后再导入；最终地址=" + (response.url || url) +
+                "；响应类型=" + responseType
+            );
+        }
 
         var jsonData;
         try {
             jsonData = JSON.parse(jsonText);
         } catch (e) {
-            console.error('JS: JSON 解析失败，可能是会话过期:', e);
-            window.shiguangBridge.showToast("数据返回格式错误，可能是您未成功登录或会话已过期。");
-            return null;
-        }
-
-        if (jsonText.indexOf("登录") !== -1 && jsonText.indexOf("密码") !== -1) {
-            window.shiguangBridge.showToast("未登录或登录已过期，请先登录教务系统");
-            return null;
+            throw new Error(
+                "QUT 课表接口未返回有效 JSON：" + e.message +
+                "；响应类型=" + responseType +
+                "；最终地址=" + (response.url || url) +
+                "；响应摘要=" + responsePreview
+            );
         }
 
         var courses = parseJsonData(jsonData);
