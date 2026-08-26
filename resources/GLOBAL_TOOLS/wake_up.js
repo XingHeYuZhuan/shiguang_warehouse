@@ -52,6 +52,99 @@ function validateKey(input) {
 }
 
 /**
+ * 节次与周次合并去重函数
+ * @param {Array<Object>} courses 原始解析课程数组
+ * @returns {Array<Object>} 合并去重后的课程数组
+ */
+function mergeAndDistinctCourses(courses) {
+    if (!Array.isArray(courses) || courses.length <= 1) return courses;
+
+    // 1. 深拷贝并规范周次数据，过滤无效项
+    const list = courses.map(c => ({
+        ...c,
+        name: c.name || '',
+        teacher: c.teacher || '',
+        position: c.position || '',
+        weeks: Array.isArray(c.weeks) ? [...c.weeks].sort((a, b) => a - b) : []
+    }));
+
+    // 阶段 1：合并连续节次与完全重复记录
+    list.sort((a, b) => {
+        return a.name.localeCompare(b.name) ||
+               a.teacher.localeCompare(b.teacher) ||
+               a.position.localeCompare(b.position) ||
+               (a.day || 0) - (b.day || 0) ||
+               a.weeks.join(',').localeCompare(b.weeks.join(',')) ||
+               (a.startSection || 0) - (b.startSection || 0);
+    });
+
+    const step1Merged = [];
+    let current = list[0];
+
+    for (let i = 1; i < list.length; i++) {
+        const next = list[i];
+
+        const isSameCourseAndWeeks =
+            current.name === next.name &&
+            current.teacher === next.teacher &&
+            current.position === next.position &&
+            current.day === next.day &&
+            current.weeks.join(',') === next.weeks.join(',');
+
+        const isContinuous = current.endSection + 1 === next.startSection;
+        const isDuplicate = current.startSection === next.startSection && current.endSection === next.endSection;
+
+        if (isSameCourseAndWeeks && isContinuous) {
+            // 节次连续：延长结束节次
+            current.endSection = next.endSection;
+        } else if (isSameCourseAndWeeks && isDuplicate) {
+            // 完全重复：跳过
+            continue;
+        } else {
+            step1Merged.push(current);
+            current = next;
+        }
+    }
+    step1Merged.push(current);
+
+    // 阶段 2：合并同节次的周次
+    step1Merged.sort((a, b) => {
+        return a.name.localeCompare(b.name) ||
+               a.teacher.localeCompare(b.teacher) ||
+               a.position.localeCompare(b.position) ||
+               (a.day || 0) - (b.day || 0) ||
+               (a.startSection || 0) - (b.startSection || 0) ||
+               (a.endSection || 0) - (b.endSection || 0);
+    });
+
+    const step2Merged = [];
+    let cur = step1Merged[0];
+
+    for (let i = 1; i < step1Merged.length; i++) {
+        const nxt = step1Merged[i];
+
+        const isSameCourseAndSection =
+            cur.name === nxt.name &&
+            cur.teacher === nxt.teacher &&
+            cur.position === nxt.position &&
+            cur.day === nxt.day &&
+            cur.startSection === nxt.startSection &&
+            cur.endSection === nxt.endSection;
+
+        if (isSameCourseAndSection) {
+            // 周次合并去重
+            cur.weeks = Array.from(new Set([...cur.weeks, ...nxt.weeks])).sort((a, b) => a - b);
+        } else {
+            step2Merged.push(cur);
+            cur = nxt;
+        }
+    }
+    step2Merged.push(cur);
+
+    return step2Merged;
+}
+
+/**
  * 从 WakeUP 的标准分享文案或裸口令中提取分享口令。
  * 规则与 WakeUP v6.1.70 官方渠道一致，兼容旧版 32 位十六进制口令。
  */
@@ -607,25 +700,32 @@ function convertToCourseJsonModel(parsedData) {
             }
         }
         
-        // 转换 startSection 和 endSection
-        const startSection = detail.startNode;
-        const endSection = detail.startNode + detail.step - 1;
-        
         // 构造 CourseJsonModel 对象
         const course = {
             "name": courseInfo.courseName, 
             "teacher": detail.teacher || "",
             "position": detail.room || "",
             "day": detail.day, 
-            "startSection": startSection,
-            "endSection": endSection,
             "weeks": weeks
         };
+
+        // 处理自定义时间 (ownTime)
+        if (detail.ownTime === true && detail.startTime && detail.endTime) {
+            // 使用自定义时间
+            course.isCustomTime = true;
+            course.customStartTime = detail.startTime;
+            course.customEndTime = detail.endTime;
+        } else {
+            // 使用标准节次
+            course.startSection = detail.startNode;
+            course.endSection = detail.startNode + detail.step - 1;
+        }
 
         finalCourses.push(course);
     });
 
-    return finalCourses;
+    // 应用合并去重
+    return mergeAndDistinctCourses(finalCourses);
 }
 
 
