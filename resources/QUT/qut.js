@@ -263,6 +263,79 @@ async function resolveTerm() {
     return await selectTermFromPage(await fetchTermPage());
 }
 
+function normalizeStartDate(value) {
+    var match = String(value || "").match(/(\d{4})[-\/.年](\d{1,2})[-\/.月](\d{1,2})/);
+    if (!match) return null;
+    return match[1] + "-" + match[2].padStart(2, "0") + "-" + match[3].padStart(2, "0");
+}
+
+function findSemesterStartDate(value) {
+    if (value == null) return null;
+    if (typeof value !== "object") return normalizeStartDate(value);
+
+    if (Array.isArray(value)) {
+        var firstWeek = value.find(function(item) {
+            return item && (String(item.zs) === "1" || String(item.zsmc) === "1");
+        }) || value[0];
+        var firstWeekDate = findSemesterStartDate(firstWeek);
+        if (firstWeekDate) return firstWeekDate;
+        for (var i = 0; i < value.length; i++) {
+            var date = findSemesterStartDate(value[i]);
+            if (date) return date;
+        }
+        return null;
+    }
+
+    var fields = ["zrq", "zcrq", "rq", "ksrq"];
+    for (var j = 0; j < fields.length; j++) {
+        var fieldDate = normalizeStartDate(value[fields[j]]);
+        if (fieldDate) return fieldDate;
+    }
+    var values = Object.values(value);
+    for (var k = 0; k < values.length; k++) {
+        var nestedDate = findSemesterStartDate(values[k]);
+        if (nestedDate) return nestedDate;
+    }
+    return null;
+}
+
+async function fetchSemesterStartDate(academicYear, semesterCode) {
+    var url = window.location.origin + "/jwglxt/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
+    var requestBody = "xnm=" + encodeURIComponent(academicYear) + "&xqm=" + encodeURIComponent(semesterCode);
+
+    try {
+        var response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "accept": "application/json, text/javascript, */*; q=0.01",
+                "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+                "x-requested-with": "XMLHttpRequest"
+            },
+            body: requestBody,
+            credentials: "include"
+        });
+        if (!response.ok) {
+            console.warn("JS: 开学日期接口请求失败：HTTP " + response.status);
+            return null;
+        }
+        var responseText = await response.text();
+        var data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (error) {
+            console.warn("JS: 开学日期接口未返回 JSON，可能登录已过期。", error);
+            return null;
+        }
+        var startDate = findSemesterStartDate(data);
+        if (!startDate) console.warn("JS: 校历响应中未找到第 1 周开学日期。");
+        else console.log("JS: 获取到开学日期：" + startDate);
+        return startDate;
+    } catch (error) {
+        console.warn("JS: 获取学期开学日期失败：", error);
+        return null;
+    }
+}
+
 /**
  * 请求和解析课程数据。
  */
@@ -287,7 +360,9 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
     };
 
     try {
-        var response = await fetch(url, requestOptions);
+        var requests = await Promise.all([fetch(url, requestOptions), fetchSemesterStartDate(academicYear, semesterCode)]);
+        var response = requests[0];
+        var semesterStartDate = requests[1];
         var jsonText = await response.text();
         var responseType = response.headers && response.headers.get
             ? response.headers.get("content-type") || "未知"
@@ -338,6 +413,7 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
         console.log("JS: 课程数据解析成功，共找到 " + courses.length + " 门课程。");
 
         var config = buildCourseConfig(courses);
+        config.semesterStartDate = semesterStartDate;
 
         return { courses: courses, config: config };
 
