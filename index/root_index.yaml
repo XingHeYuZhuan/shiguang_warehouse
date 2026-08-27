@@ -762,3 +762,8 @@ schools:
     name: "山西电子科技学院"
     initial: "S"
     resource_folder: "SXDZKJ"
+  
+  - id: "ZZVCAE"
+    name: "郑州汽车工程职业学院"
+    initial: "Z"
+    resource_folder: "ZZVCAE"
