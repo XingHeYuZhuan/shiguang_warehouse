@@ -2,36 +2,38 @@
  * 广东海洋大学教务课表导入适配
  * @date 2026-08-27
  * @author Mccurtain
- * @version 2.0
+ * @version 2.6
  */
 
 (function () {
 
 // ==================== 常量 ====================
 
-// 特殊作息，按校区分组：
+// 特殊作息（指定楼/室外场地作息），按校区分组：
+// venues 为整栋楼使用特殊作息的楼名（包含匹配，如 "实验楼" 会命中 "实验楼301"、"网球场（实验楼东面）"）；
+// venuePatterns 为楼名简写正则（如海滨 "实"+房间号 = 实验楼简写，实506-1计算机（2）室）；
+// outdoorKeywords 为特殊作息的室外场地关键词。
+// 命中这些场地的课程打标为特殊时间（SPECIAL_TIME_BLOCKS），
+// 未命中的其他教室（教学楼等）使用 TimeSlots 全校统一作息。
 const CAMPUS_CONFIGS = [
     {
         id: "huguang",
         label: "湖光校区",
         venues: ["广学楼", "明德楼"],
+        venuePatterns: [],
         outdoorKeywords: []
     },
     {
         id: "haibin",
         label: "海滨校区",
         venues: ["实验楼"],
+        // 实验楼简写："实"+房间号（如实506-1计算机（2）室），等价于实验楼
+        venuePatterns: [{ name: "实验楼简写", pattern: /^实\d/ }],
         outdoorKeywords: ["球场", "东面", "南面", "西面", "北面"]
     }
 ];
 
-// 特殊作息时间
-const SPECIAL_TIME_BLOCKS = [
-    { startSection: 3, endSection: 4, startTime: "10:05", endTime: "11:35" },
-    { startSection: 7, endSection: 8, startTime: "16:25", endTime: "17:50" }
-];
-
-// 全校统一作息时间（1-10 节）
+// 全校统一作息时间（1-10 节），未指定特殊作息的教室使用
 const TimeSlots = [
     { number: 1, startTime: "08:10", endTime: "08:55" },
     { number: 2, startTime: "09:00", endTime: "09:45" },
@@ -43,6 +45,12 @@ const TimeSlots = [
     { number: 8, startTime: "17:20", endTime: "18:05" },
     { number: 9, startTime: "19:30", endTime: "20:15" },
     { number: 10, startTime: "20:25", endTime: "21:10" }
+];
+
+// 指定楼/室外场地的特殊作息时间块（连堂）
+const SPECIAL_TIME_BLOCKS = [
+    { startSection: 3, endSection: 4, startTime: "10:05", endTime: "11:35" },
+    { startSection: 7, endSection: 8, startTime: "16:25", endTime: "17:50" }
 ];
 
 // ==================== 解析函数 ====================
@@ -221,27 +229,36 @@ function mergeAndDistinctCourses(courses) {
 // ==================== 特殊作息处理 ====================
 
 /**
- * 判断位置是否命中特殊场地
- * 楼名与室外关键词取并集，包含任一即可
+ * 判断位置是否命中特殊场地（指定楼或室外场地），返回命中的类型与关键词
+ * 楼名与室外关键词取并集，包含任一即可；命中者打标特殊作息
+ * @returns {{type: 'venue'|'outdoor', key: string}|null}
  */
 function matchesSpecialVenue(positionText, campusConfig) {
-    if (campusConfig.venues.some(venue => positionText.includes(venue))) return true;
-    return campusConfig.outdoorKeywords.some(keyword => positionText.includes(keyword));
+    const venueHit = campusConfig.venues.find(venue => positionText.includes(venue));
+    if (venueHit) return { type: 'venue', key: venueHit };
+    const patternHit = (campusConfig.venuePatterns || []).find(p => p.pattern.test(positionText));
+    if (patternHit) return { type: 'venue', key: patternHit.name };
+    const outdoorHit = campusConfig.outdoorKeywords.find(keyword => positionText.includes(keyword));
+    if (outdoorHit) return { type: 'outdoor', key: outdoorHit };
+    return null;
 }
 
 /**
- * 判断课程是否命中特殊作息
- * 仅当教室在特殊楼或室外场地内、且节次恰为连堂时间块时才返回自定义时间；
- * 普通教室（教学楼等）一律返回 null，按 TimeSlots 统一作息显示。
+ * 判断课程是否命中特殊作息（正向策略）
+ * 命中指定楼/室外场地的课程，在节次恰为特殊时间块（3-4/7-8 节）时打标特殊时间；
+ * 其他普通教室不打标，使用 TimeSlots 全校统一作息。
+ * 返回对象附带 reason 判定原因，供内部诊断与本地验证脚本使用（不写入导出课程）。
  */
 function getCustomTime(position, startSection, endSection, campusConfig) {
     const positionText = position == null ? '' : String(position);
-    if (!matchesSpecialVenue(positionText, campusConfig)) return null;
+    const hit = matchesSpecialVenue(positionText, campusConfig);
+    if (!hit) return { marked: false, reason: 'no-block' };
 
     const block = SPECIAL_TIME_BLOCKS.find(
         b => b.startSection === startSection && b.endSection === endSection
     );
-    return block ? { startTime: block.startTime, endTime: block.endTime } : null;
+    if (block) return { marked: true, startTime: block.startTime, endTime: block.endTime, reason: `special-${hit.type}:${hit.key}` };
+    return { marked: false, reason: `special-${hit.type}:${hit.key}-no-block` };
 }
 
 // ==================== 数据解析 ====================
@@ -282,10 +299,10 @@ function parseJsonData(jsonData, campusConfig) {
             weeks
         };
 
-        // 边解析边判断：直接对原始教室字段 cdmc 判断是否命中特殊场馆作息，
+        // 边解析边判断：直接对原始教室字段 cdmc 判断是否命中特殊作息，
         // 命中则在写入课程对象的同时打好 isCustomTime 标记，App 将优先显示自定义时间
         const customTime = getCustomTime(position, course.startSection, course.endSection, campusConfig);
-        if (customTime) {
+        if (customTime.marked) {
             course.isCustomTime = true;
             course.customStartTime = customTime.startTime;
             course.customEndTime = customTime.endTime;
@@ -301,7 +318,7 @@ function parseJsonData(jsonData, campusConfig) {
     return mergedCourses.map(course => {
         if (!course.isCustomTime) return course;
         const customTime = getCustomTime(course.position, course.startSection, course.endSection, campusConfig);
-        if (!customTime) {
+        if (!customTime.marked) {
             const plain = { ...course };
             delete plain.isCustomTime;
             delete plain.customStartTime;
