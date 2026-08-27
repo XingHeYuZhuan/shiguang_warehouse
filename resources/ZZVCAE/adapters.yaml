@@ -1,9 +1,9 @@
-# resources/ZZQCC/adapters.yaml
+# resources/zzvcae/adapters.yaml
 # 郑州汽车工程职业学院 拾光课程表适配
 # 教务平台：树维 EAMS（与郑州航空工业管理学院同平台）
 # 适配脚本：zzvcae.js
 adapters:
-  - adapter_id: "ZZQCC_01"
+  - adapter_id: "zzvcae_01"
     adapter_name: "郑州汽车工程职业学院"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "zzvcae.js"
