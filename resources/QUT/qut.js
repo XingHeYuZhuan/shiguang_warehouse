@@ -6,14 +6,14 @@
 function parseWeeks(zcd) {
     if (!zcd) return [];
 
-    var weekSets = zcd.split(',');
+    var weekSets = String(zcd).replace(/，/g, ',').split(',');
     var weeks = [];
 
     for (var i = 0; i < weekSets.length; i++) {
         var trimmedSet = weekSets[i].trim();
 
-        var rangeMatch = trimmedSet.match(/(\d+)-(\d+)周/);
-        var singleMatch = trimmedSet.match(/^(\d+)周/);
+        var rangeMatch = trimmedSet.match(/(\d+)\s*-\s*(\d+)\s*周?/);
+        var singleMatch = trimmedSet.match(/^(\d+)\s*周?/);
 
         var start = 0;
         var end = 0;
@@ -28,7 +28,7 @@ function parseWeeks(zcd) {
             processed = true;
         }
 
-        if (processed) {
+        if (processed && start >= 1 && end >= start) {
             var isSingle = trimmedSet.indexOf('(单)') !== -1;
             var isDouble = trimmedSet.indexOf('(双)') !== -1;
 
@@ -59,6 +59,48 @@ function cleanCourseName(name) {
     return name.replace(/[★○●◇◆]/g, '').trim();
 }
 
+function mergeAndDistinctCourses(courses) {
+    var sorted = courses.slice().sort(function(a, b) {
+        return a.name.localeCompare(b.name) ||
+            a.teacher.localeCompare(b.teacher) ||
+            a.position.localeCompare(b.position) ||
+            a.day - b.day ||
+            a.weeks.join(',').localeCompare(b.weeks.join(',')) ||
+            a.startSection - b.startSection;
+    });
+    var merged = [];
+
+    sorted.forEach(function(course) {
+        var previous = merged[merged.length - 1];
+        var sameCourse = previous && previous.name === course.name &&
+            previous.teacher === course.teacher && previous.position === course.position &&
+            previous.day === course.day && previous.weeks.join(',') === course.weeks.join(',');
+
+        if (sameCourse && previous.endSection + 1 >= course.startSection) {
+            previous.endSection = Math.max(previous.endSection, course.endSection);
+        } else if (sameCourse && previous.startSection === course.startSection && previous.endSection === course.endSection) {
+            return;
+        } else {
+            merged.push(course);
+        }
+    });
+
+    var sameSection = new Map();
+    merged.forEach(function(course) {
+        var key = [course.name, course.teacher, course.position, course.day,
+            course.startSection, course.endSection].join('|');
+        if (sameSection.has(key)) {
+            var existing = sameSection.get(key);
+            existing.weeks = Array.from(new Set(existing.weeks.concat(course.weeks))).sort(function(a, b) { return a - b; });
+        } else {
+            sameSection.set(key, course);
+        }
+    });
+    return Array.from(sameSection.values()).sort(function(a, b) {
+        return a.day - b.day || a.startSection - b.startSection || a.name.localeCompare(b.name);
+    });
+}
+
 /**
  * 解析 API 返回的 JSON 数据。
  */
@@ -75,7 +117,8 @@ function parseJsonData(jsonData) {
 
     for (var i = 0; i < rawCourseList.length; i++) {
         var rawCourse = rawCourseList[i];
-        if (!rawCourse.kcmc || !rawCourse.xqj || !rawCourse.jcs || !rawCourse.zcd) {
+        if (!rawCourse || typeof rawCourse !== "object" || !rawCourse.kcmc ||
+            rawCourse.xqj == null || rawCourse.jcs == null || rawCourse.zcd == null) {
             continue;
         }
 
@@ -84,19 +127,24 @@ function parseJsonData(jsonData) {
             continue;
         }
 
-        var sectionParts = rawCourse.jcs.split('-');
-        var startSection = Number(sectionParts[0]);
-        var endSection = Number(sectionParts[sectionParts.length - 1]);
+        var sectionMatch = String(rawCourse.jcs).match(/^\s*(?:第)?(\d+)\s*(?:-\s*(\d+))?\s*节?\s*$/);
+        if (!sectionMatch) {
+            console.warn("JS: 跳过无法解析节次的课程：" + rawCourse.kcmc + "，节次=" + rawCourse.jcs);
+            continue;
+        }
+        var startSection = Number(sectionMatch[1]);
+        var endSection = Number(sectionMatch[2] || sectionMatch[1]);
         var day = Number(rawCourse.xqj);
 
-        if (isNaN(day) || isNaN(startSection) || isNaN(endSection) || day < 1 || day > 7 || startSection > endSection) {
+        if (!Number.isInteger(day) || !Number.isInteger(startSection) || !Number.isInteger(endSection) ||
+            day < 1 || day > 7 || startSection < 1 || endSection < startSection) {
             continue;
         }
 
         finalCourseList.push({
-            name: cleanCourseName(rawCourse.kcmc),
-            teacher: (rawCourse.xm || "").trim(),
-            position: (rawCourse.cdmc || "未排地点").trim(),
+            name: cleanCourseName(String(rawCourse.kcmc)),
+            teacher: rawCourse.xm == null ? "" : String(rawCourse.xm).trim(),
+            position: rawCourse.cdmc == null ? "" : String(rawCourse.cdmc).trim(),
             day: day,
             startSection: startSection,
             endSection: endSection,
@@ -104,9 +152,7 @@ function parseJsonData(jsonData) {
         });
     }
 
-    finalCourseList.sort(function(a, b) {
-        return a.day - b.day || a.startSection - b.startSection || a.name.localeCompare(b.name);
-    });
+    finalCourseList = mergeAndDistinctCourses(finalCourseList);
 
     console.log("JS: JSON 数据解析完成，共找到 " + finalCourseList.length + " 门课程。");
     return finalCourseList;
@@ -126,6 +172,7 @@ function buildCourseConfig(courses) {
         }
     }
     return {
+        semesterStartDate: null,
         semesterTotalWeeks: maxWeek || 20,
         firstDayOfWeek: 1
     };
@@ -136,67 +183,169 @@ function buildCourseConfig(courses) {
  */
 function isLoginPage() {
     var url = window.location.href;
-    var loginUrl = "http://jxgl.qut.edu.cn/jwglxt/xtgl/login_slogin.html";
-    return url === loginUrl;
-}
-
-function validateYearInput(input) {
-    console.log("JS: validateYearInput 被调用，输入: " + input);
-    if (/^[0-9]{4}$/.test(input)) {
-        console.log("JS: validateYearInput 验证通过。");
-        return false;
-    }
-    console.log("JS: validateYearInput 验证失败。");
-    return "请输入四位数字的学年！";
+    return url.indexOf("/jwglxt/xtgl/login_slogin.html") !== -1;
 }
 
 async function promptUserToStart() {
     console.log("JS: 流程开始：显示公告。");
     return await window.shiguangBridgePromise.showAlert(
         "青岛理工大学课表导入",
-        "将从正方教务系统导入课程表。\n请确保已在教务系统中登录。",
-        "开始导入"
+        "导入前请确保您已在浏览器中成功登录青岛理工大学教务系统。\n脚本将通过正方教务接口读取课表。",
+        "好的，开始导入"
     );
 }
 
-async function getAcademicYear() {
-    var currentYear = new Date().getFullYear().toString();
-    console.log("JS: 提示用户输入学年。");
-    return await window.shiguangBridgePromise.showPrompt(
-        "选择学年",
-        "请输入要导入课程的起始学年（例如 2026-2027 应输入2026）:",
-        currentYear,
-        "validateYearInput"
-    );
+function parseSelectOptions(selectElement) {
+    if (!selectElement) return { options: [], defaultIndex: 0 };
+    var options = [];
+    var defaultIndex = 0;
+    Array.from(selectElement.querySelectorAll("option")).forEach(function(option) {
+        var value = String(option.value || "").trim();
+        if (!value) return;
+        var text = String(option.textContent || "").trim() || value;
+        if (option.selected) defaultIndex = options.length;
+        options.push({ value: value, text: text });
+    });
+    return { options: options, defaultIndex: defaultIndex };
 }
 
-async function selectSemester() {
-    var semesters = ["第一学期", "第二学期"];
-    console.log("JS: 提示用户选择学期。");
+function parseTermOptions(doc) {
+    var yearData = parseSelectOptions(doc.querySelector("#xnm"));
+    var semesterData = parseSelectOptions(doc.querySelector("#xqm"));
+    if (!yearData.options.length || !semesterData.options.length) {
+        throw new Error("课表页面未找到有效的学年或学期选项");
+    }
+    return { yearData: yearData, semesterData: semesterData };
+}
+
+function isOnTimetablePage() {
+    return window.location.pathname.indexOf("/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html") !== -1;
+}
+
+function readCurrentTerm() {
+    var yearElement = document.querySelector("#xnm");
+    var semesterElement = document.querySelector("#xqm");
+    var academicYear = yearElement ? String(yearElement.value || "").trim() : "";
+    var semesterCode = semesterElement ? String(semesterElement.value || "").trim() : "";
+    if (!academicYear || !semesterCode) {
+        throw new Error("当前课表页面未读取到学年学期，请先在教务系统页面选择学年和学期");
+    }
+    return { academicYear: academicYear, semesterCode: semesterCode };
+}
+
+async function fetchTermPage() {
+    var url = window.location.origin + "/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default";
+    var response = await fetch(url, { method: "GET", credentials: "include" });
+    if (!response.ok) throw new Error("读取课表页面失败：HTTP " + response.status);
+    return new DOMParser().parseFromString(await response.text(), "text/html");
+}
+
+async function selectTermFromPage(doc) {
+    var termData = parseTermOptions(doc);
+    var yearIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择学年", JSON.stringify(termData.yearData.options.map(function(item) { return item.text; })), termData.yearData.defaultIndex
+    );
+    if (yearIndex === null || yearIndex === -1 || !termData.yearData.options[yearIndex]) throw new Error("已取消或无法识别学年选择");
+
     var semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
-        "选择学期",
-        JSON.stringify(semesters),
-        0
+        "选择学期", JSON.stringify(termData.semesterData.options.map(function(item) { return item.text; })), termData.semesterData.defaultIndex
     );
-    return semesterIndex;
+    if (semesterIndex === null || semesterIndex === -1 || !termData.semesterData.options[semesterIndex]) throw new Error("已取消或无法识别学期选择");
+
+    return {
+        academicYear: termData.yearData.options[yearIndex].value,
+        semesterCode: termData.semesterData.options[semesterIndex].value
+    };
 }
 
-function getSemesterCode(semesterIndex) {
-    return semesterIndex === 0 ? "3" : "12";
+async function resolveTerm() {
+    if (isOnTimetablePage()) return readCurrentTerm();
+    return await selectTermFromPage(await fetchTermPage());
+}
+
+function normalizeStartDate(value) {
+    var match = String(value || "").match(/(\d{4})[-\/.年](\d{1,2})[-\/.月](\d{1,2})/);
+    if (!match) return null;
+    return match[1] + "-" + match[2].padStart(2, "0") + "-" + match[3].padStart(2, "0");
+}
+
+function findSemesterStartDate(value) {
+    if (value == null) return null;
+    if (typeof value !== "object") return normalizeStartDate(value);
+
+    if (Array.isArray(value)) {
+        var firstWeek = value.find(function(item) {
+            return item && (String(item.zs) === "1" || String(item.zsmc) === "1");
+        }) || value[0];
+        var firstWeekDate = findSemesterStartDate(firstWeek);
+        if (firstWeekDate) return firstWeekDate;
+        for (var i = 0; i < value.length; i++) {
+            var date = findSemesterStartDate(value[i]);
+            if (date) return date;
+        }
+        return null;
+    }
+
+    var fields = ["zrq", "zcrq", "rq", "ksrq"];
+    for (var j = 0; j < fields.length; j++) {
+        var fieldDate = normalizeStartDate(value[fields[j]]);
+        if (fieldDate) return fieldDate;
+    }
+    var values = Object.values(value);
+    for (var k = 0; k < values.length; k++) {
+        var nestedDate = findSemesterStartDate(values[k]);
+        if (nestedDate) return nestedDate;
+    }
+    return null;
+}
+
+async function fetchSemesterStartDate(academicYear, semesterCode) {
+    var url = window.location.origin + "/jwglxt/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
+    var requestBody = "xnm=" + encodeURIComponent(academicYear) + "&xqm=" + encodeURIComponent(semesterCode);
+
+    try {
+        var response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "accept": "application/json, text/javascript, */*; q=0.01",
+                "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+                "x-requested-with": "XMLHttpRequest"
+            },
+            body: requestBody,
+            credentials: "include"
+        });
+        if (!response.ok) {
+            console.warn("JS: 开学日期接口请求失败：HTTP " + response.status);
+            return null;
+        }
+        var responseText = await response.text();
+        var data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (error) {
+            console.warn("JS: 开学日期接口未返回 JSON，可能登录已过期。", error);
+            return null;
+        }
+        var startDate = findSemesterStartDate(data);
+        if (!startDate) console.warn("JS: 校历响应中未找到第 1 周开学日期。");
+        else console.log("JS: 获取到开学日期：" + startDate);
+        return startDate;
+    } catch (error) {
+        console.warn("JS: 获取学期开学日期失败：", error);
+        return null;
+    }
 }
 
 /**
  * 请求和解析课程数据。
  */
-async function fetchAndParseCourses(academicYear, semesterIndex) {
+async function fetchAndParseCourses(academicYear, semesterCode) {
     window.shiguangBridge.showToast("正在获取课表数据...");
 
-    var semesterCode = getSemesterCode(semesterIndex);
     var requestBody = "xnm=" + encodeURIComponent(academicYear) +
                       "&xqm=" + encodeURIComponent(semesterCode) +
                       "&kzlx=ck&xsdm=&kclbdm=&kclxdm=";
-    var url = "http://jxgl.qut.edu.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N253508";
-    var refererUrl = "http://jxgl.qut.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default";
+    var url = "https://jxgl.qut.edu.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N253508";
 
     console.log("JS: 发送请求到 " + url + ", body: " + requestBody);
 
@@ -204,7 +353,6 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
         "headers": {
             "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
             "X-Requested-With": "XMLHttpRequest",
-            "Referer": refererUrl
         },
         "body": requestBody,
         "method": "POST",
@@ -212,26 +360,47 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
     };
 
     try {
-        var response = await fetch(url, requestOptions);
+        var requests = await Promise.all([fetch(url, requestOptions), fetchSemesterStartDate(academicYear, semesterCode)]);
+        var response = requests[0];
+        var semesterStartDate = requests[1];
+        var jsonText = await response.text();
+        var responseType = response.headers && response.headers.get
+            ? response.headers.get("content-type") || "未知"
+            : "未知";
+        var responsePreview = jsonText.replace(/\s+/g, " ").trim().slice(0, 200) || "<空响应>";
 
         if (!response.ok) {
-            throw new Error("网络请求失败。状态码: " + response.status + " (" + response.statusText + ")");
+            var sessionHint = response.status === 901
+                ? "；QUT 教务系统通常用 901 表示登录会话无效或已过期，请重新登录后停留在教务系统页面再测试"
+                : "";
+            throw new Error(
+                "QUT 课表接口请求失败：HTTP " + response.status +
+                (response.statusText ? " " + response.statusText : "") +
+                sessionHint +
+                "；响应类型=" + responseType +
+                "；最终地址=" + (response.url || url) +
+                "；响应摘要=" + responsePreview
+            );
         }
 
-        var jsonText = await response.text();
+        if (jsonText.indexOf("登录") !== -1 && jsonText.indexOf("密码") !== -1) {
+            throw new Error(
+                "QUT 课表接口返回了登录页面，当前登录会话已失效。" +
+                "请重新登录教务系统后再导入；最终地址=" + (response.url || url) +
+                "；响应类型=" + responseType
+            );
+        }
 
         var jsonData;
         try {
             jsonData = JSON.parse(jsonText);
         } catch (e) {
-            console.error('JS: JSON 解析失败，可能是会话过期:', e);
-            window.shiguangBridge.showToast("数据返回格式错误，可能是您未成功登录或会话已过期。");
-            return null;
-        }
-
-        if (jsonText.indexOf("登录") !== -1 && jsonText.indexOf("密码") !== -1) {
-            window.shiguangBridge.showToast("未登录或登录已过期，请先登录教务系统");
-            return null;
+            throw new Error(
+                "QUT 课表接口未返回有效 JSON：" + e.message +
+                "；响应类型=" + responseType +
+                "；最终地址=" + (response.url || url) +
+                "；响应摘要=" + responsePreview
+            );
         }
 
         var courses = parseJsonData(jsonData);
@@ -244,6 +413,7 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
         console.log("JS: 课程数据解析成功，共找到 " + courses.length + " 门课程。");
 
         var config = buildCourseConfig(courses);
+        config.semesterStartDate = semesterStartDate;
 
         return { courses: courses, config: config };
 
@@ -302,64 +472,54 @@ async function importPresetTimeSlots(timeSlots) {
 }
 
 async function runImportFlow() {
-    if (isLoginPage()) {
-        window.shiguangBridge.showToast("导入失败：请先登录教务系统！");
-        console.log("JS: 检测到当前在登录页面，终止导入。");
-        return;
-    }
-
-    window.shiguangBridge.showToast("拾光课程表 - 青岛理工大学适配");
-
-    var alertConfirmed = await promptUserToStart();
-    if (!alertConfirmed) {
-        window.shiguangBridge.showToast("用户取消了导入。");
-        console.log("JS: 用户取消了导入流程。");
-        return;
-    }
-
-    var academicYear = await getAcademicYear();
-    if (academicYear === null) {
-        window.shiguangBridge.showToast("导入已取消。");
-        console.log("JS: 获取学年失败/取消，流程终止。");
-        return;
-    }
-    console.log("JS: 已选择学年: " + academicYear);
-
-    var semesterIndex = await selectSemester();
-    if (semesterIndex === null || semesterIndex === -1) {
-        window.shiguangBridge.showToast("导入已取消。");
-        console.log("JS: 选择学期失败/取消，流程终止。");
-        return;
-    }
-    console.log("JS: 已选择学期索引: " + semesterIndex);
-
-    var result = await fetchAndParseCourses(academicYear, semesterIndex);
-    if (result === null) {
-        console.log("JS: 课程获取或解析失败，流程终止。");
-        return;
-    }
-    var courses = result.courses;
-    var config = result.config;
-
-    var saveResult = await saveCourses(courses);
-    if (!saveResult) {
-        console.log("JS: 课程保存失败，流程终止。");
-        return;
-    }
-
     try {
-        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
-        window.shiguangBridge.showToast("课表配置更新成功！总周数：" + config.semesterTotalWeeks + "周。");
+        if (isLoginPage()) {
+            throw new Error("当前是登录页面，请先登录青岛理工大学教务系统");
+        }
+
+        window.shiguangBridge.showToast("拾光课程表 - 青岛理工大学适配");
+
+        var alertConfirmed = await promptUserToStart();
+        if (!alertConfirmed) {
+            window.shiguangBridge.showToast("用户取消了导入。");
+            console.log("JS: 用户取消了导入流程。");
+            return;
+        }
+
+        var term = await resolveTerm();
+        console.log("JS: 已选择学年学期: " + term.academicYear + ", " + term.semesterCode);
+
+        var result = await fetchAndParseCourses(term.academicYear, term.semesterCode);
+        if (result === null) {
+            console.log("JS: 课程获取或解析失败，流程终止。");
+            return;
+        }
+        var courses = result.courses;
+        var config = result.config;
+
+        var saveResult = await saveCourses(courses);
+        if (!saveResult) {
+            console.log("JS: 课程保存失败，流程终止。");
+            return;
+        }
+
+        try {
+            await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+            window.shiguangBridge.showToast("课表配置更新成功！总周数：" + config.semesterTotalWeeks + "周。");
+        } catch (error) {
+            window.shiguangBridge.showToast("课表配置保存失败: " + error.message);
+            console.error('JS: Save Config Error:', error);
+        }
+
+        await importPresetTimeSlots(TimeSlots);
+
+        window.shiguangBridge.showToast("成功导入 " + courses.length + " 门课程！");
+        console.log("JS: 整个导入流程执行完毕并成功。");
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
-        window.shiguangBridge.showToast("课表配置保存失败: " + error.message);
-        console.error('JS: Save Config Error:', error);
+        window.shiguangBridge.showToast("导入失败: " + error.message);
+        console.error("JS: 导入流程失败:", error);
     }
-
-    await importPresetTimeSlots(TimeSlots);
-
-    window.shiguangBridge.showToast("成功导入 " + courses.length + " 门课程！");
-    console.log("JS: 整个导入流程执行完毕并成功。");
-    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runImportFlow();
