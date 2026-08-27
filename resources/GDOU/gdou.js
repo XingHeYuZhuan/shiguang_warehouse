@@ -2,19 +2,17 @@
  * 广东海洋大学教务课表导入适配
  * @date 2026-08-27
  * @author Mccurtain
- * @version 2.6
+ * @version 2.0
  */
 
 (function () {
 
 // ==================== 常量 ====================
 
-// 特殊作息（指定楼/室外场地作息），按校区分组：
 // venues 为整栋楼使用特殊作息的楼名（包含匹配，如 "实验楼" 会命中 "实验楼301"、"网球场（实验楼东面）"）；
 // venuePatterns 为楼名简写正则（如海滨 "实"+房间号 = 实验楼简写，实506-1计算机（2）室）；
 // outdoorKeywords 为特殊作息的室外场地关键词。
-// 命中这些场地的课程打标为特殊时间（SPECIAL_TIME_BLOCKS），
-// 未命中的其他教室（教学楼等）使用 TimeSlots 全校统一作息。
+
 const CAMPUS_CONFIGS = [
     {
         id: "huguang",
@@ -27,7 +25,6 @@ const CAMPUS_CONFIGS = [
         id: "haibin",
         label: "海滨校区",
         venues: ["实验楼"],
-        // 实验楼简写："实"+房间号（如实506-1计算机（2）室），等价于实验楼
         venuePatterns: [{ name: "实验楼简写", pattern: /^实\d/ }],
         outdoorKeywords: ["球场", "东面", "南面", "西面", "北面"]
     }
@@ -660,6 +657,7 @@ async function runImportFlow() {
     await importPresetTimeSlots(TimeSlots);
 
     window.shiguangBridge.showToast(`课程导入成功，共导入 ${courses.length} 门课程！`);
+    window.shiguangBridge.showToast(`若课程时间有误，请提交issue或联系开发者！`);
     window.shiguangBridge.notifyTaskCompletion();
 }
 
