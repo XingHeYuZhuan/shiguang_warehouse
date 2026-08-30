@@ -767,3 +767,8 @@ schools:
     name: "郑州汽车工程职业学院"
     initial: "Z"
     resource_folder: "ZZVCAE"
+  
+  - id: "HNIE"
+    name: "湖南工程学院"
+    initial: "H"
+    resource_folder: "HNIE"
