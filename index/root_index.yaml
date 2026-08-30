@@ -153,6 +153,11 @@ schools:
     initial: "F"
     resource_folder: "FJCPC"
 
+  - id: "FAFU"
+    name: "福建农林大学"
+    initial: "F"
+    resource_folder: "FAFU"
+
   - id: "FOSU"
     name: "佛山大学"
     initial: "F"
