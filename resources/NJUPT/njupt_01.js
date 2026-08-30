@@ -1,5 +1,21 @@
 // 基于 HTML 页面抓取的拾光课表正方适配脚本
 
+// 南京邮电大学教学活动作息时间，各校区统一、全年执行。
+const NJUPT_TIME_SLOTS = [
+    { number: 1, startTime: "08:00", endTime: "08:45" },
+    { number: 2, startTime: "08:50", endTime: "09:35" },
+    { number: 3, startTime: "09:50", endTime: "10:35" },
+    { number: 4, startTime: "10:40", endTime: "11:25" },
+    { number: 5, startTime: "11:30", endTime: "12:15" },
+    { number: 6, startTime: "13:45", endTime: "14:30" },
+    { number: 7, startTime: "14:35", endTime: "15:20" },
+    { number: 8, startTime: "15:35", endTime: "16:20" },
+    { number: 9, startTime: "16:25", endTime: "17:10" },
+    { number: 10, startTime: "18:30", endTime: "19:15" },
+    { number: 11, startTime: "19:25", endTime: "20:10" },
+    { number: 12, startTime: "20:20", endTime: "21:05" }
+];
+
 /**
  * 解析表格
  */
@@ -220,6 +236,24 @@ async function saveCourses(parsedCourses) {
     }
 }
 
+async function saveNjuptTimeSlots() {
+    window.shiguangBridge.showToast("正在保存南京邮电大学作息时间...");
+    try {
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(NJUPT_TIME_SLOTS));
+        console.log("JS: 南京邮电大学作息时间保存成功！");
+        return true;
+    } catch (error) {
+        window.shiguangBridge.showToast(`作息时间保存失败: ${error.message}`);
+        console.error('JS: Save NJUPT Time Slots Error:', error);
+        await window.shiguangBridgePromise.showAlert(
+            "作息时间导入失败",
+            `课程已保存，但南京邮电大学作息时间保存失败：${error.message}`,
+            "确定"
+        );
+        return false;
+    }
+}
+
 
 async function runImportFlow() {
     const alertConfirmed = await window.shiguangBridgePromise.showAlert(
@@ -253,7 +287,13 @@ async function runImportFlow() {
         return;
     }
 
-    window.shiguangBridge.showToast(`课程导入成功，共导入 ${courses.length} 门课程！`);
+    const timeSlotsSaveResult = await saveNjuptTimeSlots();
+    if (!timeSlotsSaveResult) {
+        console.log("JS: 作息时间保存失败，流程终止。");
+        return;
+    }
+
+    window.shiguangBridge.showToast(`课程及作息时间导入成功，共导入 ${courses.length} 门课程！`);
     console.log("JS: 整个导入流程执行完毕并成功。");
     window.shiguangBridge.notifyTaskCompletion();
 }
