@@ -200,10 +200,71 @@ function getNjuptApiBasePath() {
 }
 
 function isNjuptPortalPage() {
-    return window.location.pathname.includes("/portal");
+    return (
+        window.location.pathname.includes("/portal") ||
+        window.location.pathname.includes("/mob/home")
+    );
+}
+
+let mobileTeachingSystemSearchTriggered = false;
+
+function normalizeTeachingSystemUrl(targetUrl) {
+    if (!targetUrl) return null;
+    try {
+        const parsedUrl = new URL(targetUrl);
+        if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
+            return parsedUrl.href;
+        }
+    } catch (error) {
+        console.warn("JS: 智慧校园教务入口 URL 无效：", error);
+    }
+    return null;
+}
+
+function findMobileTeachingSystemSsoUrl() {
+    if (!window.location.pathname.includes("/mob/home")) return null;
+
+    const title = document.querySelector('[title="教务系统"]');
+    const card = title?.closest(".bottom-box");
+    if (card) {
+        let capturedUrl = null;
+        const originalOpen = window.open;
+        try {
+            window.open = targetUrl => {
+                capturedUrl = targetUrl;
+                return null;
+            };
+            card.click();
+        } catch (error) {
+            console.warn("JS: 无法捕获移动端教务入口：", error);
+        } finally {
+            try {
+                window.open = originalOpen;
+            } catch (_) {}
+        }
+        return normalizeTeachingSystemUrl(capturedUrl);
+    }
+
+    if (!mobileTeachingSystemSearchTriggered) {
+        mobileTeachingSystemSearchTriggered = true;
+        const searchInput = document.querySelector('input[placeholder*="系统"]');
+        if (searchInput) {
+            searchInput.value = "教务";
+            searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+            searchInput.dispatchEvent(new KeyboardEvent("keydown", {
+                key: "Enter",
+                code: "Enter",
+                bubbles: true
+            }));
+        }
+    }
+    return null;
 }
 
 function findTeachingSystemSsoUrl() {
+    const mobileTargetUrl = findMobileTeachingSystemSsoUrl();
+    if (mobileTargetUrl) return mobileTargetUrl;
+
     const documents = [document];
     for (const iframe of document.querySelectorAll("iframe")) {
         try {
@@ -218,16 +279,8 @@ function findTeachingSystemSsoUrl() {
             const link = card.querySelector('a[title="教务系统"]');
             if (!link && !card.textContent.includes("教务系统")) continue;
 
-            const targetUrl = card.dataset.url;
-            if (!targetUrl) continue;
-            try {
-                const parsedUrl = new URL(targetUrl);
-                if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
-                    return parsedUrl.href;
-                }
-            } catch (error) {
-                console.warn("JS: portal 教务入口 URL 无效：", error);
-            }
+            const targetUrl = normalizeTeachingSystemUrl(card.dataset.url);
+            if (targetUrl) return targetUrl;
         }
     }
     return null;
