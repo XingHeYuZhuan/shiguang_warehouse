@@ -796,4 +796,9 @@ schools:
   - id: "AUFE"
     name: "安徽财经大学"
     initial: "A"
-    resource_folder: "AUFE"    
+    resource_folder: "AUFE"
+
+  - id: "GZMTU"
+    name: "广州航海学院"
+    initial: "G"
+    resource_folder: "GZMTU"
