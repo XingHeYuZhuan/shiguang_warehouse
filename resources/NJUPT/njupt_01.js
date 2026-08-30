@@ -1,5 +1,5 @@
 // 南京邮电大学正方教务（V9）拾光课程表适配脚本
-// 通过正方 API 获取课程与学期第一周日期，不依赖课表页面 HTML 结构。
+// 通过正方 API 获取课程与学期第一周日期
 
 const NJUPT_TIME_SLOTS = [
     { number: 1, startTime: "08:00", endTime: "08:45" },
@@ -160,153 +160,13 @@ function parseJsonData(jsonData) {
 }
 
 function getNjuptApiBasePath() {
-    const markers = ["/kbcx/", "/xtgl/"];
-    const markerIndex = markers
-        .map(marker => window.location.pathname.indexOf(marker))
-        .filter(index => index >= 0)
-        .sort((a, b) => a - b)[0];
-    if (markerIndex === undefined) return null;
+    const isTeachingSystemPage = ["/kbcx/", "/xtgl/"]
+        .some(marker => window.location.pathname.includes(marker));
+    if (!isTeachingSystemPage) return null;
 
     // 南邮 WebVPN 会拦截并改写根相对请求。若传入已经带 WebVPN
     // 哈希前缀的完整 URL，会被二次改写成“当前页面.htm/kbcx/...”。
     return "";
-}
-
-function isNjuptPortalPage() {
-    return (
-        window.location.pathname.includes("/portal") ||
-        window.location.pathname.includes("/mob/home")
-    );
-}
-
-let mobileTeachingSystemSearchTriggered = false;
-let mobileTeachingSystemExpandTriggered = false;
-let desktopTeachingSystemExpandTriggered = false;
-
-function normalizeTeachingSystemUrl(targetUrl) {
-    if (!targetUrl) return null;
-    try {
-        const parsedUrl = new URL(targetUrl);
-        if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
-            return parsedUrl.href;
-        }
-    } catch (error) {
-        console.warn("JS: 智慧校园教务入口 URL 无效：", error);
-    }
-    return null;
-}
-
-function findMobileTeachingSystemSsoUrl() {
-    if (!window.location.pathname.includes("/mob/home")) return null;
-
-    const title = document.querySelector('[title="教务系统"]');
-    const card = title?.closest(".bottom-box");
-    if (card) {
-        let capturedUrl = null;
-        const originalOpen = window.open;
-        try {
-            window.open = targetUrl => {
-                capturedUrl = targetUrl;
-                return null;
-            };
-            card.click();
-        } catch (error) {
-            console.warn("JS: 无法捕获移动端教务入口：", error);
-        } finally {
-            try {
-                window.open = originalOpen;
-            } catch (_) {}
-        }
-        return normalizeTeachingSystemUrl(capturedUrl);
-    }
-
-    if (!mobileTeachingSystemExpandTriggered) {
-        const moreButton = Array.from(
-            document.querySelectorAll(".work-car .bottom-box")
-        ).find(element => element.textContent.includes("更多"));
-        if (moreButton) {
-            mobileTeachingSystemExpandTriggered = true;
-            moreButton.click();
-            return null;
-        }
-    }
-
-    if (!mobileTeachingSystemSearchTriggered) {
-        mobileTeachingSystemSearchTriggered = true;
-        const searchInput = document.querySelector('input[placeholder*="系统"]');
-        if (searchInput) {
-            searchInput.value = "教务";
-            searchInput.dispatchEvent(new Event("input", { bubbles: true }));
-            searchInput.dispatchEvent(new KeyboardEvent("keydown", {
-                key: "Enter",
-                code: "Enter",
-                bubbles: true
-            }));
-        }
-    }
-    return null;
-}
-
-function findTeachingSystemSsoUrl() {
-    const mobileTargetUrl = findMobileTeachingSystemSsoUrl();
-    if (mobileTargetUrl) return mobileTargetUrl;
-
-    const documents = [document];
-    for (const iframe of document.querySelectorAll("iframe")) {
-        try {
-            if (iframe.contentDocument) documents.push(iframe.contentDocument);
-        } catch (error) {
-            console.warn("JS: 无法读取 portal iframe：", error);
-        }
-    }
-
-    for (const currentDocument of documents) {
-        for (const card of currentDocument.querySelectorAll("li.card[data-url]")) {
-            const link = card.querySelector('a[title="教务系统"]');
-            if (!link && !card.textContent.includes("教务系统")) continue;
-
-            const targetUrl = normalizeTeachingSystemUrl(card.dataset.url);
-            if (targetUrl) return targetUrl;
-        }
-    }
-
-    if (!desktopTeachingSystemExpandTriggered) {
-        for (const currentDocument of documents) {
-            const moreButton = Array.from(
-                currentDocument.querySelectorAll("li.card")
-            ).find(card => !card.dataset.url && card.textContent.includes("更多"));
-            if (moreButton) {
-                desktopTeachingSystemExpandTriggered = true;
-                moreButton.click();
-                break;
-            }
-        }
-    }
-    return null;
-}
-
-async function waitForTeachingSystemSsoUrl() {
-    for (let attempt = 0; attempt < 20; attempt++) {
-        const targetUrl = findTeachingSystemSsoUrl();
-        if (targetUrl) return targetUrl;
-        await new Promise(resolve => setTimeout(resolve, 250));
-    }
-    return null;
-}
-
-async function initializeTeachingSystemFromPortal(ssoUrl) {
-    window.shiguangBridge.showToast("正在通过智慧校园连接教务系统...");
-    const response = await fetch(ssoUrl, {
-        method: "GET",
-        credentials: "include",
-        redirect: "follow"
-    });
-    if (!response.ok) throw new Error(`教务系统单点登录失败：HTTP ${response.status}`);
-
-    const finalUrl = response.url || "";
-    if (finalUrl.includes("/enlink/sso/login")) {
-        throw new Error("WebVPN 登录状态已失效，请重新登录智慧校园");
-    }
 }
 
 async function postForm(url, requestBody) {
@@ -449,35 +309,22 @@ async function saveImportResult(courses, semesterStartDate) {
 async function runImportFlow() {
     const confirmed = await window.shiguangBridgePromise.showAlert(
         "南京邮电大学课表导入",
-        "请先完成 WebVPN 登录。可以直接在智慧校园主页导入，也可以进入教务系统后导入。",
+        "请先登录智慧校园并进入教务系统，建议打开课表页面后再导入。",
         "好的，开始导入"
     );
     if (!confirmed) return;
 
-    let appBasePath = getNjuptApiBasePath();
-    let teachingSystemSsoUrl = null;
-
-    if (appBasePath === null && isNjuptPortalPage()) {
-        teachingSystemSsoUrl = await waitForTeachingSystemSsoUrl();
-        if (teachingSystemSsoUrl) {
-            appBasePath = new URL(teachingSystemSsoUrl).origin;
-        }
-    }
-
+    const appBasePath = getNjuptApiBasePath();
     if (appBasePath === null) {
         await window.shiguangBridgePromise.showAlert(
             "无法识别当前页面",
-            "请打开南邮智慧校园主页，或从智慧校园进入教务系统后重试。",
+            "请先从智慧校园进入教务系统，并打开课表页面后重试。",
             "确定"
         );
         return;
     }
 
     try {
-        if (teachingSystemSsoUrl) {
-            await initializeTeachingSystemFromPortal(teachingSystemSsoUrl);
-        }
-
         const selection = await selectAcademicYearAndSemester(appBasePath);
         if (!selection) return;
 
