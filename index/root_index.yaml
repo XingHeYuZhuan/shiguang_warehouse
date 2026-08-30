@@ -772,3 +772,7 @@ schools:
     name: "郑州汽车工程职业学院"
     initial: "Z"
     resource_folder: "ZZVCAE"
+  - id: "LNU"
+    name: "辽宁大学"
+    initial: "L"
+    resource_folder: "LNU"
