@@ -199,6 +199,64 @@ function getNjuptApiBasePath() {
     return "";
 }
 
+function isNjuptPortalPage() {
+    return window.location.pathname.includes("/portal");
+}
+
+function findTeachingSystemSsoUrl() {
+    const documents = [document];
+    for (const iframe of document.querySelectorAll("iframe")) {
+        try {
+            if (iframe.contentDocument) documents.push(iframe.contentDocument);
+        } catch (error) {
+            console.warn("JS: 无法读取 portal iframe：", error);
+        }
+    }
+
+    for (const currentDocument of documents) {
+        for (const card of currentDocument.querySelectorAll("li.card[data-url]")) {
+            const link = card.querySelector('a[title="教务系统"]');
+            if (!link && !card.textContent.includes("教务系统")) continue;
+
+            const targetUrl = card.dataset.url;
+            if (!targetUrl) continue;
+            try {
+                const parsedUrl = new URL(targetUrl);
+                if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
+                    return parsedUrl.href;
+                }
+            } catch (error) {
+                console.warn("JS: portal 教务入口 URL 无效：", error);
+            }
+        }
+    }
+    return null;
+}
+
+async function waitForTeachingSystemSsoUrl() {
+    for (let attempt = 0; attempt < 20; attempt++) {
+        const targetUrl = findTeachingSystemSsoUrl();
+        if (targetUrl) return targetUrl;
+        await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    return null;
+}
+
+async function initializeTeachingSystemFromPortal(ssoUrl) {
+    window.shiguangBridge.showToast("正在通过智慧校园连接教务系统...");
+    const response = await fetch(ssoUrl, {
+        method: "GET",
+        credentials: "include",
+        redirect: "follow"
+    });
+    if (!response.ok) throw new Error(`教务系统单点登录失败：HTTP ${response.status}`);
+
+    const finalUrl = response.url || "";
+    if (finalUrl.includes("/enlink/sso/login")) {
+        throw new Error("WebVPN 登录状态已失效，请重新登录智慧校园");
+    }
+}
+
 async function postForm(url, requestBody) {
     const response = await fetch(url, {
         method: "POST",
@@ -256,16 +314,25 @@ async function saveImportResult(courses, semesterStartDate) {
 async function runImportFlow() {
     const confirmed = await window.shiguangBridgePromise.showAlert(
         "南京邮电大学课表导入",
-        "请先完成 WebVPN 登录，再从智慧校园手动打开本科教务系统。脚本将通过当前教务页面对应的正方 API 获取课程与开学日期。",
+        "请先完成 WebVPN 登录。可以直接在智慧校园主页导入，也可以进入教务系统后导入。",
         "好的，开始导入"
     );
     if (!confirmed) return;
 
-    const appBasePath = getNjuptApiBasePath();
+    let appBasePath = getNjuptApiBasePath();
+    let teachingSystemSsoUrl = null;
+
+    if (appBasePath === null && isNjuptPortalPage()) {
+        teachingSystemSsoUrl = await waitForTeachingSystemSsoUrl();
+        if (teachingSystemSsoUrl) {
+            appBasePath = new URL(teachingSystemSsoUrl).origin;
+        }
+    }
+
     if (appBasePath === null) {
         await window.shiguangBridgePromise.showAlert(
-            "尚未进入教务系统",
-            "请先完成 WebVPN 登录，再从智慧校园手动打开本科教务系统；等待页面加载完成后点击一键导入。",
+            "无法识别当前页面",
+            "请打开南邮智慧校园主页，或从智慧校园进入教务系统后重试。",
             "确定"
         );
         return;
@@ -281,6 +348,10 @@ async function runImportFlow() {
     window.shiguangBridge.showToast("正在从教务系统获取课表...");
 
     try {
+        if (teachingSystemSsoUrl) {
+            await initializeTeachingSystemFromPortal(teachingSystemSsoUrl);
+        }
+
         const [courses, semesterStartDate] = await Promise.all([
             fetchCourses(appBasePath, academicYear, semesterCode),
             fetchSemesterStartDate(appBasePath, academicYear, semesterCode)
