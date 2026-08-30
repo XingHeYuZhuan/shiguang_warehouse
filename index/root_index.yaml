@@ -318,6 +318,11 @@ schools:
     initial: "T"
     resource_folder: "TCU"
 
+  - id: "TUST"
+    name: "天津科技大学"
+    initial: "T"
+    resource_folder: "TUST"
+
   - id: "SCUT"
     name: "华南理工大学"
     initial: "H"
