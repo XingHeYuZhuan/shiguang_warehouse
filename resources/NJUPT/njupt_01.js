@@ -208,6 +208,7 @@ function isNjuptPortalPage() {
 
 let mobileTeachingSystemSearchTriggered = false;
 let mobileTeachingSystemExpandTriggered = false;
+let desktopTeachingSystemExpandTriggered = false;
 
 function normalizeTeachingSystemUrl(targetUrl) {
     if (!targetUrl) return null;
@@ -293,6 +294,19 @@ function findTeachingSystemSsoUrl() {
 
             const targetUrl = normalizeTeachingSystemUrl(card.dataset.url);
             if (targetUrl) return targetUrl;
+        }
+    }
+
+    if (!desktopTeachingSystemExpandTriggered) {
+        for (const currentDocument of documents) {
+            const moreButton = Array.from(
+                currentDocument.querySelectorAll("li.card")
+            ).find(card => !card.dataset.url && card.textContent.includes("更多"));
+            if (moreButton) {
+                desktopTeachingSystemExpandTriggered = true;
+                moreButton.click();
+                break;
+            }
         }
     }
     return null;
