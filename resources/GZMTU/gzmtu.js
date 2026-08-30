@@ -1,137 +1,276 @@
-﻿/**
- * 拾光课程表 - 广州航海学院 (新版正方教务系统) 适配脚本
- * 课表地址：http://jwx.gzmtu.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default
- */
-(async function () {
-    try {
-        shiguangBridge.showToast("正在获取广州航海学院课表数据...");
+﻿// 广州航海学院(gzmtu.edu.cn) 拾光课程表适配脚本
+// 基于官方正方教务 HTML 页面抓取方案
 
-        // 1. 获取当前页面选中的学年与学期
-        let xnm = document.querySelector("#xnm")?.value || document.querySelector("select[name='xnm']")?.value;
-        let xqm = document.querySelector("#xqm")?.value || document.querySelector("select[name='xqm']")?.value;
+const TIME_SLOTS = [
+    { number: 1, startTime: "08:30", endTime: "09:15" },
+    { number: 2, startTime: "09:25", endTime: "10:10" },
+    { number: 3, startTime: "10:30", endTime: "11:15" },
+    { number: 4, startTime: "11:25", endTime: "12:10" },
+    { number: 5, startTime: "14:00", endTime: "14:45" },
+    { number: 6, startTime: "14:55", endTime: "15:40" },
+    { number: 7, startTime: "16:00", endTime: "16:45" },
+    { number: 8, startTime: "16:55", endTime: "17:40" },
+    { number: 9, startTime: "19:00", endTime: "19:45" },
+    { number: 10, startTime: "19:55", endTime: "20:40" },
+    { number: 11, startTime: "20:50", endTime: "21:35" }
+];
 
-        const postData = new URLSearchParams();
-        if (xnm) postData.append("xnm", xnm);
-        if (xqm) postData.append("xqm", xqm);
-        postData.append("kzlx", "ck");
+function parseTable() {
+    const regexName = /[●★○]/g;
+    const courseInfoList = [];
+    const $ = window.jQuery;
+    if (!$) return courseInfoList;
 
-        // 2. 请求新版正方课表数据接口
-        const kbUrl = window.location.origin + "/jwglxt/kbcx/xskbcx_cxXsKb.html?gnmkdm=N2151";
-        const response = await fetch(kbUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
-            },
-            body: postData.toString()
-        });
+    $("#kbgrid_table_0 td").each((i, td) => {
+        if ($(td).hasClass("td_wrap") && $(td).text().trim() !== "") {
+            const day = parseInt($(td).attr("id").split("-")[0], 10);
 
-        if (!response.ok) {
-            throw new Error(`网络请求异常 (HTTP ${response.status})，请确保已正常登录！`);
-        }
+            $(td).find(".timetable_con.text-left").each((index, course) => {
+                const name = $(course).find(".title font").text().replace(regexName, "").trim();
+                const infoStr = $(course).find("p").eq(0).find("font").eq(1).text().trim();
+                const position = $(course).find("p").eq(1).find("font").text().trim();
+                const teacher = $(course).find("p").eq(2).find("font").text().trim();
 
-        const data = await response.json();
-        const kbList = data.kbList || [];
-
-        if (kbList.length === 0) {
-            await shiguangBridgePromise.showAlert(
-                "未获取到课表",
-                "当前学期暂无课程数据。如果本学期有课，请在页面下拉框切换学年学期后重试。"
-            );
-            return;
-        }
-
-        // 3. 周次解析工具函数
-        function parseWeeks(zcd) {
-            if (!zcd) return [];
-            const weeks = new Set();
-            const segments = zcd.split(/[,，]/);
-            for (const seg of segments) {
-                const match = seg.match(/(\d+)(?:-(\d+))?周?(?:\(([单双])\))?/);
-                if (match) {
-                    const start = parseInt(match[1], 10);
-                    const end = match[2] ? parseInt(match[2], 10) : start;
-                    const type = match[3];
-
-                    for (let w = start; w <= end; w++) {
-                        if (type === "单" && w % 2 === 0) continue;
-                        if (type === "双" && w % 2 !== 0) continue;
-                        weeks.add(w);
+                if (infoStr && infoStr.match(/\((\d+-\d+节)\)/) && infoStr.split("节)")[1]) {
+                    const [sections, weeks] = parseCourseInfo(infoStr);
+                    if (name && position && teacher && sections.length && weeks.length) {
+                        courseInfoList.push({
+                            name: name,
+                            day: day,
+                            weeks: weeks,
+                            teacher: teacher,
+                            position: position.split(/\s+/).pop(),
+                            startSection: sections[0],
+                            endSection: sections[sections.length - 1]
+                        });
                     }
                 }
-            }
-            return Array.from(weeks).sort((a, b) => a - b);
-        }
-
-        // 4. 节次解析工具函数
-        function parseSection(jcor) {
-            if (!jcor) return { startSection: 1, endSection: 1 };
-            const parts = jcor.split("-").map(n => parseInt(n, 10)).filter(n => !isNaN(n));
-            if (parts.length === 0) return { startSection: 1, endSection: 1 };
-            return {
-                startSection: Math.min(...parts),
-                endSection: Math.max(...parts)
-            };
-        }
-
-        // 5. 格式化并清洗课程数据
-        const courses = [];
-        for (const item of kbList) {
-            const courseName = item.kcmc || item.kcmc_raw || "未命名课程";
-            const teacher = item.xm || "";
-            const position = item.cdmc || item.cd_id || "";
-            const day = parseInt(item.xqj, 10);
-            const { startSection, endSection } = parseSection(item.jcor || item.jc);
-            const weeks = parseWeeks(item.zcd);
-
-            if (weeks.length === 0 || isNaN(day)) {
-                continue;
-            }
-
-            courses.push({
-                name: courseName.trim(),
-                teacher: teacher.trim(),
-                position: position.trim(),
-                day: day,
-                startSection: startSection,
-                endSection: endSection,
-                weeks: weeks,
-                isCustomTime: false,
-                customStartTime: null,
-                customEndTime: null,
-                color: null,
-                remark: item.kcxz ? `[${item.kcxz}]` : null
             });
         }
+    });
 
-        if (courses.length === 0) {
-            await shiguangBridgePromise.showAlert("解析警告", "提取到的有效课程数量为 0。");
-            return;
+    return courseInfoList;
+}
+
+function parseList() {
+    const regexName = /[●★○]/g;
+    const regexWeekNum = /周数：|周/g;
+    const regexPosition = /上课地点：/g;
+    const regexTeacher = /教师 ：/g;
+    const $ = window.jQuery;
+    if (!$) return [];
+
+    const courseInfoList = [];
+    $("#kblist_table tbody").each((day, tbody) => {
+        if (day > 0 && day < 8) {
+            let sections;
+            $(tbody).find("tr:not(:first-child)").each((trIndex, tr) => {
+                let name;
+                let font;
+
+                if ($(tr).find("td").length > 1) {
+                    sections = parseSections($(tr).find("td:first-child").text());
+                    name = $(tr).find("td:nth-child(2)").find(".title").text().replace(regexName, "").trim();
+                    font = $(tr).find("td:nth-child(2)").find("p font");
+                } else {
+                    name = $(tr).find("td").find(".title").text().replace(regexName, "").trim();
+                    font = $(tr).find("td").find("p font");
+                }
+
+                const weekStr = $(font[0]).text().replace(regexWeekNum, "").trim();
+                const weeks = parseWeeks(weekStr);
+                const positionRaw = $(font[1]).text().replace(regexPosition, "").trim();
+                const teacher = $(font[2]).text().replace(regexTeacher, "").trim();
+
+                if (name && sections && weeks.length && teacher && positionRaw) {
+                    courseInfoList.push({
+                        name: name,
+                        day: day,
+                        weeks: weeks,
+                        teacher: teacher,
+                        position: positionRaw.split(/\s+/).pop(),
+                        startSection: sections[0],
+                        endSection: sections[sections.length - 1]
+                    });
+                }
+            });
+        }
+    });
+
+    return courseInfoList;
+}
+
+function parseCourseInfo(str) {
+    const sections = parseSections(str.match(/\((\d+-\d+节)\)/)[1].replace(/节/g, ""));
+    const weekStrWithMarker = str.split("节)")[1];
+    const weeks = parseWeeks(weekStrWithMarker.replace(/周/g, "").trim());
+    return [sections, weeks];
+}
+
+function parseSections(str) {
+    const [start, end] = str.split("-").map(Number);
+    if (isNaN(start) || isNaN(end) || start > end) return [];
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+}
+
+function parseWeeks(str) {
+    const segments = str.split(",");
+    const weeks = [];
+    const segmentRegex = /(\d+)(?:-(\d+))?\s*(\([单双]\))?/g;
+
+    for (const segment of segments) {
+        const cleanSegment = segment.replace(/周/g, "").trim();
+        segmentRegex.lastIndex = 0;
+
+        let match;
+        while ((match = segmentRegex.exec(cleanSegment)) !== null) {
+            const start = parseInt(match[1], 10);
+            const end = match[2] ? parseInt(match[2], 10) : start;
+            const flagStr = match[3] || "";
+
+            let flag = 0;
+            if (flagStr.includes("单")) {
+                flag = 1;
+            } else if (flagStr.includes("双")) {
+                flag = 2;
+            }
+
+            for (let i = start; i <= end; i += 1) {
+                if (flag === 1 && i % 2 !== 1) continue;
+                if (flag === 2 && i % 2 !== 0) continue;
+                if (!weeks.includes(i)) {
+                    weeks.push(i);
+                }
+            }
+        }
+    }
+
+    return weeks.sort((a, b) => a - b);
+}
+
+function buildCourseConfig(courses) {
+    let maxWeek = 0;
+    for (const course of courses) {
+        for (const week of course.weeks) {
+            if (week > maxWeek) {
+                maxWeek = week;
+            }
+        }
+    }
+
+    return {
+        semesterTotalWeeks: maxWeek || 20,
+        firstDayOfWeek: 1
+    };
+}
+
+async function scrapeAndParseCourses() {
+    window.shiguangBridge.showToast("正在检查页面并抓取课程数据...");
+    const tips = "1. 登录广州航海学院教务系统\n2. 进入学生个人课表页面\n3. 选择正确学年、学期并点击【查询】\n4. 确认页面已显示课表\n5. 点击下方【一键导入】";
+
+    try {
+        const response = await fetch(window.location.href);
+        const text = await response.text();
+        if (!text.includes("课表查询")) {
+            await window.shiguangBridgePromise.showAlert("导入失败", `当前页面似乎不是学生课表查询页面。请检查：\n${tips}`, "确定");
+            return null;
         }
 
-        // 6. 保存作息时间表（广州航海学院常规作息）
-        const presetTimeSlots = [
-            { number: 1, startTime: "08:30", endTime: "09:15", alias: "第1节" },
-            { number: 2, startTime: "09:25", endTime: "10:10", alias: "第2节" },
-            { number: 3, startTime: "10:30", endTime: "11:15", alias: "第3节" },
-            { number: 4, startTime: "11:25", endTime: "12:10", alias: "第4节" },
-            { number: 5, startTime: "14:00", endTime: "14:45", alias: "第5节" },
-            { number: 6, startTime: "14:55", endTime: "15:40", alias: "第6节" },
-            { number: 7, startTime: "16:00", endTime: "16:45", alias: "第7节" },
-            { number: 8, startTime: "16:55", endTime: "17:40", alias: "第8节" },
-            { number: 9, startTime: "19:00", endTime: "19:45", alias: "第9节" },
-            { number: 10, startTime: "19:55", endTime: "20:40", alias: "第10节" },
-            { number: 11, startTime: "20:50", endTime: "21:35", alias: "第11节" }
-        ];
-        await shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+        const typeElement = document.querySelector("#shcPDF");
+        if (!typeElement) {
+            await window.shiguangBridgePromise.showAlert("导入失败", "未能识别课表视图类型，请确认您已点击查询且课表已加载完毕。", "确定");
+            return null;
+        }
 
-        // 7. 保存课程数据并通知完成
-        await shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        const type = typeElement.dataset.type;
+        const tableElement = document.querySelector(type === "list" ? "#kblist_table" : "#kbgrid_table_0");
+        if (!tableElement) {
+            await window.shiguangBridgePromise.showAlert("导入失败", `未能找到课表主体（${type} 视图），请确认您已点击查询且课表已加载完毕。`, "确定");
+            return null;
+        }
 
-        shiguangBridge.showToast(`成功导入广州航海学院 ${courses.length} 门课程！`);
-        shiguangBridge.notifyTaskCompletion();
+        const courses = type === "list" ? parseList() : parseTable();
+        if (!courses.length) {
+            window.shiguangBridge.showToast("未找到任何课程数据，请检查学年学期是否正确或本学期无课。");
+            return null;
+        }
 
+        return {
+            courses: courses,
+            config: buildCourseConfig(courses)
+        };
     } catch (error) {
-        console.error("广州航海学院课表导入出错:", error);
-        await shiguangBridgePromise.showAlert("导入失败", error.message || "未知错误，请重试");
+        window.shiguangBridge.showToast(`抓取或解析失败: ${error.message}`);
+        console.error("JS: Scrape/Parse Error:", error);
+        await window.shiguangBridgePromise.showAlert("抓取或解析失败", `发生错误：${error.message}`, "确定");
+        return null;
     }
-})();
+}
+
+async function saveCourses(parsedCourses) {
+    window.shiguangBridge.showToast(`正在保存 ${parsedCourses.length} 门课程...`);
+    try {
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(parsedCourses, null, 2));
+        return true;
+    } catch (error) {
+        window.shiguangBridge.showToast(`课程保存失败: ${error.message}`);
+        console.error("JS: Save Courses Error:", error);
+        return false;
+    }
+}
+
+async function saveCourseConfig(config) {
+    try {
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+    } catch (error) {
+        window.shiguangBridge.showToast(`课表配置保存失败: ${error.message}`);
+        console.error("JS: Save Config Error:", error);
+    }
+}
+
+async function importPresetTimeSlots() {
+    try {
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+        window.shiguangBridge.showToast("预设时间段导入成功！");
+    } catch (error) {
+        window.shiguangBridge.showToast(`导入时间段失败: ${error.message}`);
+        console.error("JS: Save Time Slots Error:", error);
+    }
+}
+
+async function runImportFlow() {
+    const alertConfirmed = await window.shiguangBridgePromise.showAlert(
+        "广州航海学院课表导入",
+        "导入前请确保您已在浏览器中成功登录教务系统，并处于课表查询页面且已点击查询。",
+        "好的，开始导入"
+    );
+    if (!alertConfirmed) {
+        window.shiguangBridge.showToast("用户取消了导入。");
+        return;
+    }
+
+    if (typeof window.jQuery === "undefined" && typeof $ === "undefined") {
+        const errorMsg = "当前教务系统页面似乎没有加载 jQuery 库。本脚本依赖 jQuery 进行 DOM 解析。";
+        window.shiguangBridge.showToast(errorMsg);
+        await window.shiguangBridgePromise.showAlert("导入失败", `${errorMsg}\n请尝试刷新页面后重试。`, "确定");
+        return;
+    }
+
+    const result = await scrapeAndParseCourses();
+    if (result === null) {
+        return;
+    }
+
+    const { courses, config } = result;
+    const saveResult = await saveCourses(courses);
+    if (!saveResult) {
+        return;
+    }
+
+    await saveCourseConfig(config);
+    await importPresetTimeSlots();
+    window.shiguangBridge.showToast(`课程导入成功，共导入 ${courses.length} 门课程！`);
+    window.shiguangBridge.notifyTaskCompletion();
+}
+
+runImportFlow();
