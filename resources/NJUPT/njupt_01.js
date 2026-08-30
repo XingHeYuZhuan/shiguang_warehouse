@@ -187,9 +187,12 @@ function getSemesterCode(semesterIndex) {
 }
 
 function getWebVpnAppBaseUrl() {
-    const marker = "/kbcx/";
-    const markerIndex = window.location.pathname.indexOf(marker);
-    if (markerIndex < 0) return null;
+    const markers = ["/kbcx/", "/xtgl/"];
+    const markerIndex = markers
+        .map(marker => window.location.pathname.indexOf(marker))
+        .filter(index => index >= 0)
+        .sort((a, b) => a - b)[0];
+    if (markerIndex === undefined) return null;
     return `${window.location.origin}${window.location.pathname.slice(0, markerIndex)}`;
 }
 
@@ -250,7 +253,7 @@ async function saveImportResult(courses, semesterStartDate) {
 async function runImportFlow() {
     const confirmed = await window.shiguangBridgePromise.showAlert(
         "南京邮电大学课表导入",
-        "请先完成 WebVPN 登录，从智慧校园手动打开本科教务系统，再进入学生课表查询页面。脚本将通过当前课表页面对应的正方 API 获取课程与开学日期。",
+        "请先完成 WebVPN 登录，再从智慧校园手动打开本科教务系统。脚本将通过当前教务页面对应的正方 API 获取课程与开学日期。",
         "好的，开始导入"
     );
     if (!confirmed) return;
@@ -258,8 +261,8 @@ async function runImportFlow() {
     const appBaseUrl = getWebVpnAppBaseUrl();
     if (!appBaseUrl) {
         await window.shiguangBridgePromise.showAlert(
-            "尚未进入课表页面",
-            "请先完成 WebVPN 登录，从智慧校园手动打开本科教务系统，再进入学生课表查询页面；等待页面加载完成后点击一键导入。",
+            "尚未进入教务系统",
+            "请先完成 WebVPN 登录，再从智慧校园手动打开本科教务系统；等待页面加载完成后点击一键导入。",
             "确定"
         );
         return;
