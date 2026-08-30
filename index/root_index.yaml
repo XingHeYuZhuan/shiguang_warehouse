@@ -796,4 +796,9 @@ schools:
   - id: "AUFE"
     name: "安徽财经大学"
     initial: "A"
-    resource_folder: "AUFE"    
+    resource_folder: "AUFE"
+
+  - id: "SWU"
+    name: "西南大学"
+    initial: "X"
+    resource_folder: "SWU"
