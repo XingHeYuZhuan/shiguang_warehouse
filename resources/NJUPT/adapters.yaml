@@ -1,8 +1,8 @@
 adapters:
   - adapter_id: "NJUPT_01"
-    adapter_name: "南京邮电大学正方教务"
+    adapter_name: "南京邮电大学智慧校园"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "njupt_01.js"
     import_url: "https://i.njupt.edu.cn/"
     maintainer: "kemi-20"
-    description: "南京邮电大学本科正方教务课表导入。完成 WebVPN 登录并从智慧校园打开本科教务系统后，可通过 API 导入课程、开学日期及学校作息时间。"
+    description: "南京邮电大学本科正方教务课表导入。完成 WebVPN 登录并从智慧校园打开教务系统后，可通过 API 导入课程、开学日期及学校作息时间。"

@@ -186,14 +186,17 @@ function getSemesterCode(semesterIndex) {
     return semesterIndex === 0 ? "3" : "12";
 }
 
-function getWebVpnAppBaseUrl() {
+function getNjuptApiBasePath() {
     const markers = ["/kbcx/", "/xtgl/"];
     const markerIndex = markers
         .map(marker => window.location.pathname.indexOf(marker))
         .filter(index => index >= 0)
         .sort((a, b) => a - b)[0];
     if (markerIndex === undefined) return null;
-    return `${window.location.origin}${window.location.pathname.slice(0, markerIndex)}`;
+
+    // 南邮 WebVPN 会拦截并改写根相对请求。若传入已经带 WebVPN
+    // 哈希前缀的完整 URL，会被二次改写成“当前页面.htm/kbcx/...”。
+    return "";
 }
 
 async function postForm(url, requestBody) {
@@ -211,8 +214,8 @@ async function postForm(url, requestBody) {
     return response;
 }
 
-async function fetchSemesterStartDate(appBaseUrl, academicYear, semesterCode) {
-    const url = `${appBaseUrl}/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154`;
+async function fetchSemesterStartDate(appBasePath, academicYear, semesterCode) {
+    const url = `${appBasePath}/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154`;
     try {
         const response = await postForm(url, `xnm=${academicYear}&xqm=${semesterCode}`);
         const data = await response.json();
@@ -233,8 +236,8 @@ async function fetchSemesterStartDate(appBaseUrl, academicYear, semesterCode) {
     return null;
 }
 
-async function fetchCourses(appBaseUrl, academicYear, semesterCode) {
-    const url = `${appBaseUrl}/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151`;
+async function fetchCourses(appBasePath, academicYear, semesterCode) {
+    const url = `${appBasePath}/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151`;
     const body = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=`;
     const response = await postForm(url, body);
     const data = await response.json();
@@ -258,8 +261,8 @@ async function runImportFlow() {
     );
     if (!confirmed) return;
 
-    const appBaseUrl = getWebVpnAppBaseUrl();
-    if (!appBaseUrl) {
+    const appBasePath = getNjuptApiBasePath();
+    if (appBasePath === null) {
         await window.shiguangBridgePromise.showAlert(
             "尚未进入教务系统",
             "请先完成 WebVPN 登录，再从智慧校园手动打开本科教务系统；等待页面加载完成后点击一键导入。",
@@ -279,8 +282,8 @@ async function runImportFlow() {
 
     try {
         const [courses, semesterStartDate] = await Promise.all([
-            fetchCourses(appBaseUrl, academicYear, semesterCode),
-            fetchSemesterStartDate(appBaseUrl, academicYear, semesterCode)
+            fetchCourses(appBasePath, academicYear, semesterCode),
+            fetchSemesterStartDate(appBasePath, academicYear, semesterCode)
         ]);
 
         if (courses.length === 0) {
