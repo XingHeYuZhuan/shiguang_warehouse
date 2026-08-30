@@ -1,0 +1,8 @@
+adapters:
+  - adapter_id: "NJUPT_01"
+    adapter_name: "南京邮电大学正方教务"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "njupt_01.js"
+    import_url: "https://i.njupt.edu.cn/"
+    maintainer: "kemi-20"
+    description: "南京邮电大学本科正方教务课表导入。登录智慧校园并进入教务系统的个人课表查询页面，查询课表后执行导入。"

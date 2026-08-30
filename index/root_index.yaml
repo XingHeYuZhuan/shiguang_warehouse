@@ -183,6 +183,11 @@ schools:
     initial: "N"
     resource_folder: "NJNU"
 
+  - id: "NJUPT"
+    name: "南京邮电大学"
+    initial: "N"
+    resource_folder: "NJUPT"
+
   - id: "XMCU"
     name: "厦门城市职业学院"
     initial: "X"
