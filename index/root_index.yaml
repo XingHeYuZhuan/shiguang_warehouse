@@ -767,13 +767,18 @@ schools:
     name: "郑州汽车工程职业学院"
     initial: "Z"
     resource_folder: "ZZVCAE"
-  
+
   - id: "LNU"
     name: "辽宁大学"
     initial: "L"
     resource_folder: "LNU"
-    
+
   - id: "HNIE"
     name: "湖南工程学院"
     initial: "H"
-    resource_folder: "HNIE"    
+    resource_folder: "HNIE"
+
+  - id: "CQIE"
+    name: "重庆工程学院"
+    initial: "C"
+    resource_folder: "CQIE"
