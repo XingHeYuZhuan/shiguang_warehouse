@@ -792,3 +792,8 @@ schools:
     name: "重庆工程学院"
     initial: "C"
     resource_folder: "CQIE"
+
+  - id: "AUFE"
+    name: "安徽财经大学"
+    initial: "A"
+    resource_folder: "AUFE"    
