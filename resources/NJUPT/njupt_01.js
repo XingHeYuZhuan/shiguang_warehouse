@@ -168,7 +168,7 @@ async function getAcademicYear() {
     const defaultYear = (now.getMonth() + 1 < 8 ? now.getFullYear() - 1 : now.getFullYear()).toString();
     return await window.shiguangBridgePromise.showPrompt(
         "选择学年",
-        "请输入学年起始年份（例如 2025-2026 学年请输入 2025）：",
+        "请输入学年起始年份（例如 2026-2027 学年请输入 2026）：",
         defaultYear,
         "validateYearInput"
     );
