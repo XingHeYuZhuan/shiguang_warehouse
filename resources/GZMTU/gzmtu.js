@@ -1,19 +1,69 @@
 ﻿// 广州航海学院(gzmtu.edu.cn) 拾光课程表适配脚本
-// 基于官方正方教务 HTML 页面抓取方案
+
 
 const TIME_SLOTS = [
-    { number: 1, startTime: "08:30", endTime: "09:15" },
-    { number: 2, startTime: "09:25", endTime: "10:10" },
-    { number: 3, startTime: "10:30", endTime: "11:15" },
-    { number: 4, startTime: "11:25", endTime: "12:10" },
+    { number: 1, startTime: "08:10", endTime: "08:55" },
+    { number: 2, startTime: "09:05", endTime: "09:50" },
+    { number: 3, startTime: "10:10", endTime: "10:55" },
+    { number: 4, startTime: "11:05", endTime: "11:50" },
     { number: 5, startTime: "14:00", endTime: "14:45" },
     { number: 6, startTime: "14:55", endTime: "15:40" },
     { number: 7, startTime: "16:00", endTime: "16:45" },
     { number: 8, startTime: "16:55", endTime: "17:40" },
-    { number: 9, startTime: "19:00", endTime: "19:45" },
-    { number: 10, startTime: "19:55", endTime: "20:40" },
-    { number: 11, startTime: "20:50", endTime: "21:35" }
+    { number: 9, startTime: "18:40", endTime: "19:25" },
+    { number: 10, startTime: "19:35", endTime: "20:20" }
 ];
+
+
+function mergeAndDistinctCourses(courses) {
+    if (!Array.isArray(courses) || courses.length <= 1) return courses;
+
+    const list = courses.map(c => ({
+        ...c,
+        name: c.name || '',
+        teacher: c.teacher || '',
+        position: c.position || '',
+        weeks: Array.isArray(c.weeks) ? [...c.weeks].sort((a, b) => a - b) : []
+    }));
+
+    list.sort((a, b) => {
+        return a.name.localeCompare(b.name) ||
+               a.teacher.localeCompare(b.teacher) ||
+               a.position.localeCompare(b.position) ||
+               (a.day || 0) - (b.day || 0) ||
+               a.weeks.join(',').localeCompare(b.weeks.join(',')) ||
+               (a.startSection || 0) - (b.startSection || 0);
+    });
+
+    const step1Merged = [];
+    let current = list[0];
+
+    for (let i = 1; i < list.length; i++) {
+        const next = list[i];
+
+        const isSameCourseAndWeeks =
+            current.name === next.name &&
+            current.teacher === next.teacher &&
+            current.position === next.position &&
+            current.day === next.day &&
+            current.weeks.join(',') === next.weeks.join(',');
+
+        const isContinuous = current.endSection + 1 === next.startSection;
+        const isDuplicate = current.startSection === next.startSection && current.endSection === next.endSection;
+
+        if (isSameCourseAndWeeks && isContinuous) {
+            current.endSection = next.endSection;
+        } else if (isSameCourseAndWeeks && isDuplicate) {
+            continue;
+        } else {
+            step1Merged.push(current);
+            current = next;
+        }
+    }
+    step1Merged.push(current);
+
+    return step1Merged;
+}
 
 function parseTable() {
     const regexName = /[●★○]/g;
@@ -49,7 +99,7 @@ function parseTable() {
         }
     });
 
-    return courseInfoList;
+    return mergeAndDistinctCourses(courseInfoList);
 }
 
 function parseList() {
@@ -97,7 +147,7 @@ function parseList() {
         }
     });
 
-    return courseInfoList;
+    return mergeAndDistinctCourses(courseInfoList);
 }
 
 function parseCourseInfo(str) {
@@ -114,7 +164,7 @@ function parseSections(str) {
 }
 
 function parseWeeks(str) {
-    const segments = str.split(",");
+    const segments = str.split(/[,，]/);
     const weeks = [];
     const segmentRegex = /(\d+)(?:-(\d+))?\s*(\([单双]\))?/g;
 
