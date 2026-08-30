@@ -768,7 +768,12 @@ schools:
     initial: "Z"
     resource_folder: "ZZVCAE"
   
+  - id: "LNU"
+    name: "辽宁大学"
+    initial: "L"
+    resource_folder: "LNU"
+    
   - id: "HNIE"
     name: "湖南工程学院"
     initial: "H"
-    resource_folder: "HNIE"
+    resource_folder: "HNIE"    
