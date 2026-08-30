@@ -798,7 +798,13 @@ schools:
     initial: "A"
     resource_folder: "AUFE"
 
+  - id: "GZMTU"
+    name: "广州航海学院"
+    initial: "G"
+    resource_folder: "GZMTU"
+    
   - id: "SWU"
     name: "西南大学"
     initial: "X"
     resource_folder: "SWU"
+    
