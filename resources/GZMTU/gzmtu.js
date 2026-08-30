@@ -1,9 +1,8 @@
-﻿// 广州航海学院(gzmtu.edu.cn) 拾光课程表适配脚本
-// 基于官方正方教务 v9 案例方案 (QQHRIT) 适配
-// 移动端强化版：支持强制桌面模式、智能兜底年份计算与多维容错
+// 广州航海学院(gzmtu.edu.cn) 拾光课程表适配脚本
+
 
 /**
- * 节次与周次合并去重函数 (官方标准算法)
+ * 节次与周次合并去重函数 
  */
 function mergeAndDistinctCourses(courses) {
     if (!Array.isArray(courses) || courses.length <= 1) return courses;
@@ -312,8 +311,7 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
                         courses: parsedCourses,
                         config: {
                             semesterStartDate: semesterStartDate,
-                            semesterTotalWeeks: maxWeek || 20,
-                            firstDayOfWeek: 1
+                            semesterTotalWeeks: 20
                         }
                     };
                 }
