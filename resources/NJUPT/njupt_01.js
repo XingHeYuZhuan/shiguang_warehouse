@@ -207,6 +207,7 @@ function isNjuptPortalPage() {
 }
 
 let mobileTeachingSystemSearchTriggered = false;
+let mobileTeachingSystemExpandTriggered = false;
 
 function normalizeTeachingSystemUrl(targetUrl) {
     if (!targetUrl) return null;
@@ -243,6 +244,17 @@ function findMobileTeachingSystemSsoUrl() {
             } catch (_) {}
         }
         return normalizeTeachingSystemUrl(capturedUrl);
+    }
+
+    if (!mobileTeachingSystemExpandTriggered) {
+        const moreButton = Array.from(
+            document.querySelectorAll(".work-car .bottom-box")
+        ).find(element => element.textContent.includes("更多"));
+        if (moreButton) {
+            mobileTeachingSystemExpandTriggered = true;
+            moreButton.click();
+            return null;
+        }
     }
 
     if (!mobileTeachingSystemSearchTriggered) {
