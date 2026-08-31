@@ -3,6 +3,6 @@ adapters:
     adapter_name: "三明学院正方教务"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "smu.js"
-    import_url: "https://jwxxt.fjsmu.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default"
+    import_url: "https://one.fjsmu.edu.cn/tp_up/view?m=up"
     maintainer: "Haooz"
-    description: "三明学院正方教务V9，通过CAS统一身份认证登录后进入课表页面点击导入"
+    description: "三明学院正方教务V9，通过CAS统一身份认证登录后进入教务系统执行导入"
