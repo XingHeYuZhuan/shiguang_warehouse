@@ -496,8 +496,8 @@
                 return;
             }
 
-            injectGuideBanner(`导入成功！共解析 ${courses.length} 门课程`, true);
-            toast(`导入成功！共解析 ${courses.length} 门课程`);
+            injectGuideBanner(`导入成功！共解析 ${courses.length} 门课程。提示：在设置开学日期后，课表才会正常显示！`, true);
+            toast(`导入成功！共解析 ${courses.length} 门课程。提示：在设置开学日期后，课表才会正常显示！`);
             if (window.shiguangBridge && window.shiguangBridge.notifyTaskCompletion) {
                 window.shiguangBridge.notifyTaskCompletion();
             }
