@@ -687,7 +687,7 @@ schools:
     name: "山东交通学院"
     initial: "S"
     resource_folder: "SDJTU"
-    
+
   - id: "GDOU"
     name: "广东海洋大学"
     initial: "G"
@@ -722,11 +722,11 @@ schools:
     name: "上海财经大学浙江学院"
     initial: "S"
     resource_folder: "SHUFEZJ"
-    
+
   - id: "YZU"
     name: "扬州大学"
     initial: "Y"
-    resource_folder: "YZU"   
+    resource_folder: "YZU"
 
   - id: "XUST"
     name: "西安科技大学"
@@ -736,7 +736,7 @@ schools:
   - id: "JSTC"
     name: "江苏旅游职业学院"
     initial: "J"
-    resource_folder: "JSTC"         
+    resource_folder: "JSTC"
 
   - id: "GPNU"
     name: "广东技术师范大学"
@@ -757,7 +757,7 @@ schools:
     name: "南通大学"
     initial: "N"
     resource_folder: "NTU"
-  
+
   - id: "USTL"
     name: "辽宁科技大学"
     initial: "L"
@@ -766,7 +766,7 @@ schools:
   - id: "LUT"
     name: "兰州理工大学"
     initial: "L"
-    resource_folder: "LUT"  
+    resource_folder: "LUT"
 
   - id: "SYSU"
     name: "中山大学"
@@ -777,7 +777,7 @@ schools:
     name: "山西电子科技学院"
     initial: "S"
     resource_folder: "SXDZKJ"
-  
+
   - id: "ZZVCAE"
     name: "郑州汽车工程职业学院"
     initial: "Z"
@@ -807,15 +807,13 @@ schools:
     name: "广州航海学院"
     initial: "G"
     resource_folder: "GZMTU"
-    
+
   - id: "SWU"
     name: "西南大学"
     initial: "X"
     resource_folder: "SWU"
+
   - id: "THDM"
     name: "南昌科技职业大学"
     initial: "N"
     resource_folder: "THDM"
-
-
-
