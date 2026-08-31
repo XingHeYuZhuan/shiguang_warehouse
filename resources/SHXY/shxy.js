@@ -149,13 +149,56 @@ async function fetchCourses(academicYear, semesterIndex) {
     }
 }
 
+const CampusTimeSlots = {
+    "老校区(厚德楼)": [
+        { number: 1, startTime: "08:10", endTime: "08:55" },
+        { number: 2, startTime: "09:00", endTime: "09:45" },
+        { number: 3, startTime: "10:15", endTime: "11:00" },
+        { number: 4, startTime: "11:05", endTime: "11:50" },
+        { number: 5, startTime: "13:45", endTime: "14:30" },
+        { number: 6, startTime: "14:35", endTime: "15:20" },
+        { number: 7, startTime: "15:40", endTime: "16:25" },
+        { number: 8, startTime: "16:30", endTime: "17:15" },
+        { number: 9, startTime: "18:30", endTime: "19:15" },
+        { number: 10, startTime: "19:20", endTime: "20:05" }
+    ],
+    "新校区(崇德楼)": [
+        { number: 1, startTime: "08:10", endTime: "08:55" },
+        { number: 2, startTime: "09:00", endTime: "09:45" },
+        { number: 3, startTime: "10:30", endTime: "11:15" },
+        { number: 4, startTime: "11:20", endTime: "12:05" },
+        { number: 5, startTime: "13:45", endTime: "14:30" },
+        { number: 6, startTime: "14:35", endTime: "15:20" },
+        { number: 7, startTime: "15:55", endTime: "16:40" },
+        { number: 8, startTime: "16:45", endTime: "17:30" },
+        { number: 9, startTime: "18:30", endTime: "19:15" },
+        { number: 10, startTime: "19:20", endTime: "20:05" }
+    ]
+};
+
+async function selectCampus() {
+    const campuses = Object.keys(CampusTimeSlots);
+    const idx = await window.shiguangBridgePromise.showSingleSelection(
+        "选择校区", JSON.stringify(campuses), 0
+    );
+    if (idx === null || idx === -1) return null;
+    return campuses[idx];
+}
+
 // 主流程编排
 async function runImportFlow() {
     // 1. 前置检查
     const isReady = await promptUserToStart();
     if (!isReady) return;
 
-    // 2. 获取参数（学年、学期）
+    // 2. 选择校区
+    const campus = await selectCampus();
+    if (!campus) {
+        window.shiguangBridge.showToast("未选择校区，导入终止。");
+        return;
+    }
+
+    // 3. 获取参数（学年、学期）
     const year = await getAcademicYear();
     if (!year) {
         window.shiguangBridge.showToast("导入已取消");
@@ -168,17 +211,18 @@ async function runImportFlow() {
         return;
     }
 
-    // 3. 执行获取与解析
+    // 4. 执行获取与解析
     const courses = await fetchCourses(year, semesterIdx);
     if (!courses || courses.length === 0) {
         if (courses && courses.length === 0) window.shiguangBridge.showToast("该学期暂无课程数据");
         return;
     }
 
-    // 4. 数据保存
+    // 5. 数据保存
     try {
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程！`);
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(CampusTimeSlots[campus]));
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程！(${campus})`);
         window.shiguangBridge.notifyTaskCompletion();
         console.log("JS: 流程成功完成");
     } catch (e) {
