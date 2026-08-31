@@ -59,7 +59,7 @@ async function selectSemesterSelection(){
         }
     } catch (error) {
         console.error("显示单选列表弹窗时发生错误:", error);
-        shiguangBridge.showToast("Single Selection：显示列表出错！" + error.message);
+        window.shiguangBridge.showToast("Single Selection：显示列表出错！" + error.message);
         return null;
     }
 }
@@ -252,11 +252,11 @@ async function saveCourses(courses){
             console.log("课程导入成功！");
         } else {
             console.log("课程导入未成功，结果：" + result);
-            shiguangBridge.showToast("课程导入失败，请查看日志。");
+            window.shiguangBridge.showToast("课程导入失败，请查看日志。");
         }
     } catch (error) {
         console.error("导入课程时发生错误:", error);
-        shiguangBridge.showToast("导入课程失败: " + error.message);
+        window.shiguangBridge.showToast("导入课程失败: " + error.message);
     }
 }
 
@@ -304,11 +304,11 @@ async function saveConfig(config) {
             console.log("课表配置导入成功！");
         } else {
             console.log("课表配置导入未成功，结果：" + result);
-            shiguangBridge.showToast("测试配置导入失败，请查看日志。");
+            window.shiguangBridge.showToast("测试配置导入失败，请查看日志。");
         }
     } catch (error) {
         console.error("导入配置时发生错误:", error);
-        shiguangBridge.showToast("导入配置失败: " + error.message);
+        window.shiguangBridge.showToast("导入配置失败: " + error.message);
     }
 }
 
@@ -352,10 +352,10 @@ async function runImportFlow() {
     await saveCourses(courses);
     await setPresetTimeSlots();
 
-    shiguangBridge.showToast(`成功导入 ${courses.length} 门课程！`);
+    window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程！`);
 
     // 发送最终的生命周期完成信号
-    shiguangBridge.notifyTaskCompletion();
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 // 入口函数，开始执行导入流程
