@@ -357,6 +357,11 @@ schools:
     name: "济南大学"
     initial: "J"
     resource_folder: "UJN"
+  
+  - id: "JNMC"
+    name: "济宁医学院"
+    initial: "J"
+    resource_folder: "JNMC"
 
   - id: "HBGUHX"
     name: "河北地质大学华信学院"
@@ -823,3 +828,53 @@ schools:
     initial: "Z"
     resource_folder: "ZZU"
     
+  - id: "CCZU"
+    name: "常州大学"
+    initial: "C"
+    resource_folder: "CCZU"    
+    
+  - id: "FIT"
+    name: "福州理工学院"
+    initial: "F"
+    resource_folder: "FIT"
+    
+  - id: "GXCME"
+    name: "广西机电职业技术学院"
+    initial: "G"
+    resource_folder: "GXCME"    
+    
+  - id: "HAUST"
+    name: "河南科技大学"
+    initial: "H"
+    resource_folder: "HAUST"
+    
+  - id: "HIT"
+    name: "哈尔滨工业大学"
+    initial: "H"
+    resource_folder: "HIT"
+    
+  - id: "HUEB"
+    name: "河北经贸大学"
+    initial: "H"
+    resource_folder: "HUEB"
+    
+  - id: "LCUDCC"
+    name: "聊城大学东昌学院"
+    initial: "L"
+    resource_folder: "LCUDCC"
+    
+  - id: "LYU"
+    name: "临沂大学"
+    initial: "L"
+    resource_folder: "LYU"
+
+  - id: "SHXY"
+    name: "绥化学院"
+    initial: "S"
+    resource_folder: "SHXY"    
+
+  - id: "SMXY"
+    name: "三明学院"
+    initial: "S"
+    resource_folder: "SMXY"
+
