@@ -797,3 +797,8 @@ schools:
     name: "安徽财经大学"
     initial: "A"
     resource_folder: "AUFE"    
+
+  - id: "LCUDCC"
+    name: "聊城大学东昌学院"
+    initial: "L"
+    resource_folder: "LCUDCC"
