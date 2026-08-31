@@ -153,6 +153,11 @@ schools:
     initial: "F"
     resource_folder: "FJCPC"
 
+  - id: "FAFU"
+    name: "福建农林大学"
+    initial: "F"
+    resource_folder: "FAFU"
+
   - id: "FOSU"
     name: "佛山大学"
     initial: "F"
@@ -212,6 +217,11 @@ schools:
     name: "广东药科大学"
     initial: "G"
     resource_folder: "GDPU"
+
+  - id: "GDUT"
+    name: "广东工业大学"
+    initial: "G"
+    resource_folder: "GDUT"
 
   - id: "HNUST"
     name: "湖南科技大学"
@@ -347,6 +357,11 @@ schools:
     name: "济南大学"
     initial: "J"
     resource_folder: "UJN"
+  
+  - id: "JNMC"
+    name: "济宁医学院"
+    initial: "J"
+    resource_folder: "JNMC"
 
   - id: "HBGUHX"
     name: "河北地质大学华信学院"
@@ -796,9 +811,50 @@ schools:
   - id: "AUFE"
     name: "安徽财经大学"
     initial: "A"
-    resource_folder: "AUFE"    
+    resource_folder: "AUFE"
 
+  - id: "GZMTU"
+    name: "广州航海学院"
+    initial: "G"
+    resource_folder: "GZMTU"
+    
+  - id: "SWU"
+    name: "西南大学"
+    initial: "X"
+    resource_folder: "SWU"
+
+  - id: "ZZU"
+    name: "郑州大学"
+    initial: "Z"
+    resource_folder: "ZZU"
+    
+  - id: "CCZU"
+    name: "常州大学"
+    initial: "C"
+    resource_folder: "CCZU"    
+    
+  - id: "FIT"
+    name: "福州理工学院"
+    initial: "F"
+    resource_folder: "FIT"
+    
+  - id: "GXCME"
+    name: "广西机电职业技术学院"
+    initial: "G"
+    resource_folder: "GXCME"    
+    
+  - id: "HAUST"
+    name: "河南科技大学"
+    initial: "H"
+    resource_folder: "HAUST"
+    
+  - id: "HIT"
+    name: "哈尔滨工业大学"
+    initial: "H"
+    resource_folder: "HIT"
+    
   - id: "HUEB"
     name: "河北经贸大学"
     initial: "H"
     resource_folder: "HUEB"
+    
