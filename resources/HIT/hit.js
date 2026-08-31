@@ -196,25 +196,6 @@ async function saveCourses(courses) {
     }
 }
 
-const TimeSlots = [
-    { number: 1, startTime: "08:00", endTime: "08:45" },
-    { number: 2, startTime: "08:55", endTime: "09:40" },
-    { number: 3, startTime: "10:05", endTime: "10:50" },
-    { number: 4, startTime: "11:00", endTime: "11:45" },
-    { number: 5, startTime: "13:30", endTime: "14:15" },
-    { number: 6, startTime: "14:25", endTime: "15:10" },
-    { number: 7, startTime: "15:20", endTime: "16:05" },
-    { number: 8, startTime: "16:05", endTime: "16:50" },
-    { number: 9, startTime: "18:00", endTime: "18:45" },
-    { number: 10, startTime: "18:45", endTime: "19:30" },
-    { number: 11, startTime: "19:30", endTime: "20:15" }
-];
-
-async function importPresetTimeSlots(timeSlots) {
-    if (timeSlots.length === 0) return;
-    try { await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots)); } catch (e) {}
-}
-
 async function runImportFlow() {
     const alertConfirmed = await promptUserToStart();
     if (!alertConfirmed) {
@@ -258,8 +239,6 @@ async function runImportFlow() {
             }));
         } catch (e) {}
     }
-
-    await importPresetTimeSlots(TimeSlots);
 
     const semesterName = semesterInfo ? semesterInfo.MC : "当前学期";
     window.shiguangBridge.showToast("课程导入成功！" + semesterName + "，共 " + courses.length + " 门课程");
