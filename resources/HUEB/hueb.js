@@ -391,30 +391,23 @@ async function saveCourses(parsedCourses) {
 
 const TimeSlots = [
     { number: 1, startTime: "08:00", endTime: "08:45" },
-    { number: 2, startTime: "08:55", endTime: "09:40" },
-    { number: 3, startTime: "10:05", endTime: "10:50" },
-    { number: 4, startTime: "11:00", endTime: "11:45" },
-    { number: 5, startTime: "13:30", endTime: "14:15" },
-    { number: 6, startTime: "14:25", endTime: "15:10" },
-    { number: 7, startTime: "15:20", endTime: "16:05" },
-    { number: 8, startTime: "16:05", endTime: "16:50" },
-    { number: 9, startTime: "18:00", endTime: "18:45" },
-    { number: 10, startTime: "18:45", endTime: "19:30" },
-    { number: 11, startTime: "19:30", endTime: "20:15" }
+    { number: 2, startTime: "08:45", endTime: "09:30" },
+    { number: 3, startTime: "09:45", endTime: "10:30" },
+    { number: 4, startTime: "10:30", endTime: "11:15" },
+    { number: 5, startTime: "11:25", endTime: "12:10" },
+    { number: 6, startTime: "14:00", endTime: "14:45" },
+    { number: 7, startTime: "14:45", endTime: "15:30" },
+    { number: 8, startTime: "15:45", endTime: "16:30" },
+    { number: 9, startTime: "16:30", endTime: "17:15" },
+    { number: 10, startTime: "17:25", endTime: "18:10" },
+    { number: 11, startTime: "19:00", endTime: "19:45" },
+    { number: 12, startTime: "19:45", endTime: "20:30" },
+    { number: 13, startTime: "20:40", endTime: "21:25" }
 ];
 
 async function importPresetTimeSlots(timeSlots) {
-    if (timeSlots.length === 0) {
-        window.shiguangBridge.showToast("警告：时间段为空，未导入时间段信息。");
-        return;
-    }
-
-    try {
-        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-        window.shiguangBridge.showToast("预设时间段导入成功！");
-    } catch (error) {
-        window.shiguangBridge.showToast("导入时间段失败: " + error.message);
-    }
+    if (timeSlots.length === 0) return;
+    try { await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots)); } catch (e) {}
 }
 
 async function runImportFlow() {
