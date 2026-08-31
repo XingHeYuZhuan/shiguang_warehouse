@@ -797,3 +797,8 @@ schools:
     name: "安徽财经大学"
     initial: "A"
     resource_folder: "AUFE"    
+
+  - id: "FIT"
+    name: "福州理工学院"
+    initial: "F"
+    resource_folder: "FIT"
