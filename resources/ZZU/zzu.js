@@ -1,7 +1,13 @@
 // 郑州大学 (ZZU) 拾光课程表适配脚本
-// 适用平台：郑州大学综合信息门户 (info.s.zzu.edu.cn)
+// 支持树维新一代智慧教务系统（jwxt.zzu.edu.cn）与移动综合信息门户（info.s.zzu.edu.cn）双流水线
 
 (function () {
+    const JWXT_BASE_URLS = [
+        "https://jwxt.zzu.edu.cn",
+        "https://info.s.zzu.edu.cn",
+        ""
+    ];
+
     const API_BASES = [
         "https://jwxt.zzu.edu.cn/eams-door/api/v1",
         "https://info.s.zzu.edu.cn/portal-api/v1",
@@ -10,7 +16,7 @@
         "/portal-api/v1"
     ];
 
-    // 郑州大学标准 12 节作息时间（冬季作息）
+    // 郑州大学标准 12 节作息时间（第 1-4 节上午，第 5-8 节下午，第 9-12 节晚上）
     const ZZU_TIME_SLOTS = [
         { number: 1, startTime: "08:00", endTime: "08:45" },
         { number: 2, startTime: "08:55", endTime: "09:40" },
@@ -55,9 +61,245 @@
         return s;
     }
 
-    /**
-     * 扫描本地存储与 Cookie 提取会话 Token
-     */
+    function calculateTotalWeeks(startDate, endDate) {
+        if (!startDate || !endDate) return 20;
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffMs = end.getTime() - start.getTime();
+        if (diffMs <= 0) return 20;
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        return Math.min(Math.max(Math.ceil(diffDays / 7), 16), 30);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // 树维新一代智慧教务系统流水线 (student/for-std/course-table)
+    // ──────────────────────────────────────────────────────────
+
+    async function fetchSemesters(baseUrl = "") {
+        try {
+            const res = await fetch(`${baseUrl}/student/for-std/course-table`, {
+                headers: {
+                    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "x-requested-with": "XMLHttpRequest"
+                },
+                method: "GET",
+                credentials: "include"
+            });
+            if (!res.ok) return null;
+
+            const htmlText = await res.text();
+            if (!htmlText || !htmlText.includes("allSemesters")) return null;
+
+            let options = [];
+            if (typeof DOMParser !== "undefined") {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, "text/html");
+                const select = doc.getElementById("allSemesters") || doc.querySelector("#allSemesters");
+                if (select) {
+                    options = Array.from(select.querySelectorAll("option")).map(opt => ({
+                        label: opt.textContent.trim(),
+                        value: opt.value.trim(),
+                        selected: opt.hasAttribute("selected") || opt.selected
+                    })).filter(o => o.value && o.label);
+                }
+            }
+
+            if (options.length === 0) {
+                const selectMatch = htmlText.match(/<select[^>]*id=["']allSemesters["'][^>]*>([\s\S]*?)<\/select>/i);
+                if (selectMatch) {
+                    const optRegex = /<option[^>]*value=["']([^"']*)["'][^>]*>([\s\S]*?)<\/option>/gi;
+                    let m;
+                    while ((m = optRegex.exec(selectMatch[1])) !== null) {
+                        const val = m[1].trim();
+                        const label = m[2].replace(/<[^>]*>/g, "").trim();
+                        if (val && label) {
+                            options.push({ label, value: val, selected: m[0].includes("selected") });
+                        }
+                    }
+                }
+            }
+
+            if (options.length === 0) return null;
+
+            let studentId = null;
+            const dataIdMatch = htmlText.match(/var\s+dataId\s*=\s*(\d+)/) || htmlText.match(/dataId\s*[:=]\s*["']?(\d+)["']?/);
+            if (dataIdMatch) studentId = dataIdMatch[1];
+
+            return {
+                options,
+                studentId
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function fetchSemesterMetadata(baseUrl, semesterId) {
+        try {
+            const res = await fetch(`${baseUrl}/student/ws/semester/get/${semesterId}`, {
+                headers: {
+                    "accept": "*/*",
+                    "x-requested-with": "XMLHttpRequest"
+                },
+                method: "GET",
+                credentials: "include"
+            });
+            if (!res.ok) return { startDate: null, endDate: null };
+            const data = await res.json();
+            return {
+                startDate: data.startDate || null,
+                endDate: data.endDate || null
+            };
+        } catch (e) {
+            return { startDate: null, endDate: null };
+        }
+    }
+
+    async function fetchAndParseNewJwxtCourses(baseUrl, semesterId, studentId = null) {
+        const urls = [
+            `${baseUrl}/student/for-std/course-table/semester/${semesterId}/print-data?semesterId=${semesterId}&hasExperiment=true`
+        ];
+        if (studentId) {
+            urls.push(`${baseUrl}/student/for-std/course-table/semester/${semesterId}/print-data/${studentId}`);
+        }
+
+        for (const url of urls) {
+            try {
+                const res = await fetch(url, {
+                    headers: {
+                        "accept": "*/*",
+                        "x-requested-with": "XMLHttpRequest"
+                    },
+                    method: "GET",
+                    credentials: "include"
+                });
+                if (!res.ok) continue;
+                const data = await res.json();
+                if (!data) continue;
+
+                const rawActivities = (data.studentTableVms && data.studentTableVms[0] ? data.studentTableVms[0].activities : (data.studentTableVm ? data.studentTableVm.activities : (data.activities || []))) || [];
+                if (!Array.isArray(rawActivities) || rawActivities.length === 0) continue;
+
+                const parsedCourses = [];
+                for (const act of rawActivities) {
+                    if (!act.courseName || !act.weekday || !act.startUnit || !act.endUnit || !Array.isArray(act.weekIndexes)) {
+                        continue;
+                    }
+
+                    const teacherName = Array.isArray(act.teachers) && act.teachers.length > 0
+                        ? act.teachers.map(t => String(t).replace(/\(\d+\)/g, "").replace(/\[\d+\]/g, "").trim()).filter(Boolean).join(",")
+                        : (typeof act.teachers === "string" ? act.teachers.replace(/\(\d+\)/g, "").trim() : "");
+
+                    const weeks = act.weekIndexes.map(Number).filter(w => Number.isInteger(w) && w > 0).sort((a, b) => a - b);
+                    if (weeks.length === 0) continue;
+
+                    const startSection = Number(act.startUnit);
+                    const endSection = Number(act.endUnit);
+                    const sections = [];
+                    for (let s = startSection; s <= endSection; s++) sections.push(s);
+
+                    parsedCourses.push({
+                        name: cleanString(act.courseName),
+                        teacher: cleanString(teacherName),
+                        position: cleanString(act.room || act.building || "未知地点"),
+                        day: Number(act.weekday),
+                        startSection: startSection,
+                        endSection: endSection,
+                        sections: sections,
+                        weeks: weeks
+                    });
+                }
+
+                if (parsedCourses.length > 0) {
+                    return parsedCourses;
+                }
+            } catch (e) {}
+        }
+        return null;
+    }
+
+    async function runNewJwxtFlow() {
+        for (const base of JWXT_BASE_URLS) {
+            try {
+                const semData = await fetchSemesters(base);
+                if (!semData || !semData.options || semData.options.length === 0) continue;
+
+                const labels = semData.options.map(s => s.label);
+                let defaultIndex = semData.options.findIndex(s => s.selected);
+                if (defaultIndex < 0) defaultIndex = 0;
+
+                const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
+                    "选择学期",
+                    JSON.stringify(labels),
+                    defaultIndex
+                );
+
+                if (selectedIndex === null || selectedIndex < 0 || selectedIndex >= semData.options.length) {
+                    toast("操作已取消");
+                    return true;
+                }
+
+                const selectedSemester = semData.options[selectedIndex];
+                toast("正在拉取课表数据...");
+
+                const [meta, courses] = await Promise.all([
+                    fetchSemesterMetadata(base, selectedSemester.value),
+                    fetchAndParseNewJwxtCourses(base, selectedSemester.value, semData.studentId)
+                ]);
+
+                if (!courses || courses.length === 0) {
+                    toast("未查询到有效课程数据");
+                    return false;
+                }
+
+                let totalWeeks = 20;
+                if (meta && meta.startDate && meta.endDate) {
+                    totalWeeks = calculateTotalWeeks(meta.startDate, meta.endDate);
+                } else {
+                    const allWeeks = courses.flatMap(c => c.weeks || []);
+                    if (allWeeks.length > 0) totalWeeks = Math.max(...allWeeks);
+                }
+
+                const configData = {
+                    semesterStartDate: meta && meta.startDate ? meta.startDate : "",
+                    semesterTotalWeeks: Math.max(totalWeeks, 18),
+                    firstDayOfWeek: 1,
+                    defaultClassDuration: 45,
+                    defaultBreakDuration: 10
+                };
+
+                if (window.shiguangBridgePromise && window.shiguangBridgePromise.saveCourseConfig) {
+                    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(configData));
+                }
+
+                if (window.shiguangBridgePromise && window.shiguangBridgePromise.savePresetTimeSlots) {
+                    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(ZZU_TIME_SLOTS));
+                }
+
+                if (window.shiguangBridgePromise && window.shiguangBridgePromise.saveImportedCourses) {
+                    const saveOk = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+                    if (!saveOk) {
+                        toast("课程保存失败");
+                        return true;
+                    }
+                }
+
+                toast(`导入成功！共解析 ${courses.length} 门课程，已同步学期日期与作息时间。`);
+                if (window.shiguangBridge && window.shiguangBridge.notifyTaskCompletion) {
+                    window.shiguangBridge.notifyTaskCompletion();
+                }
+                return true;
+            } catch (e) {
+                console.warn("[ZZU New Jwxt Pipeline Exception]", e);
+            }
+        }
+        return false;
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // 移动微服务日历排课兜底流水线 (info.s.zzu.edu.cn)
+    // ──────────────────────────────────────────────────────────
+
     function scanTokens() {
         const tokens = new Set();
         const jwtRegex = /ey[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]+/g;
@@ -90,9 +332,6 @@
         return Array.from(tokens);
     }
 
-    /**
-     * 根据时间判定起始节次
-     */
     function mapTimeToSection(timeStr) {
         if (!timeStr) return 1;
         const clean = parseInt(String(timeStr).replace(/[^0-9]/g, ""), 10) || 800;
@@ -110,9 +349,6 @@
         return 12;
     }
 
-    /**
-     * 根据起止时间计算连续节数
-     */
     function calculateSectionCount(startTime, endTime) {
         if (!startTime || !endTime) return 2;
         const s = parseInt(String(startTime).replace(/[^0-9]/g, ""), 10) || 800;
@@ -126,9 +362,6 @@
         return 4;
     }
 
-    /**
-     * 获取当前学期的月份列表
-     */
     function getSemesterMonths() {
         const now = new Date();
         const year = now.getFullYear();
@@ -154,9 +387,6 @@
         return months;
     }
 
-    /**
-     * 请求单个月度日历排课接口
-     */
     async function fetchOneMonthSchedule(monthStr, token) {
         const headers = {
             "Accept": "application/json, text/plain, */*",
@@ -192,9 +422,6 @@
         return null;
     }
 
-    /**
-     * 将日历排课事件合并为学期课程列表
-     */
     function aggregateEventsToCourses(monthPayloads) {
         const rawEvents = [];
 
@@ -220,7 +447,7 @@
                     if (!place) place = "教学楼";
 
                     let teacher = cleanString(item.teacher || item.teacherName || item.jsxm || item.js || "");
-                    
+
                     const m = name.match(/^(.*?)[(（]([^\d()（）\s]{2,6})[)）]$/);
                     if (m) {
                         name = m[1].trim();
@@ -249,14 +476,12 @@
             });
         });
 
-        // 1. 去重相同事件
         const uniqueMap = new Map();
         rawEvents.forEach(ev => {
             const key = `${ev.dateKey}_${ev.name}_${ev.teacher}_${ev.position}_${ev.day}_${ev.startSection}_${ev.weekIndex}`;
             if (!uniqueMap.has(key)) uniqueMap.set(key, ev);
         });
 
-        // 2. 聚合成周次区间
         const groupMap = new Map();
         Array.from(uniqueMap.values()).forEach(ev => {
             const groupKey = `${ev.name}|${ev.teacher}|${ev.position}|${ev.day}|${ev.startSection}|${ev.endSection}`;
@@ -276,7 +501,6 @@
             }
         });
 
-        // 3. 生成课程对象列表
         const resultCourses = [];
         groupMap.forEach(group => {
             const sortedWeeks = Array.from(group.weeksSet).sort((a, b) => a - b);
@@ -302,9 +526,6 @@
         return resultCourses;
     }
 
-    /**
-     * 解析前端页面 DOM 结构（备用提取）
-     */
     function parseUniAppDOM() {
         const courses = [];
         try {
@@ -341,9 +562,6 @@
         return courses.length > 0 ? courses : null;
     }
 
-    /**
-     * 保存数据至客户端
-     */
     async function saveToShiguangApp(courses) {
         const allWeeks = courses.flatMap(c => c.weeks || []);
         const maxWeek = allWeeks.length > 0 ? Math.max(...allWeeks) : 20;
@@ -367,19 +585,62 @@
             return await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         }
 
-        console.log("[ZZU Adapter] Courses Output:", courses);
         return true;
     }
 
-    /**
-     * 适配器执行入口
-     */
+    async function runMicroserviceFallback() {
+        toast("正在尝试微服务排课接口拉取...");
+        const tokenList = scanTokens();
+        const months = getSemesterMonths();
+        let validMonthData = [];
+
+        const tokensToTry = tokenList.length > 0 ? tokenList : [""];
+        for (const t of tokensToTry) {
+            const fetchPromises = months.map(m => fetchOneMonthSchedule(m, t));
+            const results = (await Promise.all(fetchPromises)).filter(Boolean);
+            if (results.length > 0) {
+                validMonthData = results;
+                break;
+            }
+        }
+
+        let courses = [];
+        if (validMonthData.length > 0) {
+            courses = aggregateEventsToCourses(validMonthData);
+        }
+
+        if (courses.length === 0) {
+            const domCourses = parseUniAppDOM();
+            if (domCourses && domCourses.length > 0) {
+                courses = domCourses;
+            }
+        }
+
+        if (courses.length === 0) {
+            return false;
+        }
+
+        const ok = await saveToShiguangApp(courses);
+        if (!ok) {
+            toast("保存课表失败，请稍后重试");
+            return true;
+        }
+
+        toast(`导入成功！共解析 ${courses.length} 门课程。提示：在设置开学日期后，课表才会正常显示！`);
+        if (window.shiguangBridge && window.shiguangBridge.notifyTaskCompletion) {
+            window.shiguangBridge.notifyTaskCompletion();
+        }
+        return true;
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // 主执行入口
+    // ──────────────────────────────────────────────────────────
+
     async function runZzuImport() {
         try {
             const currentUrl = window.location.href;
-            console.log("[ZZU Adapter] 当前 URL:", currentUrl);
 
-            // 1. CAS 登录页面拦截
             if (currentUrl.includes("cas.s.zzu.edu.cn/cas/login") && !currentUrl.includes("ticket=")) {
                 const hasPassword = !!document.querySelector("input[type='password']");
                 if (hasPassword) {
@@ -388,61 +649,20 @@
                 }
             }
 
-            toast("正在提取key并拉取学期排课...");
+            toast("正在探测郑大教务系统参数...");
+            const jwxtSuccess = await runNewJwxtFlow();
 
-            // 2. 提取 Token
-            const tokenList = scanTokens();
-            console.log(`[ZZU Adapter] 扫描到 ${tokenList.length} 个候选凭证`);
-
-            const months = getSemesterMonths();
-            let validMonthData = [];
-
-            // 3. 遍历候选 Token 请求排课接口
-            const tokensToTry = tokenList.length > 0 ? tokenList : [""];
-            for (const t of tokensToTry) {
-                const fetchPromises = months.map(m => fetchOneMonthSchedule(m, t));
-                const results = (await Promise.all(fetchPromises)).filter(Boolean);
-                if (results.length > 0) {
-                    validMonthData = results;
-                    break;
+            if (!jwxtSuccess) {
+                const fallbackOk = await runMicroserviceFallback();
+                if (!fallbackOk) {
+                    await alertUser(
+                        "未获取到课表数据",
+                        "请确认已成功登录郑大新一代智慧教务系统或信息门户。"
+                    );
                 }
-            }
-
-            let courses = [];
-            if (validMonthData.length > 0) {
-                courses = aggregateEventsToCourses(validMonthData);
-            }
-
-            // 4. DOM 提取兜底
-            if (courses.length === 0) {
-                const domCourses = parseUniAppDOM();
-                if (domCourses && domCourses.length > 0) {
-                    courses = domCourses;
-                }
-            }
-
-            // 5. 校验提取结果
-            if (courses.length === 0) {
-                await alertUser(
-                    "未获取到课表数据",
-                    "请确认已成功登录郑大信息门户."
-                );
-                return;
-            }
-
-            // 6. 保存至客户端
-            const ok = await saveToShiguangApp(courses);
-            if (!ok) {
-                toast("保存课表失败，请稍后重试");
-                return;
-            }
-
-            toast(`导入成功！共解析 ${courses.length} 门课程。提示：在设置开学日期后，课表才会正常显示！`);
-            if (window.shiguangBridge && window.shiguangBridge.notifyTaskCompletion) {
-                window.shiguangBridge.notifyTaskCompletion();
             }
         } catch (error) {
-            console.error("[ZZU Adapter Error]", error);
+            console.error("[ZZU 导入异常]", error);
             await alertUser("导入异常", error && error.message ? error.message : String(error));
         }
     }
@@ -450,12 +670,20 @@
     if (typeof module !== "undefined" && module.exports) {
         module.exports = {
             ZZU_TIME_SLOTS,
+            cleanString,
+            calculateTotalWeeks,
+            fetchSemesters,
+            fetchSemesterMetadata,
+            fetchAndParseNewJwxtCourses,
+            runNewJwxtFlow,
             scanTokens,
             calculateSectionCount,
             mapTimeToSection,
-            aggregateEventsToCourses
+            aggregateEventsToCourses,
+            runZzuImport
         };
     } else {
         runZzuImport();
     }
 })();
+

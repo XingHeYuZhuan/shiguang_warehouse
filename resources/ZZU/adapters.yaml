@@ -1,11 +1,11 @@
 # resources/ZZU/adapters.yaml
 # 郑州大学 拾光课程表适配
-# 门户平台：郑州大学移动综合信息服务平台 (info.s.zzu.edu.cn)
 adapters:
   - adapter_id: "ZZU_01"
     adapter_name: "郑州大学"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "zzu.js"
-    import_url: "https://cas.s.zzu.edu.cn/cas/login?service=https%3A%2F%2Finfo.s.zzu.edu.cn%2F"
+    import_url: "https://jwxt.zzu.edu.cn/student/home"
     maintainer: "LilyCarry"
-    description: "输入账号密码登录，接着可能要获取短信验证码或其他方式验证。登录成功后（或者分流页显示 登录成功），点击右下角执行导入即可。以此为准，不需要点到有课表的页面.郑州大学有冬夏令时,注意在 我的 - 自定义时间段里调整时间. 记得导入之后要填写开学日期"
+    description: "支持郑州大学新一代智慧教务系统（jwxt.zzu.edu.cn）与移动综合信息门户（info.s.zzu.edu.cn）。登录后点击导入即可自动识别学期、解析排课并同步标准作息时间。"
+
