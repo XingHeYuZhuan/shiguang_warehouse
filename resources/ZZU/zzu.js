@@ -1,6 +1,6 @@
 // 郑州大学 (ZZU) 拾光课程表官方适配脚本
 // 适用平台：郑州大学移动综合服务门户 (info.s.zzu.edu.cn / jwxt.zzu.edu.cn)
-// 特性：深度 JWT 凭证扫描 + 全学期日历排课流智能聚合 + 郑大 12 节标准作息时间同步
+// 特性：WebView 悬浮指引横幅 + 深度 JWT 凭证扫描 + 全学期日历排课流智能聚合 + 郑大 12 节标准作息时间同步
 
 (function () {
     const API_BASES = [
@@ -41,6 +41,67 @@
         }
         alert(title + "\n" + message);
         return true;
+    }
+
+    /**
+     * 在 WebView 顶部注入悬浮操作指引横幅
+     */
+    function injectGuideBanner(customText, isSuccess) {
+        try {
+            let banner = document.getElementById("zzu-import-guide-banner");
+            if (!banner) {
+                banner = document.createElement("div");
+                banner.id = "zzu-import-guide-banner";
+                document.body.appendChild(banner);
+            }
+
+            banner.style.cssText = `
+                position: fixed;
+                top: 12px;
+                left: 12px;
+                right: 12px;
+                background: ${isSuccess ? "rgba(16, 185, 129, 0.95)" : "rgba(30, 41, 59, 0.95)"};
+                color: #ffffff;
+                padding: 10px 14px;
+                border-radius: 12px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+                z-index: 2147483647;
+                font-size: 13px;
+                line-height: 1.4;
+                font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255,255,255,0.2);
+                transition: all 0.3s ease;
+            `;
+
+            const isLogin = window.location.href.includes("cas.s.zzu.edu.cn");
+            const title = isSuccess ? "✅ 操作指引" : (isLogin ? "🎓 郑州大学课表导入指引" : "📱 郑州大学移动门户");
+            const defaultMsg = isLogin 
+                ? "请先登录统一身份认证。登录成功进入门户后，点击右下角【执行导入】。"
+                : "已进入系统！请直接点击右下角【执行导入】按钮同步全学期排课。";
+            const text = customText || defaultMsg;
+
+            banner.innerHTML = `
+                <div style="flex: 1; margin-right: 8px;">
+                    <div style="font-weight: bold; margin-bottom: 2px; font-size: 14px;">${title}</div>
+                    <div style="opacity: 0.95; font-size: 12px;">${text}</div>
+                </div>
+                <div id="zzu-close-guide" style="cursor: pointer; padding: 4px 8px; font-size: 16px; opacity: 0.8; user-select: none;">✕</div>
+            `;
+
+            const closeBtn = document.getElementById("zzu-close-guide");
+            if (closeBtn) {
+                closeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    banner.remove();
+                };
+            }
+        } catch (e) {
+            console.warn("[ZZU Guide Banner Error]", e);
+        }
     }
 
     function cleanString(str) {
@@ -303,7 +364,6 @@
     function parseUniAppDOM() {
         const courses = [];
         try {
-            // 扫描常见 Uni-App 课程卡片与格子
             const elements = document.querySelectorAll(".uni-card, .schedule-card, .course-item, .lesson-item, .grid-item, tr, td");
             elements.forEach(el => {
                 const text = el.innerText || el.textContent || "";
@@ -379,11 +439,13 @@
             if (currentUrl.includes("cas.s.zzu.edu.cn/cas/login") && !currentUrl.includes("ticket=")) {
                 const hasPassword = !!document.querySelector("input[type='password']");
                 if (hasPassword) {
+                    injectGuideBanner("请先在当前页面输入学号密码完成登录，登录后点击右下角【执行导入】。", false);
                     toast("请先在当前页面输入账号密码完成统一身份认证登录");
                     return;
                 }
             }
 
+            injectGuideBanner("正在提取鉴权凭证并拉取全学期排课流...", false);
             toast("正在深度提取鉴权凭证并拉取全学期课表...");
 
             // 2. 深度提取 Token
@@ -419,6 +481,7 @@
 
             // 5. 若均未获取到，弹窗提示用户进入【课表】模块
             if (courses.length === 0) {
+                injectGuideBanner("未检测到课表数据，请点击底栏【课表】后再点【执行导入】", false);
                 await alertUser(
                     "未获取到课表数据",
                     "请确认已成功登录郑大移动门户。\n\n提示：如果刚登录完成，请先在底部导航栏点击【课表】（或点击首页【今日课表/课表查询】），待课表页面加载完成后，再次点击右下角【执行导入】。"
@@ -433,6 +496,7 @@
                 return;
             }
 
+            injectGuideBanner(`🎉 导入成功！共解析 ${courses.length} 门课程，已同步 12 节作息！`, true);
             toast(`🎉 导入成功！共解析 ${courses.length} 门课程，已同步郑大 12 节标准作息！`);
             if (window.shiguangBridge && window.shiguangBridge.notifyTaskCompletion) {
                 window.shiguangBridge.notifyTaskCompletion();
@@ -449,9 +513,12 @@
             deepScanTokens,
             calculateSectionCount,
             mapTimeToSection,
-            aggregateEventsToCourses
+            aggregateEventsToCourses,
+            injectGuideBanner
         };
     } else {
+        // 自动注入顶部指引横幅
+        injectGuideBanner();
         runZzuImport();
     }
 })();
