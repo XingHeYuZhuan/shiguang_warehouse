@@ -797,3 +797,8 @@ schools:
     name: "安徽财经大学"
     initial: "A"
     resource_folder: "AUFE"    
+
+  - id: "HUEB"
+    name: "河北经贸大学"
+    initial: "H"
+    resource_folder: "HUEB"
