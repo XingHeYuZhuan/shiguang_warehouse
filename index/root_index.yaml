@@ -853,3 +853,8 @@ schools:
     initial: "H"
     resource_folder: "HIT"
     
+  - id: "HUEB"
+    name: "河北经贸大学"
+    initial: "H"
+    resource_folder: "HUEB"
+    
