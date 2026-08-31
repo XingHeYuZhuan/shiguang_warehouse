@@ -128,6 +128,26 @@
     return null;
   }
 
+  const TimeSlots = [
+    { number: 1, startTime: "08:00", endTime: "08:40" },
+    { number: 2, startTime: "08:45", endTime: "09:25" },
+    { number: 3, startTime: "09:45", endTime: "10:25" },
+    { number: 4, startTime: "10:35", endTime: "11:15" },
+    { number: 5, startTime: "11:20", endTime: "12:00" },
+    { number: 6, startTime: "13:30", endTime: "14:10" },
+    { number: 7, startTime: "14:15", endTime: "14:55" },
+    { number: 8, startTime: "15:15", endTime: "15:55" },
+    { number: 9, startTime: "16:00", endTime: "16:40" },
+    { number: 10, startTime: "18:30", endTime: "19:10" },
+    { number: 11, startTime: "19:15", endTime: "19:55" },
+    { number: 12, startTime: "20:05", endTime: "20:45" }
+  ];
+
+  async function importPresetTimeSlots(timeSlots) {
+    if (timeSlots.length === 0) return;
+    try { await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots)); } catch (e) {}
+  }
+
   async function runImportFlow() {
     const result = findTable();
     if (!result) {
@@ -178,6 +198,7 @@
 
     try {
       await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+      await importPresetTimeSlots(TimeSlots);
       window.shiguangBridge.showToast(`课程导入成功，共 ${courses.length} 门课程！`);
       window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
