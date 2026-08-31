@@ -1,11 +1,15 @@
-// 郑州大学 (ZZU) 拾光课程表适配脚本
-// 支持：1. 树维移动教务 3 步 API (jw.v.zzu.edu.cn)
-//       2. 移动教务与综合服务平台 DOM 课表智能提取
-//       3. 新版 EAMS 微服务日历流 (jwxt.zzu.edu.cn)
-// 同步：郑州大学 12 节标准作息时间表
+// 郑州大学 (ZZU) 拾光课程表官方适配脚本
+// 适用平台：郑州大学移动综合服务门户 (info.s.zzu.edu.cn / jwxt.zzu.edu.cn)
+// 特性：深度 JWT 凭证扫描 + 全学期日历排课流智能聚合 + 郑大 12 节标准作息时间同步
 
 (function () {
-    const CAS_TARGET = "https://cas.s.zzu.edu.cn/cas/login?service=https%3A%2F%2Fjw.v.zzu.edu.cn%2Fapp-web%2F";
+    const API_BASES = [
+        "https://jwxt.zzu.edu.cn/eams-door/api/v1",
+        "https://info.s.zzu.edu.cn/portal-api/v1",
+        "https://info.s.zzu.edu.cn/eams-door/api/v1",
+        "/eams-door/api/v1",
+        "/portal-api/v1"
+    ];
 
     // 郑州大学标准 12 节作息时间表 (冬季/常规作息)
     const ZZU_TIME_SLOTS = [
@@ -52,252 +56,269 @@
         return s;
     }
 
-    function extractUserToken() {
+    /**
+     * 深度扫描获取当前会话中的 JWT / UserToken 列表 (含 Vuex/Pinia 嵌套解析)
+     */
+    function deepScanTokens() {
+        const tokens = new Set();
+        const jwtRegex = /ey[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]+/g;
+
+        function scanValue(val) {
+            if (!val || typeof val !== "string") return;
+            let m;
+            while ((m = jwtRegex.exec(val)) !== null) {
+                tokens.add(m[0]);
+            }
+            if (val.length > 25 && !val.includes("{") && !val.includes("[")) {
+                tokens.add(val.trim());
+            }
+        }
+
         try {
+            // 1. 扫描 localStorage 全部字段
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
-                const v = localStorage.getItem(k) || "";
-                if (["token", "userToken", "idToken", "X-Id-Token", "access_token", "jwt"].includes(k)) {
-                    if (v && v.length > 20) return v;
-                }
-                if (v.startsWith("ey") && v.length > 50) return v;
+                scanValue(localStorage.getItem(k));
             }
+            // 2. 扫描 sessionStorage 全部字段
             for (let j = 0; j < sessionStorage.length; j++) {
                 const sk = sessionStorage.key(j);
-                const sv = sessionStorage.getItem(sk) || "";
-                if (["token", "userToken", "idToken", "X-Id-Token", "access_token", "jwt"].includes(sk)) {
-                    if (sv && sv.length > 20) return sv;
-                }
-                if (sv.startsWith("ey") && sv.length > 50) return sv;
+                scanValue(sessionStorage.getItem(sk));
             }
-            const match = document.cookie.match(/(?:token|userToken|idToken|X-Id-Token|access_token)=([^;]+)/i);
-            if (match) return decodeURIComponent(match[1]);
-        } catch (e) {}
-        return "";
-    }
-
-    /**
-     * 解析单双周表达式 (如 "1-16周(单)", "2-16周(双)", "1-8周,10-17周")
-     */
-    function parseWeeksExpression(expr) {
-        if (!expr) {
-            const arr = [];
-            for (let i = 1; i <= 16; i++) arr.push(i);
-            return arr;
+            // 3. 扫描 document.cookie
+            scanValue(document.cookie);
+        } catch (e) {
+            console.warn("[ZZU Adapter] scan tokens error:", e);
         }
-        const str = String(expr).replace(/\s+/g, "");
-        const isOdd = str.includes("单");
-        const isEven = str.includes("双");
-        const clean = str.replace(/[()（）单双周每两周]/g, "");
-        const parts = clean.split(",");
-        const set = new Set();
 
-        parts.forEach(p => {
-            if (!p) return;
-            if (p.includes("-") || p.includes("~")) {
-                const [startStr, endStr] = p.split(/[-~]/);
-                const s = parseInt(startStr, 10);
-                const e = parseInt(endStr, 10);
-                if (!isNaN(s) && !isNaN(e)) {
-                    for (let w = s; w <= e; w++) {
-                        if (isOdd && w % 2 === 0) continue;
-                        if (isEven && w % 2 !== 0) continue;
-                        set.add(w);
-                    }
-                }
-            } else {
-                const w = parseInt(p, 10);
-                if (!isNaN(w)) {
-                    if (isOdd && w % 2 === 0) return;
-                    if (isEven && w % 2 !== 0) return;
-                    set.add(w);
-                }
+        return Array.from(tokens);
+    }
+
+    function mapTimeToSection(timeStr) {
+        if (!timeStr) return 1;
+        const clean = parseInt(String(timeStr).replace(/[^0-9]/g, ""), 10) || 800;
+        if (clean < 850) return 1;
+        if (clean < 1000) return 2;
+        if (clean < 1100) return 3;
+        if (clean < 1200) return 4;
+        if (clean < 1450) return 5;
+        if (clean < 1550) return 6;
+        if (clean < 1650) return 7;
+        if (clean < 1750) return 8;
+        if (clean < 1950) return 9;
+        if (clean < 2050) return 10;
+        if (clean < 2140) return 11;
+        return 12;
+    }
+
+    function calculateSectionCount(startTime, endTime) {
+        if (!startTime || !endTime) return 2;
+        const s = parseInt(String(startTime).replace(/[^0-9]/g, ""), 10) || 800;
+        const e = parseInt(String(endTime).replace(/[^0-9]/g, ""), 10) || 940;
+        const sMin = Math.floor(s / 100) * 60 + (s % 100);
+        const eMin = Math.floor(e / 100) * 60 + (e % 100);
+        const diff = eMin - sMin;
+        if (diff <= 60) return 1;
+        if (diff <= 120) return 2;
+        if (diff <= 180) return 3;
+        return 4;
+    }
+
+    function getSemesterMonths() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const months = [];
+
+        let startYear = year;
+        let startMonth = 8;
+        if (month >= 2 && month <= 7) {
+            startMonth = 2;
+        }
+
+        for (let i = 0; i < 6; i++) {
+            let m = startMonth + i;
+            let y = startYear;
+            if (m > 12) {
+                m -= 12;
+                y += 1;
             }
-        });
-
-        const res = Array.from(set).sort((a, b) => a - b);
-        return res.length > 0 ? res : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+            const mStr = m < 10 ? "0" + m : "" + m;
+            months.push(`${y}-${mStr}`);
+        }
+        return months;
     }
 
     /**
-     * 【引擎 1】树维移动教务 3 步 API 抓取 (jw.v.zzu.edu.cn)
+     * 并发拉取单个月度日历排课
      */
-    async function fetchSupwisdomAPI(userToken) {
-        try {
-            console.log("[ZZU Adapter] 尝试执行树维教务 3 步 API 协议...");
-            const baseUrl = "https://jw.v.zzu.edu.cn/app-ws/ws/app-service";
+    async function fetchOneMonthSchedule(monthStr, token) {
+        const headers = {
+            "Accept": "application/json, text/plain, */*",
+            "X-Requested-With": "XMLHttpRequest",
+            "X-Device-Info": "Android",
+            "X-Terminal-Info": "app"
+        };
+        if (token) {
+            headers["Authorization"] = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+            headers["token"] = token;
+            headers["X-Id-Token"] = token;
+        }
 
-            // Step 1: login-token
-            const bodyToken = userToken ? `userToken=${encodeURIComponent(userToken)}&timestamp=${Date.now()}` : `timestamp=${Date.now()}`;
-            const res1 = await fetch(`${baseUrl}/super/app/login-token`, {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: bodyToken
-            });
-            if (!res1.ok) return null;
-            const data1 = await res1.json();
-            if (!data1.business_data) return null;
-            const decoded1 = JSON.parse(decodeURIComponent(escape(atob(data1.business_data))));
-            const dynamicToken = decoded1.token;
-            if (!dynamicToken) return null;
-
-            // Step 2: get-semester
-            let semesterId = "142";
+        for (const base of API_BASES) {
             try {
-                const res2 = await fetch(`${baseUrl}/common/get-semester`, {
-                    method: "POST",
+                const url = `${base}/protal-schedule/getSchedules?date=${monthStr}`;
+                const res = await fetch(url, {
+                    method: "GET",
                     credentials: "include",
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
-                        "token": dynamicToken
-                    },
-                    body: `biz_type_id=1&token=${encodeURIComponent(dynamicToken)}&timestamp=${Date.now()}`
+                    headers: headers
                 });
-                if (res2.ok) {
-                    const data2 = await res2.json();
-                    if (data2.business_data) {
-                        const decoded2 = JSON.parse(decodeURIComponent(escape(atob(data2.business_data))));
-                        if (Array.isArray(decoded2) && decoded2.length > 0) {
-                            semesterId = String(decoded2[0].id || semesterId);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && typeof data === "object") {
+                        const payload = data.data && typeof data.data === "object" ? data.data : data;
+                        if (Object.keys(payload).some(k => /^\d{4}-\d{2}-\d{2}$/.test(k))) {
+                            return payload;
                         }
                     }
                 }
             } catch (e) {}
-
-            // Step 3: get-course-tables
-            const res3 = await fetch(`${baseUrl}/student/course/schedule/get-course-tables`, {
-                method: "POST",
-                credentials: "include",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "token": dynamicToken
-                },
-                body: `biz_type_id=1&semester_id=${semesterId}&token=${encodeURIComponent(dynamicToken)}&timestamp=${Date.now()}`
-            });
-            if (!res3.ok) return null;
-            const data3 = await res3.json();
-            if (!data3.business_data) return null;
-            const rawTable = JSON.parse(decodeURIComponent(escape(atob(data3.business_data))));
-            
-            const rawCourses = Array.isArray(rawTable) ? rawTable : (rawTable.data || []);
-            if (!Array.isArray(rawCourses) || rawCourses.length === 0) return null;
-
-            const courses = [];
-            rawCourses.forEach(c => {
-                let courseName = cleanString(c.name || (c.course && c.course.nameZh) || "");
-                if (!courseName) return;
-
-                const defaultTeacher = Array.isArray(c.teacherAssignmentList) ? c.teacherAssignmentList.join(", ") : cleanString(c.teacherName || "");
-                const schedules = Array.isArray(c.schedules) ? c.schedules : [];
-
-                if (schedules.length === 0) {
-                    // 若无详细排课列表，作为单项
-                    courses.push({
-                        name: courseName,
-                        teacher: defaultTeacher,
-                        position: "待定教室",
-                        day: 1,
-                        startSection: 1,
-                        endSection: 2,
-                        sections: [1, 2],
-                        weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-                    });
-                    return;
-                }
-
-                // 聚合相同 星期 + 节次 + 教室 的时段
-                const slotMap = new Map();
-                schedules.forEach(s => {
-                    const day = parseInt(s.weekday || s.dayOfWeek || 1, 10);
-                    const startUnit = parseInt(s.startUnit || s.startSection || 1, 10);
-                    const endUnit = parseInt(s.endUnit || s.endSection || (startUnit + 1), 10);
-                    
-                    let roomName = "";
-                    if (s.room && typeof s.room === "object") {
-                        roomName = s.room.nameZh || s.room.name || "";
-                    } else {
-                        roomName = cleanString(s.room || s.roomName || s.location || s.place || "");
-                    }
-                    if (!roomName) roomName = "教学楼";
-
-                    const teacher = cleanString(s.teacherName || defaultTeacher);
-                    const weekIdx = parseInt(s.weekIndex || s.week || 0, 10);
-                    const weekExpr = s.weekIndices || s.weekExpression || s.weeks || "";
-
-                    const key = `${day}_${startUnit}_${endUnit}_${roomName}_${teacher}`;
-                    if (!slotMap.has(key)) {
-                        slotMap.set(key, {
-                            day,
-                            startUnit,
-                            endUnit,
-                            roomName,
-                            teacher,
-                            weeksSet: new Set()
-                        });
-                    }
-                    if (weekIdx > 0) {
-                        slotMap.get(key).weeksSet.add(weekIdx);
-                    } else if (weekExpr) {
-                        parseWeeksExpression(weekExpr).forEach(w => slotMap.get(key).weeksSet.add(w));
-                    }
-                });
-
-                slotMap.forEach(item => {
-                    const sortedWeeks = Array.from(item.weeksSet).sort((a, b) => a - b);
-                    const sections = [];
-                    for (let u = item.startUnit; u <= item.endUnit; u++) sections.push(u);
-
-                    courses.push({
-                        name: courseName,
-                        teacher: item.teacher,
-                        position: item.roomName,
-                        day: item.day,
-                        startSection: item.startUnit,
-                        endSection: item.endUnit,
-                        sections: sections,
-                        weeks: sortedWeeks.length > 0 ? sortedWeeks : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-                    });
-                });
-            });
-
-            return courses;
-        } catch (e) {
-            console.warn("[ZZU Adapter] 树维 API 抓取异常:", e);
-            return null;
         }
+        return null;
     }
 
     /**
-     * 【引擎 2】网页 DOM 课表格子智能解析
+     * 聚合日历事件为学期标准排课
      */
-    function parseDOMCourseTable() {
+    function aggregateEventsToCourses(monthPayloads) {
+        const rawEvents = [];
+
+        monthPayloads.forEach(dataObj => {
+            if (!dataObj || typeof dataObj !== "object") return;
+
+            Object.keys(dataObj).forEach(dateKey => {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
+                const arr = dataObj[dateKey];
+                if (!Array.isArray(arr)) return;
+
+                const dateObj = new Date(dateKey + "T00:00:00");
+                let dayOfWeek = dateObj.getDay();
+                if (dayOfWeek === 0) dayOfWeek = 7;
+
+                arr.forEach(item => {
+                    if (!item || typeof item !== "object") return;
+
+                    let name = cleanString(item.context || item.courseName || item.kcmc || item.name || "");
+                    if (!name) return;
+
+                    let place = cleanString(item.place || item.classroom || item.cdmc || item.roomName || "");
+                    if (!place) place = "教学楼";
+
+                    let teacher = cleanString(item.teacher || item.teacherName || item.jsxm || item.js || "");
+                    
+                    const m = name.match(/^(.*?)[(（]([^\d()（）\s]{2,6})[)）]$/);
+                    if (m) {
+                        name = m[1].trim();
+                        if (!teacher) teacher = m[2].trim();
+                    }
+
+                    const startTime = item.startTime || "08:00";
+                    const endTime = item.endTime || "09:40";
+                    const weekIndex = parseInt(item.weekIndex || item.week || 1, 10);
+
+                    const startSection = mapTimeToSection(startTime);
+                    const sectionCount = calculateSectionCount(startTime, endTime);
+                    const endSection = startSection + sectionCount - 1;
+
+                    rawEvents.push({
+                        dateKey,
+                        name,
+                        teacher,
+                        position: place,
+                        day: dayOfWeek,
+                        startSection,
+                        endSection,
+                        weekIndex
+                    });
+                });
+            });
+        });
+
+        // 1. 去重完全相同事件
+        const uniqueMap = new Map();
+        rawEvents.forEach(ev => {
+            const key = `${ev.dateKey}_${ev.name}_${ev.teacher}_${ev.position}_${ev.day}_${ev.startSection}_${ev.weekIndex}`;
+            if (!uniqueMap.has(key)) uniqueMap.set(key, ev);
+        });
+
+        // 2. 聚合成周次区间
+        const groupMap = new Map();
+        Array.from(uniqueMap.values()).forEach(ev => {
+            const groupKey = `${ev.name}|${ev.teacher}|${ev.position}|${ev.day}|${ev.startSection}|${ev.endSection}`;
+            if (!groupMap.has(groupKey)) {
+                groupMap.set(groupKey, {
+                    name: ev.name,
+                    teacher: ev.teacher,
+                    position: ev.position,
+                    day: ev.day,
+                    startSection: ev.startSection,
+                    endSection: ev.endSection,
+                    weeksSet: new Set()
+                });
+            }
+            if (ev.weekIndex > 0 && ev.weekIndex <= 30) {
+                groupMap.get(groupKey).weeksSet.add(ev.weekIndex);
+            }
+        });
+
+        // 3. 构建课程输出
+        const resultCourses = [];
+        groupMap.forEach(group => {
+            const sortedWeeks = Array.from(group.weeksSet).sort((a, b) => a - b);
+            if (sortedWeeks.length === 0) {
+                for (let w = 1; w <= 16; w++) sortedWeeks.push(w);
+            }
+
+            const sections = [];
+            for (let s = group.startSection; s <= group.endSection; s++) sections.push(s);
+
+            resultCourses.push({
+                name: group.name,
+                teacher: group.teacher,
+                position: group.position,
+                day: group.day,
+                startSection: group.startSection,
+                endSection: group.endSection,
+                sections: sections,
+                weeks: sortedWeeks
+            });
+        });
+
+        return resultCourses;
+    }
+
+    /**
+     * DOM 页面智能扫描提取 (Uni-app H5 课表视图)
+     */
+    function parseUniAppDOM() {
+        const courses = [];
         try {
-            console.log("[ZZU Adapter] 尝试从当前网页 DOM 中解析课表...");
-            const courses = [];
-            const cells = document.querySelectorAll("td, .course-cell, .timetable-item, .schedule-item, .lesson");
-            if (!cells || cells.length === 0) return null;
+            // 扫描常见 Uni-App 课程卡片与格子
+            const elements = document.querySelectorAll(".uni-card, .schedule-card, .course-item, .lesson-item, .grid-item, tr, td");
+            elements.forEach(el => {
+                const text = el.innerText || el.textContent || "";
+                if (!text || text.length < 5 || text.length > 200) return;
 
-            cells.forEach(cell => {
-                const text = cell.innerText || cell.textContent || "";
-                if (!text || text.length < 4) return;
-
-                // 匹配包含课程名称与教室的单元格 (例如: 数据结构 1-16周 北3-101)
                 const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
                 if (lines.length >= 2) {
                     const name = lines[0];
-                    let place = "教学楼";
-                    let weeks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-                    let teacher = "";
+                    if (name.includes("星期") || name.includes("节次") || name.includes("学期")) return;
 
-                    lines.slice(1).forEach(line => {
-                        if (line.includes("周")) {
-                            weeks = parseWeeksExpression(line);
-                        } else if (line.includes("楼") || line.includes("室") || line.includes("-") || line.includes("校区")) {
-                            place = line;
-                        } else if (line.length <= 6) {
-                            teacher = line;
-                        }
+                    let place = "教学楼";
+                    let teacher = "";
+                    lines.slice(1).forEach(l => {
+                        if (l.includes("楼") || l.includes("室") || l.includes("-")) place = l;
+                        else if (l.length <= 5 && !l.includes("周") && !l.includes(":")) teacher = l;
                     });
 
                     courses.push({
@@ -308,15 +329,12 @@
                         startSection: 1,
                         endSection: 2,
                         sections: [1, 2],
-                        weeks: weeks
+                        weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
                     });
                 }
             });
-
-            return courses.length > 0 ? courses : null;
-        } catch (e) {
-            return null;
-        }
+        } catch (e) {}
+        return courses.length > 0 ? courses : null;
     }
 
     /**
@@ -350,58 +368,72 @@
     }
 
     /**
-     * 主导入控制流
+     * 核心导入执行流
      */
     async function runZzuImport() {
         try {
-            const currentHref = window.location.href;
-            console.log("[ZZU Adapter] 当前页面:", currentHref);
+            const currentUrl = window.location.href;
+            console.log("[ZZU Adapter] 当前 URL:", currentUrl);
 
-            // 1. 若当前在 CAS 统一认证登录界面，引导先登录
-            if (currentHref.includes("cas.s.zzu.edu.cn/cas/login") && !currentHref.includes("ticket=")) {
+            // 1. CAS 登录页面拦截
+            if (currentUrl.includes("cas.s.zzu.edu.cn/cas/login") && !currentUrl.includes("ticket=")) {
                 const hasPassword = !!document.querySelector("input[type='password']");
                 if (hasPassword) {
-                    toast("请先在当前页面输入账号密码登录统一身份认证");
+                    toast("请先在当前页面输入账号密码完成统一身份认证登录");
                     return;
                 }
             }
 
-            toast("正在通过树维移动教务抓取全学期排课...");
+            toast("正在深度提取鉴权凭证并拉取全学期课表...");
 
-            const token = extractUserToken();
-            let courses = null;
+            // 2. 深度提取 Token
+            const tokenList = deepScanTokens();
+            console.log(`[ZZU Adapter] 扫描到 ${tokenList.length} 个候选凭证`);
 
-            // 优先执行树维 3 步 API 协议
-            courses = await fetchSupwisdomAPI(token);
+            const months = getSemesterMonths();
+            let validMonthData = [];
 
-            // 兜底 1: DOM 课表解析
-            if (!courses || courses.length === 0) {
-                courses = parseDOMCourseTable();
+            // 3. 遍历候选 Token 并发请求月度排课日历流
+            const tokensToTry = tokenList.length > 0 ? tokenList : [""];
+            for (const t of tokensToTry) {
+                const fetchPromises = months.map(m => fetchOneMonthSchedule(m, t));
+                const results = (await Promise.all(fetchPromises)).filter(Boolean);
+                if (results.length > 0) {
+                    validMonthData = results;
+                    break;
+                }
             }
 
-            // 若仍为空且在门户/CAS页，自动重定向到树维教务
-            if (!courses || courses.length === 0) {
-                if (currentHref.includes("info.s.zzu.edu.cn") || currentHref.includes("cas.s.zzu.edu.cn")) {
-                    toast("正在免密跳转至树维教务系统同步课表...");
-                    window.location.href = CAS_TARGET;
-                    return;
-                }
+            let courses = [];
+            if (validMonthData.length > 0) {
+                courses = aggregateEventsToCourses(validMonthData);
+            }
 
+            // 4. DOM 提取兜底
+            if (courses.length === 0) {
+                const domCourses = parseUniAppDOM();
+                if (domCourses && domCourses.length > 0) {
+                    courses = domCourses;
+                }
+            }
+
+            // 5. 若均未获取到，弹窗提示用户进入【课表】模块
+            if (courses.length === 0) {
                 await alertUser(
                     "未获取到课表数据",
-                    "请确认已在教务系统中进入【课表查询】页面，然后再次点击【执行导入】。"
+                    "请确认已成功登录郑大移动门户。\n\n提示：如果刚登录完成，请先在底部导航栏点击【课表】（或点击首页【今日课表/课表查询】），待课表页面加载完成后，再次点击右下角【执行导入】。"
                 );
                 return;
             }
 
-            // 保存到拾光 APP
+            // 6. 保存至拾光
             const ok = await saveToShiguangApp(courses);
             if (!ok) {
                 toast("保存课表失败，请稍后重试");
                 return;
             }
 
-            toast(`🎉 导入成功！共解析 ${courses.length} 个排课时段，已同步郑大 12 节作息！`);
+            toast(`🎉 导入成功！共解析 ${courses.length} 门课程，已同步郑大 12 节标准作息！`);
             if (window.shiguangBridge && window.shiguangBridge.notifyTaskCompletion) {
                 window.shiguangBridge.notifyTaskCompletion();
             }
@@ -414,7 +446,10 @@
     if (typeof module !== "undefined" && module.exports) {
         module.exports = {
             ZZU_TIME_SLOTS,
-            parseWeeksExpression
+            deepScanTokens,
+            calculateSectionCount,
+            mapTimeToSection,
+            aggregateEventsToCourses
         };
     } else {
         runZzuImport();
