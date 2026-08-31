@@ -872,3 +872,9 @@ schools:
     name: "绥化学院"
     initial: "S"
     resource_folder: "SHXY"    
+
+  - id: "SMXY"
+    name: "三明学院"
+    initial: "S"
+    resource_folder: "SMXY"
+
