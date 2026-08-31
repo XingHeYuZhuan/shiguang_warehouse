@@ -4,8 +4,10 @@
 // 出现问题请提issues或者提交pr更改,这更加快速
 //
 // 通过正方接口 xskbcx_cxXsgrkb 拉取个人课表 JSON（kbList），解析课程名、教师、教室、
-// 星期、节次和周次（含单双周）；集中实践课（军训、毕业设计等）无星期节次，弹窗提示手动添加。
-// 交互上依次询问学年与学期；导入课程、课表配置与西南大学 14 节节次时间。
+// 星期、节次和周次（含单双周）。集中实践课（军训、毕业设计等）无星期节次，直接忽略不导入。
+// 交互上自动读取教务系统的学年/学期下拉列表，用户只需依次点选即可，无需手动输入。
+// 通过 xskbcx_cxXskbcxIndex 读取学年学期选项、xskbcxZccx_cxZcByXnxq 取所选学期开学日期；
+// 导入课程、课表配置与西南大学 14 节节次时间。
 //
 // 使用方式：从办事大厅(i.swu.edu.cn)登录后进入教务系统(jw.swu.edu.cn/jwglxt)课表查询页面，再执行导入。
 
@@ -92,25 +94,6 @@ function buildCourseRemark(rawCourse) {
 }
 
 /**
- * 解析集中实践课列表（sjkList）。
- * 这类课程（军事技能训练、毕业设计等）只有课程名、教师和起止周，
- * 没有星期和节次，无法映射到周课表，只能提示用户手动添加。
- */
-function parsePracticeCourses(jsonData) {
-    if (!jsonData || !Array.isArray(jsonData.sjkList)) {
-        return [];
-    }
-
-    return jsonData.sjkList
-        .map((item) => ({
-            name: String(item.kcmc || "").trim(),
-            teacher: String(item.jsxm || "").trim(),
-            weekDesc: String(item.qsjsz || "").trim()
-        }))
-        .filter((item) => item.name);
-}
-
-/**
  * 解析 API 返回的 JSON 数据。
  */
 function parseJsonData(jsonData) {
@@ -181,13 +164,6 @@ function parseJsonData(jsonData) {
     return finalCourseList;
 }
 
-function validateYearInput(input) {
-    if (/^[0-9]{4}$/.test(input)) {
-        return false;
-    }
-    return "请输入四位数字的学年！";
-}
-
 async function promptUserToStart() {
     return await window.shiguangBridgePromise.showAlert(
         "西南大学课表导入",
@@ -196,84 +172,141 @@ async function promptUserToStart() {
     );
 }
 
-async function getAcademicYear() {
-    const currentYear = new Date().getFullYear().toString();
-    const currentMonth = new Date().getMonth() + 1; // 月份从0开始，所以加1
-    // 如果当前月份在8月或之后，默认学年是当前年份-下一年份，否则是上一年份-当前年份
-    const defaultYear = currentMonth >= 8 ? currentYear : (Number(currentYear) - 1).toString();
-    return await window.shiguangBridgePromise.showPrompt(
-        "选择学年",
-        "请输入要导入课程的起始学年（如2025-2026 应该填2025）:",
-        defaultYear,
-        "validateYearInput"
-    );
-}
-
-async function selectSemester() {
-    const semesters = ["第一学期", "第二学期"];
-    const currentMonth = new Date().getMonth() + 1; // 月份从0开始，所以加1
-    const defaultSemesterIndex = currentMonth >= 8 ? 0 : 1; // 如果当前月份在8月或之后，默认选择第一学期，否则选择第二学期
-    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
-        "选择学期",
-        JSON.stringify(semesters),
-        defaultSemesterIndex
-    );
-    return semesterIndex;
-}
-
 /**
- * 将选择索引转换为 API 所需的学期码。
+ * 从教务系统课表查询页读取学年与学期下拉选项。
+ * 学年以选中的一项为中心，取前 2 年 + 后 2 年，最多 5 项，避免列表过长。
  */
-function getSemesterCode(semesterIndex) {
-    // semesterIndex 3 (第一学期), 12 (第二学期)
-    return semesterIndex === 0 ? "3" : "12";
-}
-
-/**
- * 获取教务系统当前学期的起止日期。
- * 首页日历区块的标题形如 "2026-2027学年1学期(2026-08-31至2027-02-21)"，
- * 其中起始日期就是第 1 周周一，正是 semesterStartDate 需要的值。
- * 注意：该接口忽略 xnm/xqm 参数，只返回当前学期，
- * 因此只有用户选择的学年学期与返回值一致时才能使用。
- */
-async function fetchCurrentSemesterRange() {
-    const url = buildApiUrl("/xtgl/index_cxAreaFive.html?localeKey=zh_CN&gnmkdm=index");
+async function fetchAcademicOptions() {
+    const url = buildApiUrl("/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151");
 
     try {
         const response = await fetch(url, {
-            "headers": {
-                "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
-            },
-            "body": "",
-            "method": "POST",
-            "credentials": "include"
+            method: "GET",
+            credentials: "include"
         });
-
         if (!response.ok) {
-            throw new Error(`状态码 ${response.status}`);
+            return null;
         }
+        const htmlText = await response.text();
+        const doc = new DOMParser().parseFromString(htmlText, "text/html");
 
-        const html = await response.text();
-        const match = html.match(/(\d{4})-\d{4}学年(\d)学期\s*[（(](\d{4}-\d{2}-\d{2})至(\d{4}-\d{2}-\d{2})[）)]/);
+        const allYearOptions = Array.from(doc.querySelectorAll("#xnm option"))
+            .filter((opt) => opt.value !== "")
+            .map((opt) => ({
+                value: opt.value,
+                text: opt.textContent.trim(),
+                selected: opt.selected
+            }));
+        const semesterOptions = Array.from(doc.querySelectorAll("#xqm option"))
+            .filter((opt) => opt.value !== "")
+            .map((opt) => ({
+                value: opt.value,
+                text: opt.textContent.trim(),
+                selected: opt.selected
+            }));
 
-        if (!match) {
-            console.warn("JS: 未能从日历区块解析出学期起止日期。");
+        if (allYearOptions.length === 0 || semesterOptions.length === 0) {
             return null;
         }
 
-        const range = {
-            academicYear: match[1],
-            semesterIndex: Number(match[2]) - 1,
-            startDate: match[3],
-            endDate: match[4]
-        };
-        console.log("JS: 教务系统当前学期:", range);
-        return range;
+        const defaultSemesterIndex = (() => {
+            const i = semesterOptions.findIndex((opt) => opt.selected);
+            return i !== -1 ? i : 0;
+        })();
 
-    } catch (error) {
-        console.warn("JS: 获取学期起止日期失败:", error);
+        const selectedIndex = allYearOptions.findIndex((opt) => opt.selected);
+        if (selectedIndex === -1) {
+            return {
+                yearOptions: allYearOptions.slice(0, 5),
+                semesterOptions,
+                defaultYearIndex: 0,
+                defaultSemesterIndex
+            };
+        }
+
+        const start = Math.max(0, selectedIndex - 2);
+        const end = Math.min(allYearOptions.length, selectedIndex + 3);
+        return {
+            yearOptions: allYearOptions.slice(start, end),
+            semesterOptions,
+            defaultYearIndex: selectedIndex - start,
+            defaultSemesterIndex
+        };
+    } catch (e) {
         return null;
     }
+}
+
+/**
+ * 让用户依次点选学年与学期（带默认选中项），返回 API 所需的 xnm/xqm 代码。
+ * 无需手动输入，用户一路点下一步即可。
+ */
+async function selectAcademicYearAndSemester() {
+    const optionsData = await fetchAcademicOptions();
+    if (!optionsData) {
+        window.shiguangBridge.showToast("从教务系统读取学年学期失败，请确认登录状态有效。");
+        return null;
+    }
+
+    const { yearOptions, semesterOptions, defaultYearIndex, defaultSemesterIndex } = optionsData;
+
+    const yearIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择学年",
+        JSON.stringify(yearOptions.map((item) => item.text)),
+        defaultYearIndex
+    );
+    if (yearIndex === null || yearIndex === -1) {
+        return null;
+    }
+    const academicYear = yearOptions[yearIndex].value;
+
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择学期",
+        JSON.stringify(semesterOptions.map((item) => item.text)),
+        defaultSemesterIndex
+    );
+    if (semesterIndex === null || semesterIndex === -1) {
+        return null;
+    }
+
+    return {
+        academicYear,
+        semesterCode: semesterOptions[semesterIndex].value
+    };
+}
+
+/**
+ * 获取所选学期的开学日期（第 1 周的日期）。
+ * 该接口按用户所选 xnm/xqm 返回对应学期的周历，能拿到比当前学期更准确的开班日期。
+ */
+async function fetchSemesterStartDate(academicYear, semesterCode) {
+    const url = buildApiUrl("/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154");
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "content-type": "application/x-www-form-urlencoded;charset=UTF-8"
+            },
+            body: `xnm=${academicYear}&xqm=${semesterCode}`,
+            credentials: "include"
+        });
+
+        if (response.ok) {
+            const json = await response.json();
+            if (Array.isArray(json) && json.length > 0) {
+                const firstWeekObj = json.find((item) => String(item.zs) === "1" || String(item.zsmc) === "1") || json[0];
+
+                const matchStr = String(firstWeekObj.rq || firstWeekObj.zcrq || firstWeekObj.ksrq || "").match(/(\d{4}-\d{2}-\d{2})/);
+                if (matchStr) {
+                    return matchStr[1];
+                }
+            }
+        }
+    } catch (e) {
+        // 获取失败不影响主流程
+    }
+    return null;
 }
 
 /**
@@ -283,8 +316,8 @@ async function fetchCurrentSemesterRange() {
  * 其中 semesterStartDate 的默认值是 null，会把用户已经设置好的开学日期清空。
  * 所以拿不到真实开学日期时返回 null，由调用方跳过整个配置保存，宁可不写也不要写坏。
  */
-function buildCourseConfig(courses, semesterRange, firstDayOfWeek) {
-    if (!semesterRange) {
+function buildCourseConfig(courses, startDate, firstDayOfWeek) {
+    if (!startDate) {
         return null;
     }
 
@@ -298,7 +331,7 @@ function buildCourseConfig(courses, semesterRange, firstDayOfWeek) {
     }
 
     return {
-        semesterStartDate: semesterRange.startDate,
+        semesterStartDate: startDate,
         // 只增不减：默认 20 周，课表里出现更大的周次时才扩展。
         semesterTotalWeeks: Math.max(maxWeek, 20),
         firstDayOfWeek: firstDayOfWeek
@@ -307,35 +340,32 @@ function buildCourseConfig(courses, semesterRange, firstDayOfWeek) {
 
 /**
  * 请求和解析课程数据。
+ * 并行拉取课表 JSON 与所选学期开学日期。
  */
-async function fetchAndParseCourses(academicYear, semesterIndex) {
+async function fetchAndParseCourses(academicYear, semesterCode) {
     window.shiguangBridge.showToast("正在请求课表数据...");
 
-    const semesterCode = getSemesterCode(semesterIndex);
-
-    // API URL 和请求体
-    const xnmXqmBody = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=`;
+    const body = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=`;
     const url = buildApiUrl("/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151");
 
-    console.log(`JS: 发送请求到 ${url}, body: ${xnmXqmBody}`);
-
-    const requestOptions = {
-        "headers": {
-            "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
-        },
-        "body": xnmXqmBody,
-        "method": "POST",
-        "credentials": "include"
-    };
+    const [courseResponse, startDate] = await Promise.all([
+        fetch(url, {
+            method: "POST",
+            headers: {
+                "content-type": "application/x-www-form-urlencoded;charset=UTF-8"
+            },
+            body,
+            credentials: "include"
+        }),
+        fetchSemesterStartDate(academicYear, semesterCode)
+    ]);
 
     try {
-        const response = await fetch(url, requestOptions);
-
-        if (!response.ok) {
-            throw new Error(`网络请求失败。状态码: ${response.status} (${response.statusText})`);
+        if (!courseResponse.ok) {
+            throw new Error(`网络请求失败。状态码: ${courseResponse.status} (${courseResponse.statusText})`);
         }
 
-        const jsonText = await response.text();
+        const jsonText = await courseResponse.text();
         let jsonData;
         try {
             jsonData = JSON.parse(jsonText);
@@ -354,20 +384,14 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
 
         console.log(`JS: 课程数据解析成功，共找到 ${courses.length} 门课程。`);
 
-        // 集中实践课（军训、毕业设计等）没有星期和节次，无法排进周课表，单独取出用于提示。
-        const practiceCourses = parsePracticeCourses(jsonData);
-        if (practiceCourses.length > 0) {
-            console.log(`JS: 检测到 ${practiceCourses.length} 门集中实践课，无法自动导入。`);
-        }
-
         // qsxqj: 教务系统设置的一周起始星期几，缺失时按周一处理。
         const rawFirstDay = Number(jsonData.qsxqj);
         const firstDayOfWeek = (rawFirstDay >= 1 && rawFirstDay <= 7) ? rawFirstDay : 1;
 
         return {
-            courses: courses,
-            practiceCourses: practiceCourses,
-            firstDayOfWeek: firstDayOfWeek
+            courses,
+            startDate,
+            firstDayOfWeek
         };
 
     } catch (error) {
@@ -394,25 +418,8 @@ async function saveCourses(parsedCourses) {
  * 拿不到就完全不调用 saveCourseConfig —— 应用侧是整体覆盖，
  * 传入不含 semesterStartDate 的配置会把用户已设置的开学日期清空。
  */
-async function saveCourseConfigIfPossible(courses, academicYear, semesterIndex, firstDayOfWeek) {
-    const semesterRange = await fetchCurrentSemesterRange();
-
-    let usableRange = null;
-    if (semesterRange) {
-        const sameYear = semesterRange.academicYear === String(academicYear);
-        const sameSemester = semesterRange.semesterIndex === semesterIndex;
-
-        if (sameYear && sameSemester) {
-            usableRange = semesterRange;
-        } else {
-            console.log(
-                `JS: 所选学年学期(${academicYear}/第${semesterIndex + 1}学期)` +
-                `不是教务系统当前学期(${semesterRange.academicYear}/第${semesterRange.semesterIndex + 1}学期)，跳过开学日期写入。`
-            );
-        }
-    }
-
-    const config = buildCourseConfig(courses, usableRange, firstDayOfWeek);
+async function saveCourseConfigIfPossible(courses, startDate, firstDayOfWeek) {
+    const config = buildCourseConfig(courses, startDate, firstDayOfWeek);
 
     if (!config) {
         window.shiguangBridge.showToast("未取到本学期开学日期，已跳过课表配置，请在应用内手动设置开学日期。");
@@ -471,46 +478,19 @@ async function runImportFlow() {
         return;
     }
 
-    const academicYear = await getAcademicYear();
-    if (academicYear === null) {
+    const selection = await selectAcademicYearAndSemester();
+    if (selection === null) {
         window.shiguangBridge.showToast("导入已取消。");
         return;
     }
-    console.log(`JS: 已选择学年: ${academicYear}`);
+    console.log(`JS: 已选择学年学期: ${selection.academicYear}/${selection.semesterCode}`);
 
-    const semesterIndex = await selectSemester();
-    if (semesterIndex === null || semesterIndex === -1) {
-        window.shiguangBridge.showToast("导入已取消。");
-        return;
-    }
-    console.log(`JS: 已选择学期索引: ${semesterIndex}`);
-
-    const result = await fetchAndParseCourses(academicYear, semesterIndex);
+    const result = await fetchAndParseCourses(selection.academicYear, selection.semesterCode);
     if (result === null) {
         console.log("JS: 课程获取或解析失败，流程终止。");
         return;
     }
-    const { courses, practiceCourses, firstDayOfWeek } = result;
-
-    // 集中实践课（军训、毕业设计等）没有星期和节次，无法排进周课表，提示手动添加。
-    if (practiceCourses.length > 0) {
-        const practiceList = practiceCourses
-            .map((item) => {
-                const teacher = item.teacher ? `（${item.teacher}）` : "";
-                const weekDesc = item.weekDesc ? ` ${item.weekDesc}` : "";
-                return `· ${item.name}${teacher}${weekDesc}`;
-            })
-            .join("\n");
-
-        console.log("JS: 集中实践课列表:", practiceCourses);
-        await window.shiguangBridgePromise.showAlert(
-            "集中实践课需手动添加",
-            `本学期有 ${practiceCourses.length} 门集中实践课，教务系统未给出星期和节次，无法自动导入：\n\n` +
-            practiceList +
-            "\n\n请按实际安排在应用内手动添加。",
-            "我知道了"
-        );
-    }
+    const { courses, startDate, firstDayOfWeek } = result;
 
     const saveResult = await saveCourses(courses);
     if (!saveResult) {
@@ -518,7 +498,7 @@ async function runImportFlow() {
         return;
     }
 
-    await saveCourseConfigIfPossible(courses, academicYear, semesterIndex, firstDayOfWeek);
+    await saveCourseConfigIfPossible(courses, startDate, firstDayOfWeek);
 
     await importPresetTimeSlots(SWU_TIME_SLOTS);
 
