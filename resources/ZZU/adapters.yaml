@@ -1,0 +1,11 @@
+# resources/ZZU/adapters.yaml
+# 郑州大学 拾光课程表适配
+# 教务平台：树维 EAMS 微服务平台 (jwxt.zzu.edu.cn)
+adapters:
+  - adapter_id: "ZZU_01"
+    adapter_name: "郑州大学"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "zzu.js"
+    import_url: "https://cas.s.zzu.edu.cn/login?service=https%3A%2F%2Fjwxt.zzu.edu.cn%2Feams-door%2F"
+    maintainer: "LilyCarry"
+    description: "郑州大学教务系统课表一键导入。在统一身份认证(CAS)页面登录并进入教务系统后，点击【执行导入】，自动聚合全学期排课流并同步郑州大学 12 节标准作息时间表。"

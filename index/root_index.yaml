@@ -812,4 +812,9 @@ schools:
     name: "西南大学"
     initial: "X"
     resource_folder: "SWU"
+
+  - id: "ZZU"
+    name: "郑州大学"
+    initial: "Z"
+    resource_folder: "ZZU"
     
