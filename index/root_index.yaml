@@ -843,3 +843,8 @@ schools:
     initial: "G"
     resource_folder: "GXCME"    
     
+  - id: "HAUST"
+    name: "河南科技大学"
+    initial: "H"
+    resource_folder: "HAUST"
+    
