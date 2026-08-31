@@ -5,7 +5,7 @@ adapters:
     adapter_name: "郑州大学"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "zzu.js"
-    import_url: "https://jwxt.zzu.edu.cn/student/home"
+    import_url: "https://cas.s.zzu.edu.cn/cas/a/login?service=https%3A%2F%2Fjwxt.zzu.edu.cn%2Fstudent%2Fsso%2Flogin"
     maintainer: "LilyCarry"
     description: "支持郑州大学新一代智慧教务系统（jwxt.zzu.edu.cn）与移动综合信息门户（info.s.zzu.edu.cn）。登录后点击导入即可自动识别学期、解析排课并同步标准作息时间。"
 
