@@ -218,6 +218,11 @@ schools:
     initial: "G"
     resource_folder: "GDPU"
 
+  - id: "GDUT"
+    name: "广东工业大学"
+    initial: "G"
+    resource_folder: "GDUT"
+
   - id: "HNUST"
     name: "湖南科技大学"
     initial: "H"
@@ -812,4 +817,9 @@ schools:
     name: "西南大学"
     initial: "X"
     resource_folder: "SWU"
+
+  - id: "ZZU"
+    name: "郑州大学"
+    initial: "Z"
+    resource_folder: "ZZU"
     
