@@ -812,4 +812,10 @@ schools:
     name: "西南大学"
     initial: "X"
     resource_folder: "SWU"
-    
+  - id: "THDM"
+    name: "南昌科技职业大学"
+    initial: "N"
+    resource_folder: "THDM"
+
+
+
