@@ -29,16 +29,18 @@ async function selectSemesterSelection(){
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
-    const currentSemester = currentMonth >= 9 || currentMonth <= 2 ? 1 : 1;
-    const nextSemester = currentSemester === 1 ? 2 : 1;
+    const currentSemester = currentMonth >= 8 || currentMonth <= 2 ? 1 : 2;
 
-    const presetSemeters = [];
+    const nextSemester = currentSemester === 1 ? 2 : 1;
+    const nextSemesterYear = currentSemester === 1 ? currentYear : currentYear + 1;
+
+    const presetSemetersId = [];
     const presetSemestersName = [];
 
-    for (let year = currentYear; year >= currentYear - 3; year--){
+    for (let year = nextSemesterYear; year >= nextSemesterYear - 3; year--){
         for (let semester = nextSemester; semester >= 1; semester--){
+            presetSemetersId.push(`${year}0${semester}`);
             const semesterName = `${year}-${year + 1}学年 ${semester === 1 ? "秋季" : "春季"}（第${semester}学期）`;
-            presetSemeters.push({ name: semesterName, semesterId: `${year}0${semester}` });
             presetSemestersName.push(semesterName);
         }
     }
@@ -49,10 +51,9 @@ async function selectSemesterSelection(){
             JSON.stringify(presetSemestersName),
             2
         );
-        if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < presetSemeters.length) {
-            const selecedSemester = presetSemeters[selectedIndex];
-            console.log("用户选择了: " + selecedSemester.name + " (索引: " + selectedIndex + ")");
-            return selecedSemester;
+        if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < presetSemetersId.length) {
+            console.log("用户选择了: " + presetSemestersName[selectedIndex] + " (索引: " + selectedIndex + ")");
+            return presetSemetersId[selectedIndex];
         } else {
             console.log("用户取消了选择。");
             return null;
@@ -190,6 +191,7 @@ async function fetchCourses(semesterId){
 
     } catch (error) {
         console.error('添加课程表失败:', error);
+        window.shiguangBridge.showToast(`添加课程失败: ${error.message}`);
         return null;
     }
 }
@@ -285,7 +287,7 @@ async function setPresetTimeSlots() {
             console.log("预设时间段导入成功！");
         } else {
             console.log("预设时间段导入未成功，结果：" + result);
-            window.shiguangBridge.showToast("测试时间段导入失败，请查看日志。");
+            window.shiguangBridge.showToast("预设时间段导入失败，请查看日志。");
         }
     } catch (error) {
         console.error("导入时间段时发生错误:", error);
@@ -304,11 +306,11 @@ async function saveConfig(config) {
             console.log("课表配置导入成功！");
         } else {
             console.log("课表配置导入未成功，结果：" + result);
-            window.shiguangBridge.showToast("测试配置导入失败，请查看日志。");
+            window.shiguangBridge.showToast("课表配置导入失败，请查看日志。");
         }
     } catch (error) {
-        console.error("导入配置时发生错误:", error);
-        window.shiguangBridge.showToast("导入配置失败: " + error.message);
+        console.error("导入课表配置时发生错误:", error);
+        window.shiguangBridge.showToast("导入课表配置失败: " + error.message);
     }
 }
 
@@ -323,14 +325,21 @@ async function runImportFlow() {
         return; // 用户取消，立即退出函数
     }
 
-    const semester = await selectSemesterSelection();
+    const semesterId = await selectSemesterSelection();
 
-    if (!semester) {
+    if (!semesterId) {
         console.log("用户取消了学期选择，停止后续执行。");
         return; // 用户取消，立即退出函数
     }
 
-    const startDate = await fetchStartDate(semester.semesterId);
+    const startDate = await fetchStartDate(semesterId);
+
+    const courses = await fetchCourses(semesterId);
+
+    if (!courses) {
+        console.log(`未能获取课程数据，停止后续执行。`);
+        return; // 获取课程失败，立即退出函数
+    }
 
     const config = {
         semesterStartDate: startDate.toISOString().split('T')[0], // 转换为 YYYY-MM-DD 格式
@@ -341,14 +350,6 @@ async function runImportFlow() {
     }
 
     await saveConfig(config);
-
-    const courses = await fetchCourses(semester.semesterId);
-
-    if (!courses) {
-        console.log(`未能获取课程数据，停止后续执行。`);
-        return; // 获取课程失败，立即退出函数
-    }
-
     await saveCourses(courses);
     await setPresetTimeSlots();
 
