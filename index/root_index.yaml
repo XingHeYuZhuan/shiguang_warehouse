@@ -357,6 +357,11 @@ schools:
     name: "济南大学"
     initial: "J"
     resource_folder: "UJN"
+  
+  - id: "JNMC"
+    name: "济宁医学院"
+    initial: "J"
+    resource_folder: "JNMC"
 
   - id: "HBGUHX"
     name: "河北地质大学华信学院"
