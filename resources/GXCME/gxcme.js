@@ -296,24 +296,25 @@ async function saveCourses(parsedCourses) {
 }
 
 const TimeSlots = [
-    { number: 1, startTime: "08:00", endTime: "08:45" },
-    { number: 2, startTime: "08:55", endTime: "09:40" },
-    { number: 3, startTime: "10:05", endTime: "10:50" },
-    { number: 4, startTime: "11:00", endTime: "11:45" },
-    { number: 5, startTime: "13:30", endTime: "14:15" },
-    { number: 6, startTime: "14:25", endTime: "15:10" },
-    { number: 7, startTime: "15:20", endTime: "16:05" },
-    { number: 8, startTime: "16:05", endTime: "16:50" },
-    { number: 9, startTime: "18:00", endTime: "18:45" },
-    { number: 10, startTime: "18:45", endTime: "19:30" },
-    { number: 11, startTime: "19:30", endTime: "20:15" }
+    { number: 1, startTime: "08:10", endTime: "08:50" },
+    { number: 2, startTime: "09:00", endTime: "09:40" },
+    { number: 3, startTime: "09:40", endTime: "10:20" },
+    { number: 4, startTime: "10:30", endTime: "11:10" },
+    { number: 5, startTime: "11:20", endTime: "12:00" },
+    { number: 6, startTime: "12:10", endTime: "12:50" },
+    { number: 7, startTime: "14:40", endTime: "15:20" },
+    { number: 8, startTime: "15:30", endTime: "16:10" },
+    { number: 9, startTime: "16:10", endTime: "16:50" },
+    { number: 10, startTime: "17:00", endTime: "17:40" },
+    { number: 11, startTime: "17:50", endTime: "18:30" },
+    { number: 12, startTime: "19:30", endTime: "20:10" },
+    { number: 13, startTime: "20:20", endTime: "21:00" },
+    { number: 14, startTime: "21:00", endTime: "21:40" }
 ];
 
 async function importPresetTimeSlots(timeSlots) {
     if (timeSlots.length === 0) return;
-    try {
-        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-    } catch (error) {}
+    try { await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots)); } catch (e) {}
 }
 
 async function runImportFlow() {
