@@ -863,3 +863,8 @@ schools:
     initial: "L"
     resource_folder: "LCUDCC"
     
+  - id: "LYU"
+    name: "临沂大学"
+    initial: "L"
+    resource_folder: "LYU"
+    
