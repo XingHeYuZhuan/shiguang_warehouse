@@ -833,3 +833,8 @@ schools:
     initial: "C"
     resource_folder: "CCZU"    
     
+  - id: "FIT"
+    name: "福州理工学院"
+    initial: "F"
+    resource_folder: "FIT"
+    
