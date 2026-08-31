@@ -828,3 +828,8 @@ schools:
     initial: "Z"
     resource_folder: "ZZU"
     
+  - id: "CCZU"
+    name: "常州大学"
+    initial: "C"
+    resource_folder: "CCZU"    
+    
