@@ -445,8 +445,8 @@
                 }
             }
 
-            injectGuideBanner("正在提取鉴权凭证并拉取全学期排课流...", false);
-            toast("正在提取鉴权凭据并同步全学期排课...");
+            injectGuideBanner("正在提取key并拉取学期排课...", false);
+            toast("正在提取key并拉取学期排课...");
 
             // 2. 深度提取 Token
             const tokenList = deepScanTokens();
@@ -484,7 +484,7 @@
                 injectGuideBanner("未检测到课表数据，请点击底栏【课表】后再点【执行导入】", false);
                 await alertUser(
                     "未获取到课表数据",
-                    "请确认已成功登录郑大移动门户。\n\n提示：如果刚登录完成，请先在底部导航栏点击【课表】（或点击首页【今日课表/课表查询】），待课表页面加载完成后，再次点击右下角【执行导入】。"
+                    "请确认已成功登录郑大信息门户."
                 );
                 return;
             }
@@ -496,8 +496,8 @@
                 return;
             }
 
-            injectGuideBanner(`导入成功！共解析 ${courses.length} 门课程，已同步 12 节作息`, true);
-            toast(`导入成功！共解析 ${courses.length} 门课程，已同步郑大 12 节标准作息`);
+            injectGuideBanner(`导入成功！共解析 ${courses.length} 门课程`, true);
+            toast(`导入成功！共解析 ${courses.length} 门课程`);
             if (window.shiguangBridge && window.shiguangBridge.notifyTaskCompletion) {
                 window.shiguangBridge.notifyTaskCompletion();
             }
