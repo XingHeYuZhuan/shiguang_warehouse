@@ -8,4 +8,4 @@ adapters:
     asset_js_path: "zzu.js"
     import_url: "https://cas.s.zzu.edu.cn/cas/login?service=https%3A%2F%2Finfo.s.zzu.edu.cn%2F"
     maintainer: "LilyCarry"
-    description: "郑州大学教务系统课表一键导入。在统一身份认证(CAS)登录成功进入移动服务门户后，点击【执行导入】，自动聚合全学期排课流并同步郑州大学 12 节标准作息时间表。"
+    description: "输入账号密码登录，接着可能要获取短信验证码。完全登录后（或者成功显示分流页）系统将自动执行导入，也可点击右下角【执行导入】同步全学期排课与12节标准作息。"

@@ -1,6 +1,6 @@
 // 郑州大学 (ZZU) 拾光课程表官方适配脚本
 // 适用平台：郑州大学移动综合服务门户 (info.s.zzu.edu.cn / jwxt.zzu.edu.cn)
-// 特性：WebView 悬浮指引横幅 + 深度 JWT 凭证扫描 + 全学期日历排课流智能聚合 + 郑大 12 节标准作息时间同步
+// 特性：自动检测进站即时导入 + 顶部操作指引横幅 + 深度 JWT 凭证扫描 + 12 节标准作息同步
 
 (function () {
     const API_BASES = [
@@ -44,7 +44,7 @@
     }
 
     /**
-     * 在 WebView 顶部注入悬浮操作指引横幅
+     * 在 WebView 顶部注入悬浮操作指引横幅 (纯净文本，无emoji)
      */
     function injectGuideBanner(customText, isSuccess) {
         try {
@@ -67,7 +67,7 @@
                 box-shadow: 0 8px 24px rgba(0,0,0,0.3);
                 z-index: 2147483647;
                 font-size: 13px;
-                line-height: 1.4;
+                line-height: 1.45;
                 font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                 display: flex;
                 align-items: center;
@@ -78,15 +78,15 @@
             `;
 
             const isLogin = window.location.href.includes("cas.s.zzu.edu.cn");
-            const title = isSuccess ? "✅ 操作指引" : (isLogin ? "🎓 郑州大学课表导入指引" : "📱 郑州大学移动门户");
+            const title = isSuccess ? "操作指引" : (isLogin ? "郑州大学课表导入指引" : "郑州大学移动门户");
             const defaultMsg = isLogin 
-                ? "请先登录统一身份认证。登录成功进入门户后，点击右下角【执行导入】。"
-                : "已进入系统！请直接点击右下角【执行导入】按钮同步全学期排课。";
+                ? "输入账号密码登录，接着可能要获取短信验证码。完全登录后（或者成功显示分流页）将自动导入，也可点击右下角【执行导入】。"
+                : "已成功进入移动门户，系统将自动同步课表，也可直接点击右下角【执行导入】。";
             const text = customText || defaultMsg;
 
             banner.innerHTML = `
                 <div style="flex: 1; margin-right: 8px;">
-                    <div style="font-weight: bold; margin-bottom: 2px; font-size: 14px;">${title}</div>
+                    <div style="font-weight: bold; margin-bottom: 2px; font-size: 13px;">${title}</div>
                     <div style="opacity: 0.95; font-size: 12px;">${text}</div>
                 </div>
                 <div id="zzu-close-guide" style="cursor: pointer; padding: 4px 8px; font-size: 16px; opacity: 0.8; user-select: none;">✕</div>
@@ -430,23 +430,25 @@
     /**
      * 核心导入执行流
      */
-    async function runZzuImport() {
+    async function runZzuImport(isAutoTrigger) {
         try {
             const currentUrl = window.location.href;
-            console.log("[ZZU Adapter] 当前 URL:", currentUrl);
+            console.log("[ZZU Adapter] 当前 URL:", currentUrl, "是否自动触发:", !!isAutoTrigger);
 
             // 1. CAS 登录页面拦截
             if (currentUrl.includes("cas.s.zzu.edu.cn/cas/login") && !currentUrl.includes("ticket=")) {
                 const hasPassword = !!document.querySelector("input[type='password']");
                 if (hasPassword) {
-                    injectGuideBanner("请先在当前页面输入学号密码完成登录，登录后点击右下角【执行导入】。", false);
-                    toast("请先在当前页面输入账号密码完成统一身份认证登录");
+                    injectGuideBanner("输入账号密码登录，接着可能要获取短信验证码。完全登录后（或者成功显示分流页）将自动导入，也可点击右下角【执行导入】。", false);
+                    if (!isAutoTrigger) {
+                        toast("请先输入账号密码与短信验证码登录统一身份认证");
+                    }
                     return;
                 }
             }
 
             injectGuideBanner("正在提取鉴权凭证并拉取全学期排课流...", false);
-            toast("正在深度提取鉴权凭证并拉取全学期课表...");
+            toast("正在提取鉴权凭据并同步全学期排课...");
 
             // 2. 深度提取 Token
             const tokenList = deepScanTokens();
@@ -481,6 +483,12 @@
 
             // 5. 若均未获取到，弹窗提示用户进入【课表】模块
             if (courses.length === 0) {
+                if (isAutoTrigger) {
+                    // 自动触发模式下若凭证未就绪，继续展示就绪指引，等待用户手动点击或跳转完毕
+                    injectGuideBanner("已进入门户，请点击右下角【执行导入】同步课表", false);
+                    return;
+                }
+
                 injectGuideBanner("未检测到课表数据，请点击底栏【课表】后再点【执行导入】", false);
                 await alertUser(
                     "未获取到课表数据",
@@ -496,14 +504,33 @@
                 return;
             }
 
-            injectGuideBanner(`🎉 导入成功！共解析 ${courses.length} 门课程，已同步 12 节作息！`, true);
-            toast(`🎉 导入成功！共解析 ${courses.length} 门课程，已同步郑大 12 节标准作息！`);
+            injectGuideBanner(`导入成功！共解析 ${courses.length} 门课程，已同步 12 节作息`, true);
+            toast(`导入成功！共解析 ${courses.length} 门课程，已同步郑大 12 节标准作息`);
             if (window.shiguangBridge && window.shiguangBridge.notifyTaskCompletion) {
                 window.shiguangBridge.notifyTaskCompletion();
             }
         } catch (error) {
             console.error("[ZZU Adapter Error]", error);
-            await alertUser("导入异常", error && error.message ? error.message : String(error));
+            if (!isAutoTrigger) {
+                await alertUser("导入异常", error && error.message ? error.message : String(error));
+            }
+        }
+    }
+
+    /**
+     * 自动监听页面进站事件：一旦进入 info.s.zzu.edu.cn 立即自动执行导入
+     */
+    function setupAutoImportWatcher() {
+        injectGuideBanner();
+
+        const href = window.location.href;
+        if (href.includes("info.s.zzu.edu.cn")) {
+            if (!window.__zzu_auto_imported) {
+                window.__zzu_auto_imported = true;
+                setTimeout(() => {
+                    runZzuImport(true);
+                }, 800);
+            }
         }
     }
 
@@ -517,8 +544,7 @@
             injectGuideBanner
         };
     } else {
-        // 自动注入顶部指引横幅
-        injectGuideBanner();
-        runZzuImport();
+        setupAutoImportWatcher();
+        runZzuImport(false);
     }
 })();
