@@ -1,9 +1,9 @@
 // 郑州大学 (ZZU) 拾光课程表适配脚本
 // 适用平台：郑州大学树维 EAMS 微服务教务系统 (jwxt.zzu.edu.cn)
-// 包含日历排课流提取、周次与节次智能聚合算法及郑大 12 节标准作息时间同步
+// 包含全域 Token 提取、日历排课流自动抓取、周次与节次聚合算法及 12 节标准作息同步
 
 (function () {
-    const JWXT_HOST = "https://jwxt.zzu.edu.cn";
+    const CAS_JWXT_REDIRECT = "https://cas.s.zzu.edu.cn/cas/login?service=https%3A%2F%2Fjwxt.zzu.edu.cn%2F";
     const API_BASE = "https://jwxt.zzu.edu.cn/eams-door/api/v1";
 
     // 郑州大学标准 12 节作息时间表 (冬季/常规作息)
@@ -52,6 +52,38 @@
             return "";
         }
         return s;
+    }
+
+    /**
+     * 深度扫描获取当前会话中的 JWT / UserToken
+     */
+    function extractUserToken() {
+        try {
+            // 1. 扫描 localStorage
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                const v = localStorage.getItem(k) || "";
+                if (["token", "userToken", "idToken", "X-Id-Token", "access_token", "jwt"].includes(k)) {
+                    if (v && v.length > 20) return v;
+                }
+                if (v.startsWith("ey") && v.length > 50) return v;
+            }
+            // 2. 扫描 sessionStorage
+            for (let j = 0; j < sessionStorage.length; j++) {
+                const sk = sessionStorage.key(j);
+                const sv = sessionStorage.getItem(sk) || "";
+                if (["token", "userToken", "idToken", "X-Id-Token", "access_token", "jwt"].includes(sk)) {
+                    if (sv && sv.length > 20) return sv;
+                }
+                if (sv.startsWith("ey") && sv.length > 50) return sv;
+            }
+            // 3. 扫描 Cookie
+            const match = document.cookie.match(/(?:token|userToken|idToken|X-Id-Token|access_token)=([^;]+)/i);
+            if (match) return decodeURIComponent(match[1]);
+        } catch (e) {
+            console.warn("[ZZU Adapter] extractUserToken error:", e);
+        }
+        return "";
     }
 
     /**
@@ -120,25 +152,43 @@
     }
 
     /**
-     * 从郑大树维 EAMS 微服务接口拉取月度排课日历流
+     * 从郑大微服务接口拉取月度排课日历流 (支持双网关与 Token 注入)
      */
-    async function fetchJwxtMonthSchedule(monthStr) {
-        try {
-            const url = `${API_BASE}/protal-schedule/getSchedules?date=${monthStr}`;
-            const res = await fetch(url, {
-                method: "GET",
-                credentials: "include",
-                headers: {
-                    "Accept": "application/json, text/plain, */*",
-                    "X-Requested-With": "XMLHttpRequest"
+    async function fetchJwxtMonthSchedule(monthStr, userToken) {
+        const candidateUrls = [
+            `${API_BASE}/protal-schedule/getSchedules?date=${monthStr}`,
+            `/eams-door/api/v1/protal-schedule/getSchedules?date=${monthStr}`,
+            `https://info.s.zzu.edu.cn/portal-api/v1/protal-schedule/getSchedules?date=${monthStr}`
+        ];
+
+        const headers = {
+            "Accept": "application/json, text/plain, */*",
+            "X-Requested-With": "XMLHttpRequest",
+            "X-Device-Info": "Android",
+            "X-Terminal-Info": "app"
+        };
+        if (userToken) {
+            headers["Authorization"] = userToken.startsWith("Bearer ") ? userToken : `Bearer ${userToken}`;
+            headers["token"] = userToken;
+            headers["X-Id-Token"] = userToken;
+        }
+
+        for (const url of candidateUrls) {
+            try {
+                const res = await fetch(url, {
+                    method: "GET",
+                    credentials: "include",
+                    headers: headers
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && (data.data || Object.keys(data).some(k => /^\d{4}-\d{2}-\d{2}$/.test(k)))) {
+                        return data;
+                    }
                 }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                return data || {};
+            } catch (e) {
+                // Ignore and try next endpoint
             }
-        } catch (e) {
-            console.warn(`[ZZU Adapter] Fetch month ${monthStr} failed:`, e);
         }
         return null;
     }
@@ -239,11 +289,9 @@
         groupMap.forEach(group => {
             const sortedWeeks = Array.from(group.weeksSet).sort((a, b) => a - b);
             if (sortedWeeks.length === 0) {
-                // 若周次解析为空，默认 1~16 周
                 for (let w = 1; w <= 16; w++) sortedWeeks.push(w);
             }
 
-            // 生成 sections 数组 (例如 [1, 2])
             const sections = [];
             for (let s = group.startSection; s <= group.endSection; s++) {
                 sections.push(s);
@@ -291,7 +339,6 @@
         }
 
         console.log("[ZZU Adapter] Output Courses:", JSON.stringify(courses, null, 2));
-        console.log("[ZZU Adapter] Output TimeSlots:", JSON.stringify(ZZU_TIME_SLOTS, null, 2));
         return true;
     }
 
@@ -300,10 +347,27 @@
      */
     async function runZzuImport() {
         try {
-            toast("正在连接郑大教务系统，拉取学期排课流...");
+            const currentHref = window.location.href;
+            console.log("[ZZU Adapter] 当前页面地址:", currentHref);
 
+            // 1. 如果还在 CAS 登录页，提示用户先登录
+            if (currentHref.includes("cas.s.zzu.edu.cn/cas/login") && !currentHref.includes("ticket=")) {
+                const isLoginForm = !!document.querySelector("input[type='password']");
+                if (isLoginForm) {
+                    toast("请先在网页中输入账号密码登录统一身份认证");
+                    return;
+                }
+            }
+
+            toast("正在提取凭据并拉取郑大全学期排课流...");
+
+            // 2. 提取用户 Token
+            const token = extractUserToken();
+            console.log("[ZZU Adapter] 提取到 Token 状态:", !!token);
+
+            // 3. 并发拉取 6 个月日历排课
             const months = getSemesterMonths();
-            const fetchPromises = months.map(m => fetchJwxtMonthSchedule(m));
+            const fetchPromises = months.map(m => fetchJwxtMonthSchedule(m, token));
             const monthResults = await Promise.all(fetchPromises);
 
             const validResults = monthResults.filter(Boolean);
@@ -313,11 +377,17 @@
                 courses = parseAndAggregateRawEvents(validResults);
             }
 
+            // 4. 若接口抓取为空且当前在门户页，自动引导跳转到教务主站获取 SSO Ticket
             if (courses.length === 0) {
-                // 如果直接接口拉取为空，提示用户登录
+                if (currentHref.includes("info.s.zzu.edu.cn") || currentHref.includes("cas.s.zzu.edu.cn")) {
+                    toast("正在自动跳转到教务主站同步凭证...");
+                    window.location.href = CAS_JWXT_REDIRECT;
+                    return;
+                }
+
                 await alertUser(
                     "未获取到课表数据",
-                    "请确认已在当前网页成功登录郑州大学统一身份认证 (CAS) 并进入了教学综合信息服务平台。如果尚未登录，请登录后重试点击【执行导入】。"
+                    "请确认已成功登录并进入了郑州大学教务系统 (jwxt.zzu.edu.cn)。如果仍在门户页面，请点击页面内的【教务系统】图标进入后，再次点击【执行导入】。"
                 );
                 return;
             }
@@ -338,7 +408,7 @@
         }
     }
 
-    // 暴露核心解析方法供外部测试环境直接调用
+    // 暴露核心解析方法供测试环境调用
     if (typeof module !== "undefined" && module.exports) {
         module.exports = {
             ZZU_TIME_SLOTS,
