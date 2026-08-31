@@ -838,3 +838,8 @@ schools:
     initial: "F"
     resource_folder: "FIT"
     
+  - id: "GXCME"
+    name: "广西机电职业技术学院"
+    initial: "G"
+    resource_folder: "GXCME"    
+    
