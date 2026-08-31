@@ -1,6 +1,6 @@
 // 郑州大学 (ZZU) 拾光课程表官方适配脚本
 // 适用平台：郑州大学移动综合服务门户 (info.s.zzu.edu.cn / jwxt.zzu.edu.cn)
-// 特性：自动检测进站即时导入 + 顶部操作指引横幅 + 深度 JWT 凭证扫描 + 12 节标准作息同步
+// 特性：深度 JWT 凭证扫描 + 全学期日历排课流智能聚合 + 郑大 12 节标准作息时间同步
 
 (function () {
     const API_BASES = [
@@ -80,8 +80,8 @@
             const isLogin = window.location.href.includes("cas.s.zzu.edu.cn");
             const title = isSuccess ? "操作指引" : (isLogin ? "郑州大学课表导入指引" : "郑州大学移动门户");
             const defaultMsg = isLogin 
-                ? "输入账号密码登录，接着可能要获取短信验证码。完全登录后（或者成功显示分流页）将自动导入，也可点击右下角【执行导入】。"
-                : "已成功进入移动门户，系统将自动同步课表，也可直接点击右下角【执行导入】。";
+                ? "输入账号密码登录，接着可能要获取短信验证码。完全登录后（或者成功显示分流页）再点击导入课表。"
+                : "已成功进入移动门户，请直接点击右下角【执行导入】同步全学期排课。";
             const text = customText || defaultMsg;
 
             banner.innerHTML = `
@@ -428,21 +428,19 @@
     }
 
     /**
-     * 核心导入执行流
+     * 核心导入执行流 (用户点击执行导入时触发)
      */
-    async function runZzuImport(isAutoTrigger) {
+    async function runZzuImport() {
         try {
             const currentUrl = window.location.href;
-            console.log("[ZZU Adapter] 当前 URL:", currentUrl, "是否自动触发:", !!isAutoTrigger);
+            console.log("[ZZU Adapter] 当前 URL:", currentUrl);
 
             // 1. CAS 登录页面拦截
             if (currentUrl.includes("cas.s.zzu.edu.cn/cas/login") && !currentUrl.includes("ticket=")) {
                 const hasPassword = !!document.querySelector("input[type='password']");
                 if (hasPassword) {
-                    injectGuideBanner("输入账号密码登录，接着可能要获取短信验证码。完全登录后（或者成功显示分流页）将自动导入，也可点击右下角【执行导入】。", false);
-                    if (!isAutoTrigger) {
-                        toast("请先输入账号密码与短信验证码登录统一身份认证");
-                    }
+                    injectGuideBanner("输入账号密码登录，接着可能要获取短信验证码。完全登录后（或者成功显示分流页）再点击导入课表。", false);
+                    toast("请先输入账号密码与短信验证码登录统一身份认证");
                     return;
                 }
             }
@@ -483,12 +481,6 @@
 
             // 5. 若均未获取到，弹窗提示用户进入【课表】模块
             if (courses.length === 0) {
-                if (isAutoTrigger) {
-                    // 自动触发模式下若凭证未就绪，继续展示就绪指引，等待用户手动点击或跳转完毕
-                    injectGuideBanner("已进入门户，请点击右下角【执行导入】同步课表", false);
-                    return;
-                }
-
                 injectGuideBanner("未检测到课表数据，请点击底栏【课表】后再点【执行导入】", false);
                 await alertUser(
                     "未获取到课表数据",
@@ -511,26 +503,7 @@
             }
         } catch (error) {
             console.error("[ZZU Adapter Error]", error);
-            if (!isAutoTrigger) {
-                await alertUser("导入异常", error && error.message ? error.message : String(error));
-            }
-        }
-    }
-
-    /**
-     * 自动监听页面进站事件：一旦进入 info.s.zzu.edu.cn 立即自动执行导入
-     */
-    function setupAutoImportWatcher() {
-        injectGuideBanner();
-
-        const href = window.location.href;
-        if (href.includes("info.s.zzu.edu.cn")) {
-            if (!window.__zzu_auto_imported) {
-                window.__zzu_auto_imported = true;
-                setTimeout(() => {
-                    runZzuImport(true);
-                }, 800);
-            }
+            await alertUser("导入异常", error && error.message ? error.message : String(error));
         }
     }
 
@@ -544,7 +517,7 @@
             injectGuideBanner
         };
     } else {
-        setupAutoImportWatcher();
-        runZzuImport(false);
+        injectGuideBanner();
+        runZzuImport();
     }
 })();
