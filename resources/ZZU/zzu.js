@@ -1,6 +1,5 @@
-// 郑州大学 (ZZU) 拾光课程表官方适配脚本
-// 适用平台：郑州大学移动综合服务门户 (info.s.zzu.edu.cn / jwxt.zzu.edu.cn)
-// 特性：深度 JWT 凭证扫描 + 全学期日历排课流智能聚合 + 郑大 12 节标准作息时间同步
+// 郑州大学 (ZZU) 拾光课程表适配脚本
+// 适用平台：郑州大学综合信息门户 (info.s.zzu.edu.cn)
 
 (function () {
     const API_BASES = [
@@ -11,7 +10,7 @@
         "/portal-api/v1"
     ];
 
-    // 郑州大学标准 12 节作息时间表 (冬季/常规作息)
+    // 郑州大学标准 12 节作息时间（冬季作息）
     const ZZU_TIME_SLOTS = [
         { number: 1, startTime: "08:00", endTime: "08:45" },
         { number: 2, startTime: "08:55", endTime: "09:40" },
@@ -43,67 +42,6 @@
         return true;
     }
 
-    /**
-     * 在 WebView 顶部注入悬浮操作指引横幅 (纯净文本，无emoji)
-     */
-    function injectGuideBanner(customText, isSuccess) {
-        try {
-            let banner = document.getElementById("zzu-import-guide-banner");
-            if (!banner) {
-                banner = document.createElement("div");
-                banner.id = "zzu-import-guide-banner";
-                document.body.appendChild(banner);
-            }
-
-            banner.style.cssText = `
-                position: fixed;
-                top: 12px;
-                left: 12px;
-                right: 12px;
-                background: ${isSuccess ? "rgba(16, 185, 129, 0.95)" : "rgba(30, 41, 59, 0.95)"};
-                color: #ffffff;
-                padding: 10px 14px;
-                border-radius: 12px;
-                box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-                z-index: 2147483647;
-                font-size: 13px;
-                line-height: 1.45;
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                backdrop-filter: blur(10px);
-                border: 1px solid rgba(255,255,255,0.2);
-                transition: all 0.3s ease;
-            `;
-
-            const isLogin = window.location.href.includes("cas.s.zzu.edu.cn");
-            const title = isSuccess ? "操作指引" : (isLogin ? "郑州大学课表导入指引" : "郑州大学移动门户");
-            const defaultMsg = isLogin 
-                ? "输入账号密码登录，接着可能要获取短信验证码。完全登录后（或者成功显示分流页）再点击导入课表。"
-                : "已成功进入移动门户，请直接点击右下角【执行导入】同步全学期排课。";
-            const text = customText || defaultMsg;
-
-            banner.innerHTML = `
-                <div style="flex: 1; margin-right: 8px;">
-                    <div style="font-weight: bold; margin-bottom: 2px; font-size: 13px;">${title}</div>
-                    <div style="opacity: 0.95; font-size: 12px;">${text}</div>
-                </div>
-                <div id="zzu-close-guide" style="cursor: pointer; padding: 4px 8px; font-size: 16px; opacity: 0.8; user-select: none;">✕</div>
-            `;
-
-            const closeBtn = document.getElementById("zzu-close-guide");
-            if (closeBtn) {
-                closeBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    banner.remove();
-                };
-            }
-        } catch (e) {
-            console.warn("[ZZU Guide Banner Error]", e);
-        }
-    }
-
     function cleanString(str) {
         if (!str) return "";
         const s = String(str)
@@ -118,9 +56,9 @@
     }
 
     /**
-     * 深度扫描获取当前会话中的 JWT / UserToken 列表 (含 Vuex/Pinia 嵌套解析)
+     * 扫描本地存储与 Cookie 提取会话 Token
      */
-    function deepScanTokens() {
+    function scanTokens() {
         const tokens = new Set();
         const jwtRegex = /ey[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]+/g;
 
@@ -136,17 +74,14 @@
         }
 
         try {
-            // 1. 扫描 localStorage 全部字段
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
                 scanValue(localStorage.getItem(k));
             }
-            // 2. 扫描 sessionStorage 全部字段
             for (let j = 0; j < sessionStorage.length; j++) {
                 const sk = sessionStorage.key(j);
                 scanValue(sessionStorage.getItem(sk));
             }
-            // 3. 扫描 document.cookie
             scanValue(document.cookie);
         } catch (e) {
             console.warn("[ZZU Adapter] scan tokens error:", e);
@@ -155,6 +90,9 @@
         return Array.from(tokens);
     }
 
+    /**
+     * 根据时间判定起始节次
+     */
     function mapTimeToSection(timeStr) {
         if (!timeStr) return 1;
         const clean = parseInt(String(timeStr).replace(/[^0-9]/g, ""), 10) || 800;
@@ -172,6 +110,9 @@
         return 12;
     }
 
+    /**
+     * 根据起止时间计算连续节数
+     */
     function calculateSectionCount(startTime, endTime) {
         if (!startTime || !endTime) return 2;
         const s = parseInt(String(startTime).replace(/[^0-9]/g, ""), 10) || 800;
@@ -185,6 +126,9 @@
         return 4;
     }
 
+    /**
+     * 获取当前学期的月份列表
+     */
     function getSemesterMonths() {
         const now = new Date();
         const year = now.getFullYear();
@@ -211,7 +155,7 @@
     }
 
     /**
-     * 并发拉取单个月度日历排课
+     * 请求单个月度日历排课接口
      */
     async function fetchOneMonthSchedule(monthStr, token) {
         const headers = {
@@ -249,7 +193,7 @@
     }
 
     /**
-     * 聚合日历事件为学期标准排课
+     * 将日历排课事件合并为学期课程列表
      */
     function aggregateEventsToCourses(monthPayloads) {
         const rawEvents = [];
@@ -305,7 +249,7 @@
             });
         });
 
-        // 1. 去重完全相同事件
+        // 1. 去重相同事件
         const uniqueMap = new Map();
         rawEvents.forEach(ev => {
             const key = `${ev.dateKey}_${ev.name}_${ev.teacher}_${ev.position}_${ev.day}_${ev.startSection}_${ev.weekIndex}`;
@@ -332,7 +276,7 @@
             }
         });
 
-        // 3. 构建课程输出
+        // 3. 生成课程对象列表
         const resultCourses = [];
         groupMap.forEach(group => {
             const sortedWeeks = Array.from(group.weeksSet).sort((a, b) => a - b);
@@ -359,7 +303,7 @@
     }
 
     /**
-     * DOM 页面智能扫描提取 (Uni-app H5 课表视图)
+     * 解析前端页面 DOM 结构（备用提取）
      */
     function parseUniAppDOM() {
         const courses = [];
@@ -398,7 +342,7 @@
     }
 
     /**
-     * 保存数据至拾光课表 APP
+     * 保存数据至客户端
      */
     async function saveToShiguangApp(courses) {
         const allWeeks = courses.flatMap(c => c.weeks || []);
@@ -428,7 +372,7 @@
     }
 
     /**
-     * 核心导入执行流 (用户点击执行导入时触发)
+     * 适配器执行入口
      */
     async function runZzuImport() {
         try {
@@ -439,23 +383,21 @@
             if (currentUrl.includes("cas.s.zzu.edu.cn/cas/login") && !currentUrl.includes("ticket=")) {
                 const hasPassword = !!document.querySelector("input[type='password']");
                 if (hasPassword) {
-                    injectGuideBanner("输入账号密码登录，接着可能要获取短信验证码。完全登录后（或者成功显示分流页）再点击导入课表。", false);
                     toast("请先输入账号密码与短信验证码登录统一身份认证");
                     return;
                 }
             }
 
-            injectGuideBanner("正在提取key并拉取学期排课...", false);
             toast("正在提取key并拉取学期排课...");
 
-            // 2. 深度提取 Token
-            const tokenList = deepScanTokens();
+            // 2. 提取 Token
+            const tokenList = scanTokens();
             console.log(`[ZZU Adapter] 扫描到 ${tokenList.length} 个候选凭证`);
 
             const months = getSemesterMonths();
             let validMonthData = [];
 
-            // 3. 遍历候选 Token 并发请求月度排课日历流
+            // 3. 遍历候选 Token 请求排课接口
             const tokensToTry = tokenList.length > 0 ? tokenList : [""];
             for (const t of tokensToTry) {
                 const fetchPromises = months.map(m => fetchOneMonthSchedule(m, t));
@@ -479,9 +421,8 @@
                 }
             }
 
-            // 5. 若均未获取到，弹窗提示用户进入【课表】模块
+            // 5. 校验提取结果
             if (courses.length === 0) {
-                injectGuideBanner("未检测到课表数据，请点击底栏【课表】后再点【执行导入】", false);
                 await alertUser(
                     "未获取到课表数据",
                     "请确认已成功登录郑大信息门户."
@@ -489,14 +430,13 @@
                 return;
             }
 
-            // 6. 保存至拾光
+            // 6. 保存至客户端
             const ok = await saveToShiguangApp(courses);
             if (!ok) {
                 toast("保存课表失败，请稍后重试");
                 return;
             }
 
-            injectGuideBanner(`导入成功！共解析 ${courses.length} 门课程。提示：在设置开学日期后，课表才会正常显示！`, true);
             toast(`导入成功！共解析 ${courses.length} 门课程。提示：在设置开学日期后，课表才会正常显示！`);
             if (window.shiguangBridge && window.shiguangBridge.notifyTaskCompletion) {
                 window.shiguangBridge.notifyTaskCompletion();
@@ -510,14 +450,12 @@
     if (typeof module !== "undefined" && module.exports) {
         module.exports = {
             ZZU_TIME_SLOTS,
-            deepScanTokens,
+            scanTokens,
             calculateSectionCount,
             mapTimeToSection,
-            aggregateEventsToCourses,
-            injectGuideBanner
+            aggregateEventsToCourses
         };
     } else {
-        injectGuideBanner();
         runZzuImport();
     }
 })();
