@@ -1,5 +1,5 @@
-// 郑州大学 (ZZU) 拾光课程表适配脚本
-// 适配树维新一代智慧教务系统（jwxt.zzu.edu.cn）
+// 郑州大学时光课程表适配脚本
+// 树维改版
 
 (function () {
     const JWXT_BASE_URLS = [
@@ -63,7 +63,7 @@
     }
 
     // ──────────────────────────────────────────────────────────
-    // 树维新一代智慧教务系统流水线 (student/for-std/course-table)
+    // 树维导入
     // ──────────────────────────────────────────────────────────
 
     async function fetchSemesters(baseUrl = "") {
@@ -204,7 +204,7 @@
                 if (parsedCourses.length > 0) {
                     return parsedCourses;
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
         return null;
     }
