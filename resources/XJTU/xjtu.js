@@ -1,5 +1,6 @@
 /**
  * 西安交通大学教务系统课表适配脚本
+ * by CeTmBeTc
  * 适配页面: https://jwxt.xjtu.edu.cn/jwapp/sys/wdkb/xskcb/xskcb.jsp
  */
 
