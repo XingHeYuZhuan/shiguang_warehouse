@@ -797,3 +797,8 @@ schools:
     name: "安徽财经大学"
     initial: "A"
     resource_folder: "AUFE"    
+
+  - id: "SHXY"
+    name: "绥化学院"
+    initial: "S"
+    resource_folder: "SHXY"
