@@ -867,4 +867,8 @@ schools:
     name: "临沂大学"
     initial: "L"
     resource_folder: "LYU"
-    
+
+  - id: "SHXY"
+    name: "绥化学院"
+    initial: "S"
+    resource_folder: "SHXY"    
