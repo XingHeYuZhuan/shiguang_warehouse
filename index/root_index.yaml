@@ -797,3 +797,8 @@ schools:
     name: "安徽财经大学"
     initial: "A"
     resource_folder: "AUFE"    
+
+  - id: "LYU"
+    name: "临沂大学"
+    initial: "L"
+    resource_folder: "LYU"
