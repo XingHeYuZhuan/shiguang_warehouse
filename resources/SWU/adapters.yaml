@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "swu.js"
     import_url: "https://i.swu.edu.cn/"
     maintainer: "小漫君"
-    description: "登录西南大学信息门户后进入教务系统课表页面，再执行导入脚本；脚本会自动套用西南大学节次时间。"
+    description: "基于正方新一代教务接口取数。请从办事大厅(i.swu.edu.cn)登录后进入教务系统课表查询页面，再执行导入脚本；脚本会自动套用西南大学节次时间。"
