@@ -798,7 +798,7 @@ schools:
     initial: "A"
     resource_folder: "AUFE"    
 
-  - id: "SMU"
+  - id: "SMXY"
     name: "三明学院"
     initial: "S"
-    resource_folder: "SMU"
+    resource_folder: "SMXY"
