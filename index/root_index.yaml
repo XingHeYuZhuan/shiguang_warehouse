@@ -797,3 +797,8 @@ schools:
     name: "安徽财经大学"
     initial: "A"
     resource_folder: "AUFE"    
+
+  - id: "GXCME"
+    name: "广西机电职业技术学院"
+    initial: "G"
+    resource_folder: "GXCME"
