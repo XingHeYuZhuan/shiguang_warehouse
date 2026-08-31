@@ -858,3 +858,8 @@ schools:
     initial: "H"
     resource_folder: "HUEB"
     
+  - id: "LCUDCC"
+    name: "聊城大学东昌学院"
+    initial: "L"
+    resource_folder: "LCUDCC"
+    
