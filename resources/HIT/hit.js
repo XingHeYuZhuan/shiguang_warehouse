@@ -196,6 +196,32 @@ async function saveCourses(courses) {
     }
 }
 
+async function setPresetTimeSlots() {
+    const presetTimeSlots = [
+        { "number": 1, "startTime": "08:00", "endTime": "08:50" },
+        { "number": 2, "startTime": "08:55", "endTime": "09:45" },
+        { "number": 3, "startTime": "10:00", "endTime": "10:50" },
+        { "number": 4, "startTime": "10:55", "endTime": "11:45" },
+        { "number": 5, "startTime": "13:45", "endTime": "14:35" },
+        { "number": 6, "startTime": "14:40", "endTime": "15:30" },
+        { "number": 7, "startTime": "15:45", "endTime": "16:35" },
+        { "number": 8, "startTime": "16:40", "endTime": "17:30" },
+        { "number": 9, "startTime": "18:30", "endTime": "19:20" },
+        { "number": 10, "startTime": "19:25", "endTime": "20:15" },
+        { "number": 11, "startTime": "20:30", "endTime": "21:20" },
+        { "number": 12, "startTime": "21:25", "endTime": "22:15" }
+    ];
+
+    try {
+        const result = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+        if (result === true) {
+            console.log("HIT: 预设时间段导入成功");
+        }
+    } catch (error) {
+        console.error("HIT: 导入时间段失败:", error);
+    }
+}
+
 async function runImportFlow() {
     const alertConfirmed = await promptUserToStart();
     if (!alertConfirmed) {
@@ -230,6 +256,8 @@ async function runImportFlow() {
 
     const saveResult = await saveCourses(courses);
     if (!saveResult) return;
+
+    await setPresetTimeSlots();
 
     if (semesterInfo && semesterInfo.ZCJSSJ) {
         try {
