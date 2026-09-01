@@ -35,6 +35,18 @@
         })
     };
 
+    const CHENGBEI_PRESET_TIME_SLOTS = Object.keys(CAMPUS_TIME_SLOTS.chengbei).map(function (number) {
+        const sectionNumber = Number(number);
+        const slot = CAMPUS_TIME_SLOTS.chengbei[sectionNumber];
+        return {
+            number: sectionNumber,
+            startTime: slot.start,
+            endTime: slot.end
+        };
+    }).sort(function (left, right) {
+        return left.number - right.number;
+    });
+
     const WEEKDAY_MAP = {
         "一": 1,
         "二": 2,
@@ -503,6 +515,7 @@
         const promiseBridge = window.shiguangBridgePromise;
         const bridge = window.shiguangBridge;
         if (!promiseBridge || typeof promiseBridge.saveCourseConfig !== "function" ||
+            typeof promiseBridge.savePresetTimeSlots !== "function" ||
             typeof promiseBridge.saveImportedCourses !== "function" ||
             !bridge || typeof bridge.notifyTaskCompletion !== "function") {
             throw new Error("当前拾光课表版本不支持所需导入接口，请更新应用后重试。");
@@ -514,9 +527,15 @@
         if (configResult !== true) {
             throw new Error("课表配置保存失败，课程尚未保存。");
         }
+        const presetResult = await window.shiguangBridgePromise.savePresetTimeSlots(
+            JSON.stringify(CHENGBEI_PRESET_TIME_SLOTS)
+        );
+        if (presetResult !== true) {
+            throw new Error("城北基准时间轴保存失败；课表配置可能已更新，课程尚未保存。");
+        }
         const courseResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (courseResult !== true) {
-            throw new Error("课程保存失败；课表配置可能已更新，请检查应用内课表后重试。");
+            throw new Error("课程保存失败；课表配置和城北基准时间轴可能已更新，请检查应用内课表后重试。");
         }
     }
 
@@ -543,7 +562,8 @@
                 "目标学期：" + semesterResult.semesterName + "\n" +
                 "课程时段：" + courses.length + " 个\n" +
                 "涉及校区：" + buildCampusSummary(courses) + "\n\n" +
-                "确认后将保存课表配置和课程。",
+                "节次网格以城北作息为基准，城西课程仍按实际时间显示。\n" +
+                "确认后将保存课表配置、基准时间轴和课程。",
                 "确认导入"
             );
             if (!shouldSave) return;
