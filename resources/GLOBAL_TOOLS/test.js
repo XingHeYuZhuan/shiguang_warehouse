@@ -1,8 +1,6 @@
 /**
  * 西安交通大学教务系统课表适配脚本 (API版)
  * 适配系统: e-hall 教务系统 (wdkb)
- * 测试
- * by CeTmBeTc
  * API端点: xskcb.do (课程数据), dqxnxq.do (当前学期)
  */
 
@@ -13,14 +11,13 @@ const BASE_URL = 'https://ehall.xjtu.edu.cn/jwapp/sys/wdkb/modules';
 /**
  * 将 SKZC 二进制位串解析为周次数组
  * 输入: "000001" → [6], "00000000000000001111" → [1,2,3,4]
- * SKZC 是20位二进制字符串，从右到左表示第1-20周
+ * SKZC 是二进制字符串，从左到右依次表示第1-20周，'1'表示上课
  */
 function parseWeeksFromBinary(skzc) {
     if (!skzc) return [];
     const weeks = [];
-    const reversed = skzc.split('').reverse();
-    for (let i = 0; i < reversed.length; i++) {
-        if (reversed[i] === '1') {
+    for (let i = 0; i < skzc.length; i++) {
+        if (skzc[i] === '1') {
             weeks.push(i + 1);
         }
     }
