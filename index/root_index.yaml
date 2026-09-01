@@ -848,6 +848,11 @@ schools:
     initial: "H"
     resource_folder: "HAUST"
 
+  - id: "HEU"
+    name: "哈尔滨工程大学"
+    initial: "H"
+    resource_folder: "HEU"
+
   - id: "HIT"
     name: "哈尔滨工业大学"
     initial: "H"
