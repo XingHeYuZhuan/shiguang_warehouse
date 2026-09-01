@@ -136,54 +136,61 @@ async function fetchCourses(semesterId){
 
         const rawCourses = [];
 
-        const pageSize = 100;
-        let pageIndex = 1;
+        // 理论上此处应分页遍历处理，但分页处理将导致教务系统返回错误的数据（课程重复和缺失）。
+        // 此处假设总课程数量总是小于 1000，并设置一页的最大课程数量为 1000。
+        const pageSize = 1000;
 
-        while (true) {
-            const formData = new URLSearchParams();
-            formData.append('xnxqdm', semesterId);
-            formData.append('zc', '');
-            formData.append('page', String(pageIndex));
-            formData.append('rows', String(pageSize));
-            formData.append('sort', 'kxh');
-            formData.append('order', 'asc');
+        const formData = new URLSearchParams();
+        formData.append('zc', '');
+        formData.append('xnxqdm', semesterId);
+        formData.append('page', '1');
+        formData.append('rows', String(pageSize));
+        formData.append('sort', 'kxh');
+        formData.append('order', 'asc');
 
-            const response = await fetch(Strings.GET_ALL_COURSES_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Referer': Strings.BASE_URL
-                },
-                body: formData.toString(),
-                credentials: 'include'
-            });
+        const response = await fetch(Strings.GET_ALL_COURSES_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Referer': Strings.BASE_URL
+            },
+            body: formData.toString(),
+            credentials: 'include'
+        });
 
-            if (!response.ok) {
-                throw new Error(`请求失败: ${response.status}`);
-            }
-
-            const rawData = await response.json();
-
-            if (rawData.total === 0 || rawData.rows.length === 0) {
-                console.log(`学期 ${semesterId} 没有找到课程数据。`);
-                if (await checkSemesterIsOpened(semesterId)) {
-                    throw new Error('该学期没有找到课程，请确认选择了正确的学期');
-                }
-                throw new Error('学期未开放课表查询！');
-            }
-
-            for (const row of rawData.rows) {
-                rawCourses.push(row);
-            }
-
-            if (rawCourses.length >= rawData.total) {
-                break;
-            }
-
-            pageIndex++;
-
-            await new Promise(resolve => setTimeout(resolve, 100));
+        if (!response.ok) {
+            throw new Error(`请求失败: ${response.status}`);
         }
+
+        const rawData = await response.json();
+
+        if (rawData.total === 0 || rawData.rows.length === 0) {
+            console.log(`学期 ${semesterId} 没有找到课程数据。`);
+            if (await checkSemesterIsOpened(semesterId)) {
+                throw new Error('该学期没有找到课程！请确认选择了正确的学期。');
+            }
+            throw new Error('学期未开放课表查询！');
+        }
+
+        for (const row of rawData.rows) {
+            for (const existingCourse of rawCourses) {
+                if (row.xq === existingCourse.xq 
+                    && row.zc === existingCourse.zc 
+                    && row.kcmc === existingCourse.kcmc 
+                    && row.jcdm === existingCourse.jcdm 
+                    && row.kxh === existingCourse.kxh) {
+                    console.error(`检查到有与现有课程重复的课程: `);
+                    console.error(row);
+                    console.error(`已有课程：`);
+                    console.error(existingCourse);
+                    window.shiguangBridge.showToast(`导入课程失败: ${row.kcmc} 意外地出现了重复的课程。请联系开发者解决此问题。`);
+                    return null;
+                }
+            }
+            rawCourses.push(row);
+        }
+
+        console.log(`成功获取学期 ${semesterId} 的课程数据，共 ${rawCourses.length} 条记录。`);
 
         const courses = parseCourses(rawCourses);
 
