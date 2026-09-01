@@ -1,10 +1,10 @@
 // 文件: gdut.js
 
 if (typeof Strings === 'undefined') {
-    var Strings = {
+    const Strings = {
         BASE_URL: "https://jxfw.gdut.edu.cn",
-        GET_WEEK_COURSES_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!getKbRq.action",
-        GET_ALL_COURSES_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!getDataList.action",
+        GET_WEEK_COURSES_API_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!getKbRq.action",
+        GET_ALL_COURSES_API_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!getDataList.action",
         GET_ALL_COURSES_HTML_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!xsAllKbList.action",
         GET_ALL_COURSES_HTML_URL_REFERRER: "https://jxfw.gdut.edu.cn/xsgrkbcx!getXsgrbkList.action"
     };
@@ -14,7 +14,7 @@ async function stepDescriptionAlert() {
     try {
         const confirmed = await window.shiguangBridgePromise.showAlert(
             "提示",
-            "即将执行导入课程操作。请确保你已处于登录状态，无需打开课程表页面。",
+            "即将执行导入课程操作，确保当前处于已登录状态（无需打开课程表页面）",
             "确认"
         );
         
@@ -29,7 +29,7 @@ async function selectSemesterSelection(){
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
-    const currentSemester = currentMonth >= 8 || currentMonth <= 2 ? 1 : 2;
+    const currentSemester = currentMonth >= 7 || currentMonth <= 1 ? 1 : 2;
 
     const nextSemester = currentSemester === 1 ? 2 : 1;
     const nextSemesterYear = currentSemester === 1 ? currentYear : currentYear + 1;
@@ -40,7 +40,7 @@ async function selectSemesterSelection(){
     for (let year = nextSemesterYear; year >= nextSemesterYear - 3; year--){
         for (let semester = nextSemester; semester >= 1; semester--){
             presetSemetersId.push(`${year}0${semester}`);
-            const semesterName = `${year}-${year + 1}学年 ${semester === 1 ? "秋季" : "春季"}（第${semester}学期）`;
+            const semesterName = `${year} 年${semester === 1 ? "秋季" : "春季"} (${year}-${year + 1} 学年第${semester}学期)`;
             presetSemestersName.push(semesterName);
         }
     }
@@ -49,7 +49,7 @@ async function selectSemesterSelection(){
         const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
             "选择要导入的学期",
             JSON.stringify(presetSemestersName),
-            2
+            1
         );
         if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < presetSemetersId.length) {
             console.log("用户选择了: " + presetSemestersName[selectedIndex] + " (索引: " + selectedIndex + ")");
@@ -70,10 +70,6 @@ function extractFirstDay(dateInfoJsonData) {
         const jsonArray = JSON.parse(dateInfoJsonData);
 
         const dateInfoArray = jsonArray[1];
-        if (!Array.isArray(dateInfoArray)) {
-            console.error('JSON 数据格式异常：索引 [1] 不是数组');
-            return null;
-        }
 
         // 遍历查找 xqmc === "1"（周一）的项
         for (const dateInfo of dateInfoArray) {
@@ -82,7 +78,7 @@ function extractFirstDay(dateInfoJsonData) {
             }
         }
 
-        console.warn('未找到 xqmc=1 的日期项');
+        console.error('未找到 xqmc=1 的日期项');
         return null;
     } catch (error) {
         console.error('解析 JSON 失败:', error);
@@ -91,11 +87,10 @@ function extractFirstDay(dateInfoJsonData) {
 }
 
 async function fetchStartDate(semesterId) {
-    const url = `${"https://jxfw.gdut.edu.cn"}/xsgrkbcx!getKbRq.action?xnxqdm=${semesterId}&zc=1`;
+    const url = `${Strings.GET_WEEK_COURSES_API_URL}?xnxqdm=${semesterId}&zc=1`;
     
     try {
-
-        console.log(`正在获取学期开始日期。学期代码：${semesterId}}`);
+        console.log(`正在获取学期开始日期。学期代码：${semesterId}`);
         const response = await fetch(url, {
             method: 'GET',
             headers: {
@@ -223,22 +218,29 @@ async function checkSemesterIsOpened(semesterId) {
 }
 
 function parseCourses(rawCourses){
-    console.log(`正在解析课程数据，共 ${rawCourses.length} 条原始记录...`);
+    console.log(`正在转换原始课程数据...`);
 
     const courses = [];
     for (const raw of rawCourses) {
+
         const sectionMatch = raw.jcdm.match(/\d{2}/g);
-        if (!sectionMatch) continue;
-        
+        if (!sectionMatch) {
+            console.error(`课程节次解析失败，原始数据：${raw.jcdm}，跳过该课程。`);
+            continue;
+        }
+
         const sections = sectionMatch.map(Number);
         const startSection = sections[0];
         const endSection = sections[sections.length - 1];
         
         // 周次
         const week = Number(raw.zc);
-        if (isNaN(week)) continue;
+        if (isNaN(week)) {
+            console.error(`课程周次解析失败，原始数据：${raw.zc}，跳过该课程。`);
+            continue;
+        }
 
-        courses.push({
+        const course = {
             name: raw.kcmc.trim(),
             teacher: (raw.teaxms || "").trim(),
             position: (raw.jxcdmc || "").trim(),
@@ -247,7 +249,9 @@ function parseCourses(rawCourses){
             endSection: endSection,
             weeks: [week],
             isCustomTime: false
-        });
+        };
+
+        courses.push(course);
     }
 
     return courses;
@@ -325,7 +329,17 @@ async function saveConfig(config) {
  * 编排这些异步操作，并在用户取消时停止后续执行。
  */
 async function runImportFlow() {
-    var result = await stepDescriptionAlert();
+    if (window.location.hostname === "authserver.gdut.edu.cn"){
+        window.shiguangBridge.showToast("执行导入课表操作前，必须先登录到教务系统！");
+        return;
+    } 
+
+    if (window.location.hostname !== "jxfw.gdut.edu.cn") {
+        window.shiguangBridge.showToast("当前页面不是教务系统页面！");
+        return;
+    }
+
+    const result = await stepDescriptionAlert();
 
     if (!result) {
         console.log("用户取消了操作，停止后续执行。");
