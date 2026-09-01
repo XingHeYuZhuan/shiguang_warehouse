@@ -1,7 +1,7 @@
 // 文件: gdut.js
 
 if (typeof Strings === 'undefined') {
-    const Strings = {
+    var Strings = {
         BASE_URL: "https://jxfw.gdut.edu.cn",
         GET_WEEK_COURSES_API_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!getKbRq.action",
         GET_ALL_COURSES_API_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!getDataList.action",
