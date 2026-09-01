@@ -882,3 +882,8 @@ schools:
     name: "南昌科技职业大学"
     initial: "N"
     resource_folder: "THDM"
+
+  - id: "XJTU"
+    name: "西安交通大学"
+    initial: "X"
+    resource_folder: "XJTU"
