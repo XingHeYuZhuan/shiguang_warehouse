@@ -1,0 +1,9 @@
+# resources/QHNU/adapters.yaml
+adapters:
+  - adapter_id: "QHNU_01"
+    adapter_name: "青海师范大学研究生课表导入"
+    category: "POSTGRADUATE"
+    asset_js_path: "qhnu_01.js"
+    import_url: "http://one.qhnu.edu.cn/default/portal/index.jsp"
+    maintainer: "ming"
+    description: "完成统一身份认证后，进入研究生系统的“课程及成绩 → 我的课程”，选择目标学期并点击查询，再执行导入。"
