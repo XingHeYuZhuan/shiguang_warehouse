@@ -117,13 +117,12 @@
         return token.trim();
     }
 
-    async function fetchAllScheduleRecords(semesterCode) {
+    async function fetchSchedulePage(semesterCode, page, runtimeToken) {
         const requestUrl = new URL(SCHEDULE_PATH, EXPECTED_ORIGIN);
-        requestUrl.searchParams.set("page", "0");
+        requestUrl.searchParams.set("page", String(page));
         requestUrl.searchParams.set("size", "999");
         requestUrl.searchParams.set("sort", "createTime,desc");
         requestUrl.searchParams.set("xqcode", semesterCode);
-        const runtimeToken = getRuntimeToken();
 
         let response;
         try {
@@ -160,6 +159,53 @@
         return validatePageResponse(payload);
     }
 
+    async function fetchAllScheduleRecords(semesterCode) {
+        const runtimeToken = getRuntimeToken();
+        const records = [];
+        const seenRecordSignatures = new Set();
+        let expectedTotal = null;
+        let page = 0;
+
+        while (expectedTotal === null || records.length < expectedTotal) {
+            const pageResult = await fetchSchedulePage(semesterCode, page, runtimeToken);
+            if (expectedTotal === null) {
+                expectedTotal = pageResult.totalElements;
+                if (expectedTotal === 0 && pageResult.content.length === 0) {
+                    throw new Error("所选学期暂无课程，未保存空课表。");
+                }
+            } else if (pageResult.totalElements !== expectedTotal) {
+                throw new Error("课表分页总数发生变化，请刷新页面重新查询后重试。");
+            }
+
+            if (pageResult.content.length === 0) {
+                throw new Error("课表分页在读取完成前返回空页，请刷新页面重新查询后重试。");
+            }
+
+            const pageRecordSignatures = pageResult.content.map(function (record) {
+                return JSON.stringify(record);
+            });
+            if (pageRecordSignatures.some(function (signature) {
+                return seenRecordSignatures.has(signature);
+            })) {
+                throw new Error("课表分页未继续前进，请刷新页面重新查询后重试。");
+            }
+            pageRecordSignatures.forEach(function (signature) {
+                seenRecordSignatures.add(signature);
+            });
+            records.push.apply(records, pageResult.content);
+
+            if (records.length > expectedTotal) {
+                throw new Error("课表分页记录数超过接口声明总数，请刷新页面重新查询后重试。");
+            }
+            page += 1;
+        }
+
+        if (records.length !== expectedTotal) {
+            throw new Error("课表记录未完整返回，请刷新页面重新查询后重试。");
+        }
+        return records;
+    }
+
     function validatePageResponse(payload) {
         if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
             throw new Error("课表接口返回结构异常：响应根节点不是对象。");
@@ -171,13 +217,10 @@
         if (!Number.isInteger(totalElements) || totalElements < 0) {
             throw new Error("课表接口返回结构异常：totalElements 无效。");
         }
-        if (totalElements === 0 || payload.content.length === 0) {
-            throw new Error("所选学期暂无课程，未保存空课表。");
-        }
-        if (payload.content.length < totalElements) {
-            throw new Error("课表记录未完整返回，请刷新页面重新查询后重试。");
-        }
-        return payload.content;
+        return {
+            content: payload.content,
+            totalElements: totalElements
+        };
     }
 
     function toPositiveInteger(value, fieldLabel) {
@@ -588,6 +631,7 @@
     if (isNodeTestMode) {
         globalThis.__QHNU_TEST__ = Object.freeze({
             validatePageResponse: validatePageResponse,
+            fetchAllScheduleRecords: fetchAllScheduleRecords,
             parseWeeks: parseWeeks,
             parseScheduleFragments: parseScheduleFragments,
             parseCourses: parseCourses,
