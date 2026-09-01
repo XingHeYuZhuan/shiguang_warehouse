@@ -9,10 +9,9 @@
 //      （形如 "老师:张三;时间:1-8周[1-2节];地点:树人楼(树人楼北502)"）
 //   3. 请求方式由 POST 改为 GET，新增 时间模式(kbjcmsid) 等参数
 //   4. 跨大节的课会用 rowspan 合并单元格，必须还原网格才能定位星期
-
-window.validateYearInput = function (input) {
-    return /^[0-9]{4}$/.test(input) ? false : "请输入四位数字的学年！";
-};
+//   5. 2026-09 按官方《适配脚本开发指南 v2》迁移桥接 API：
+//      window.shiguangBridgePromise（异步）+ window.shiguangBridge（同步）
+//      notifyTaskCompletion 仅在整条流程成功后调用
 
 var JWXT_BASE = "https://http-jwxt-csuft-edu-cn-80.webvpn.csuft.edu.cn/jsxsd";
 var KB_URL = JWXT_BASE + "/xskb/xskb_list.do";
@@ -272,75 +271,95 @@ async function loadTermList() {
 async function fetchScheduleDoc(semId, kbjcmsid) {
     var p = baseParams(semId);
     if (kbjcmsid) p.kbjcmsid = kbjcmsid;
+    return await fetchPage(p);
+}
 
-    var doc = await fetchPage(p);
-    // 表格没渲染出来，或渲染出来了却一门课都没有（例如新学年还没排课、
-    // 该学期的"时间模式"与当前学期不同），就用页面自带的 kbjcmsid 再试一次
-    var id = getKbjcmsid(doc);
-    var useless = !doc.querySelector('table.qz-weeklyTable') || parseSchedule(doc).length === 0;
-    if (id && id !== kbjcmsid && useless) {
-        p.kbjcmsid = id;
-        doc = await fetchPage(p);
+// showPrompt 的输入校验：v2 约定为全局函数名，返回 false=通过，返回字符串=错误提示
+function validateYearInput(input) {
+    return /^[0-9]{4}$/.test(input) ? false : "请输入四位数字的起始学年！";
+}
+
+async function promptUserToStart() {
+    return window.shiguangBridgePromise.showAlert(
+        "提示", "导入前请确保已成功登录教务系统。", "开始导入");
+}
+
+// 优先从教务页面读取学年学期列表直接选择；取不到再退回"手输学年 + 选学期"
+async function chooseTerm() {
+    try {
+        window.shiguangBridge.showToast("正在获取学年学期列表...");
+        const info = await loadTermList();
+        if (info.options.length) {
+            const idx = await window.shiguangBridgePromise.showSingleSelection(
+                "选择学年学期", JSON.stringify(info.options), info.selected);
+            if (idx === null) return null;
+            return { semId: info.options[idx], kbjcmsid: info.kbjcmsid };
+        }
+    } catch (e) { /* 列表获取失败，走手工输入兜底 */ }
+
+    const year = await window.shiguangBridgePromise.showPrompt(
+        "选择学年", "请输入要导入的起始学年（例如 2025-2026 应输入 2025）:", "", "validateYearInput");
+    if (year === null) return null;
+
+    const semesterIdx = await window.shiguangBridgePromise.showSingleSelection(
+        "选择学期", JSON.stringify(["第一学期", "第二学期"]), -1);
+    if (semesterIdx === null) return null;
+
+    return {
+        semId: year + "-" + (parseInt(year, 10) + 1) + "-" + (semesterIdx + 1),
+        kbjcmsid: ""
+    };
+}
+
+async function fetchAndParseCourses(term) {
+    window.shiguangBridge.showToast("正在获取课表数据...");
+    const doc = await fetchScheduleDoc(term.semId, term.kbjcmsid);
+    const courses = parseSchedule(doc);
+
+    if (courses.length === 0) {
+        // 区分"页面没拿到"和"页面拿到了但该学期确实没课"，后者不能覆盖已有课程
+        window.shiguangBridge.showToast(!doc.querySelector('table.qz-weeklyTable')
+            ? "未获取到课表页面，请检查登录状态或学年学期是否正确。"
+            : "该学年学期暂无课表数据，已保留原有课程。");
+        return null;
     }
-    return doc;
+    return courses;
+}
+
+async function saveAll(courses) {
+    try {
+        await window.shiguangBridgePromise.saveCourseConfig(
+            JSON.stringify({ semesterTotalWeeks: 20, firstDayOfWeek: 1 }));
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        return true;
+    } catch (error) {
+        window.shiguangBridge.showToast("保存失败: " + error.message);
+        return false;
+    }
 }
 
 async function runImportFlow() {
-    try {
-        const confirmed = await window.AndroidBridgePromise.showAlert("提示", "请确保已成功登录教务系统。是否开始导入？", "开始");
-        if (!confirmed) return;
-
-        // 优先从教务页面读取学年学期列表直接选择，取不到再退回手工输入
-        let semId = "";
-        let kbjcmsid = "";
-        try {
-            AndroidBridge.showToast("正在获取学年学期列表...");
-            const info = await loadTermList();
-            kbjcmsid = info.kbjcmsid;
-            if (info.options.length) {
-                const idx = await window.AndroidBridgePromise.showSingleSelection(
-                    "选择学年学期", JSON.stringify(info.options), info.selected);
-                if (idx === null) return;
-                semId = info.options[idx];
-            }
-        } catch (e) {
-            semId = "";
-        }
-
-        if (!semId) {
-            const year = await window.AndroidBridgePromise.showPrompt("选择学年", "请输入要导入的起始学年（例如 2025-2026 应输入2025）:", "", "validateYearInput");
-            if (!year) return;
-
-            const semesterIdx = await window.AndroidBridgePromise.showSingleSelection("选择学期", JSON.stringify(["第一学期", "第二学期"]), -1);
-            if (semesterIdx === null) return;
-
-            semId = `${year}-${parseInt(year) + 1}-${semesterIdx + 1}`;
-        }
-
-        AndroidBridge.showToast("正在获取课表数据...");
-
-        const doc = await fetchScheduleDoc(semId, kbjcmsid);
-        const courses = parseSchedule(doc);
-
-        if (courses.length === 0) {
-            // 区分"页面没拿到"和"页面拿到了但该学期确实没课"，后者不能覆盖已有课程
-            if (!doc.querySelector('table.qz-weeklyTable')) {
-                AndroidBridge.showToast("未获取到课表页面，请检查登录状态或学年学期是否正确。");
-            } else {
-                AndroidBridge.showToast("该学年学期暂无课表数据，已保留原有课程。");
-            }
-            return;
-        }
-
-        await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify({ semesterTotalWeeks: 20, firstDayOfWeek: 1 }));
-        await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
-        await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
-
-        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程`);
-        AndroidBridge.notifyTaskCompletion();
-    } catch (err) {
-        AndroidBridge.showToast("错误: " + err.message);
+    const confirmed = await promptUserToStart();
+    if (!confirmed) {
+        window.shiguangBridge.showToast("导入已取消。");
+        return;
     }
+
+    const term = await chooseTerm();
+    if (term === null) {
+        window.shiguangBridge.showToast("导入已取消。");
+        return;
+    }
+
+    const courses = await fetchAndParseCourses(term);
+    if (courses === null) return; // 失败原因已在 fetchAndParseCourses 中提示
+
+    if (!(await saveAll(courses))) return;
+
+    // 整条流程成功后才发送结束信号
+    window.shiguangBridge.showToast("成功导入 " + courses.length + " 门课程");
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runImportFlow();
