@@ -103,11 +103,6 @@ function parseJsonData(jsonData) {
     return finalCourseList;
 }
 
-function validateYearInput(input) {
-    if (/^[0-9]{4}$/.test(input)) return false;
-    return "请输入四位数字的学年！";
-}
-
 async function promptUserToStart() {
     return await window.shiguangBridgePromise.showAlert(
         "常机电学生课表导入",
@@ -116,34 +111,167 @@ async function promptUserToStart() {
     );
 }
 
-async function getAcademicYear() {
-    const currentYear = new Date().getFullYear().toString();
-    return await window.shiguangBridgePromise.showPrompt(
-        "选择学年",
-        "请输入要导入课程的起始学年（例如 2026-2027 应输入 2026）:",
-        currentYear,
-        "validateYearInput"
-    );
+/**
+ * 从教务系统获取学年学期选项
+ * 学年：以选中项为中心，取前2年+后2年，共5个选项
+ */
+async function fetchAcademicOptions() {
+    const targetUrls = [
+        "https://webapp.czimt.edu.cn/http/77726476706e69737468656265737421fae042d2242a65557d468aa2/kbcx/xskbcx_cxXskbcxIndex.html?vpn-12-o1-jwc.czmec.cn&gnmkdm=N2151",
+        "http://jwc.czmec.cn/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151"
+    ];
+
+    for (const url of targetUrls) {
+        try {
+            const response = await fetch(url, {
+                method: "GET",
+                credentials: "include"
+            });
+
+            if (!response.ok) continue;
+
+            const htmlText = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlText, "text/html");
+
+            const allYearOptions = Array.from(doc.querySelectorAll("#xnm option"))
+                .filter(opt => opt.value !== "")
+                .map(opt => ({
+                    value: opt.value,
+                    text: opt.textContent.trim(),
+                    selected: opt.selected
+                }));
+
+            const semesterOptions = Array.from(doc.querySelectorAll("#xqm option"))
+                .filter(opt => opt.value !== "")
+                .map(opt => ({
+                    value: opt.value,
+                    text: opt.textContent.trim(),
+                    selected: opt.selected
+                }));
+
+            if (allYearOptions.length === 0 || semesterOptions.length === 0) continue;
+
+            const selectedIndex = allYearOptions.findIndex(opt => opt.selected);
+
+            if (selectedIndex === -1) {
+                return {
+                    yearOptions: allYearOptions.slice(0, 5),
+                    semesterOptions,
+                    defaultYearIndex: 0,
+                    defaultSemesterIndex: Math.max(0, semesterOptions.findIndex(opt => opt.selected))
+                };
+            }
+
+            const start = Math.max(0, selectedIndex - 2);
+            const end = Math.min(allYearOptions.length, selectedIndex + 3);
+            const defaultSemesterIndex = semesterOptions.findIndex(opt => opt.selected);
+
+            return {
+                yearOptions: allYearOptions.slice(start, end),
+                semesterOptions,
+                defaultYearIndex: selectedIndex - start,
+                defaultSemesterIndex: defaultSemesterIndex !== -1 ? defaultSemesterIndex : 0
+            };
+        } catch (e) {
+            console.error(`JS: 获取学年学期选项失败: ${url}`);
+        }
+    }
+    return null;
 }
 
-async function selectSemester() {
-    const semesters = ["第一学期", "第二学期", "第三学期(短学期)"];
+/**
+ * 提示用户选择学年和学期
+ */
+async function selectAcademicYearAndSemester() {
+    const optionsData = await fetchAcademicOptions();
+
+    if (!optionsData) {
+        window.shiguangBridge.showToast("从教务系统读取学年学期失败，请确保登录状态。");
+        return null;
+    }
+
+    const { yearOptions, semesterOptions, defaultYearIndex, defaultSemesterIndex } = optionsData;
+
+    const yearTexts = yearOptions.map(item => item.text);
+    const yearIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择学年",
+        JSON.stringify(yearTexts),
+        defaultYearIndex
+    );
+
+    if (yearIndex === null || yearIndex === -1) return null;
+    const selectedYearCode = yearOptions[yearIndex].value;
+
+    const semesterTexts = semesterOptions.map(item => item.text);
     const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
-        JSON.stringify(semesters),
-        0
+        JSON.stringify(semesterTexts),
+        defaultSemesterIndex
     );
-    return semesterIndex;
+
+    if (semesterIndex === null || semesterIndex === -1) return null;
+    const selectedSemesterCode = semesterOptions[semesterIndex].value;
+
+    return {
+        academicYear: selectedYearCode,
+        semesterCode: selectedSemesterCode
+    };
 }
 
-function getSemesterCode(semesterIndex) {
-    const codes = ["3", "12", "16"];
-    return codes[semesterIndex] || "3";
+/**
+ * 获取学期开学日期
+ * 优先找第1周的记录，从 rq / zcrq 字段中提取日期
+ */
+async function fetchSemesterStartDate(academicYear, semesterCode) {
+    const targetUrls = [
+        "https://webapp.czimt.edu.cn/http/77726476706e69737468656265737421fae042d2242a65557d468aa2/kbcx/xskbcxZccx_cxZcByXnxq.html?vpn-12-o1-jwc.czmec.cn&gnmkdm=N2154",
+        "http://jwc.czmec.cn/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154"
+    ];
+    const requestBody = `xnm=${academicYear}&xqm=${semesterCode}`;
+
+    for (const url of targetUrls) {
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "accept": "application/json, text/javascript, */*; q=0.01",
+                    "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+                    "x-requested-with": "XMLHttpRequest"
+                },
+                body: requestBody,
+                credentials: "include"
+            });
+
+            if (!response.ok) continue;
+
+            const json = await response.json();
+            if (!Array.isArray(json) || json.length === 0) continue;
+
+            // 优先找第1周，否则取第一项
+            const firstWeekObj = json.find(item => String(item.zs) === "1" || String(item.zsmc) === "1") || json[0];
+
+            // rq 是该周每天的日期列表（逗号或斜杠分隔），取第一个即周一
+            if (firstWeekObj.rq) {
+                const match = String(firstWeekObj.rq).match(/(\d{4}-\d{2}-\d{2})/);
+                if (match) return match[1];
+            }
+
+            if (firstWeekObj.zcrq) {
+                const match = String(firstWeekObj.zcrq).match(/(\d{4}-\d{2}-\d{2})/);
+                if (match) return match[1];
+            }
+        } catch (e) {
+            console.error(`JS: 获取开学日期失败: ${url}`);
+        }
+    }
+    return null;
 }
 
-async function fetchAndParseCourses(academicYear, semesterIndex) {
-    const semesterCode = getSemesterCode(semesterIndex);
+async function fetchAndParseCourses(academicYear, semesterCode) {
     const requestBody = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=&kclxdm=`;
+    // 与课程请求并行获取开学日期
+    const semesterStartDatePromise = fetchSemesterStartDate(academicYear, semesterCode);
 
     const targetUrls = [
         "https://webapp.czimt.edu.cn/http/77726476706e69737468656265737421fae042d2242a65557d468aa2/kbcx/xskbcx_cxXsgrkb.html?vpn-12-o1-jwc.czmec.cn&gnmkdm=N2151",
@@ -170,7 +298,7 @@ async function fetchAndParseCourses(academicYear, semesterIndex) {
                         return {
                             courses: parsedCourses,
                             config: {
-                                semesterStartDate: null,
+                                semesterStartDate: await semesterStartDatePromise,
                                 semesterTotalWeeks: 20
                             }
                         };
@@ -194,7 +322,7 @@ async function saveCourses(parsedCourses) {
         return true;
     } catch (error) {
         window.shiguangBridge.showToast(`课程保存失败: ${error.message}`);
-        console.error('JS: Save Courses Error:', error);A
+        console.error('JS: Save Courses Error:', error);
         return false;
     }
 }
@@ -240,21 +368,16 @@ async function runImportFlow() {
         return;
     }
 
-    const academicYear = await getAcademicYear();
-    if (academicYear === null) {
-        window.shiguangBridge.showToast("导入已取消。");
+    const selection = await selectAcademicYearAndSemester();
+    if (!selection) {
+        window.shiguangBridge.showToast("未选择学年学期，导入流程终止。");
         return;
     }
-    console.log(`JS: 已选择学年: ${academicYear}`);
 
-    const semesterIndex = await selectSemester();
-    if (semesterIndex === null || semesterIndex === -1) {
-        window.shiguangBridge.showToast("导入已取消。");
-        return;
-    }
-    console.log(`JS: 已选择学期索引: ${semesterIndex}`);
+    const { academicYear, semesterCode } = selection;
+    console.log(`JS: 已选择学年: ${academicYear}, 学期代码: ${semesterCode}`);
 
-    const result = await fetchAndParseCourses(academicYear, semesterIndex);
+    const result = await fetchAndParseCourses(academicYear, semesterCode);
     if (result === null) {
         console.log("JS: 课程获取或解析失败，流程终止。");
         return;
@@ -276,7 +399,11 @@ async function runImportFlow() {
 
     try {
         await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
-        window.shiguangBridge.showToast(`课表配置更新成功！总周数：${config.semesterTotalWeeks}周。`);
+        let configMsg = `课表配置更新成功！总周数：${config.semesterTotalWeeks}周。`;
+        if (config.semesterStartDate) {
+            configMsg += ` 开学日期：${config.semesterStartDate}`;
+        }
+        window.shiguangBridge.showToast(configMsg);
     } catch (error) {
         window.shiguangBridge.showToast(`课表配置保存失败: ${error.message}`);
     }

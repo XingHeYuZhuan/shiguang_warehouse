@@ -187,12 +187,13 @@
             section = mapSectionToTimeSlotNumber(section);
             if (day < 1 || day > 7 || section < 1 || section > 16) continue;
             let teacher = unquoteJsLiteral(args[1]);
-            if (teacher && !/^['"]/.test(String(args[1]).trim()) && /join\s*\(/.test(String(args[1]))) {
-                const resolved = resolveTeachersForTaskActivityBlock(text, match.index);
-                if (resolved) teacher = resolved;
+            // 教师值为 JS 表达式时，尝试解析或置空以触发兜底
+            if (teacher && /\.join\s*\(/.test(teacher)) {
+                const resolved = resolveTeachersForTaskActivityBlock(text, match.index, teacher);
+                teacher = resolved || "";
             }
             const name = cleanCourseName(unquoteJsLiteral(args[3]));
-            const position = unquoteJsLiteral(args[5]);
+            let position = unquoteJsLiteral(args[5]);
             const weekBitmap = unquoteJsLiteral(args[6]);
             const weeks = normalizeWeeks(parseValidWeeksBitmap(weekBitmap));
             if (!name) continue;
@@ -210,25 +211,33 @@
     }
 
     // 当教师名为表达式时，尝试在附近代码中回溯真实教师名
-    function resolveTeachersForTaskActivityBlock(fullText, blockStartIndex) {
+    function resolveTeachersForTaskActivityBlock(fullText, blockStartIndex, teacherExpr) {
         const start = Math.max(0, blockStartIndex - 2200);
         const segment = fullText.slice(start, blockStartIndex);
-        const re = /var\s+actTeachers\s*=\s*\[([^]*?)\]\s*;/g;
-        let m;
-        let last = null;
-        while ((m = re.exec(segment)) !== null) {
-            last = m[1];
+        // 从表达式中提取变量名（如 actTeacherName.join(',') → actTeacherName）
+        let varName = "actTeachers";
+        const varMatch = String(teacherExpr || "").match(/^(\w+)\.join/);
+        if (varMatch) varName = varMatch[1];
+        const varNames = [varName];
+        if (varName !== "actTeachers") varNames.push("actTeachers");
+        for (const vn of varNames) {
+            const re = new RegExp(`var\\s+${vn}\\s*=\\s*\\[([^]*?)\\]\\s*;`, "g");
+            let m;
+            let last = null;
+            while ((m = re.exec(segment)) !== null) {
+                last = m[1];
+            }
+            if (!last) continue;
+            const names = [];
+            const nameRe = /name\s*:\s*(?:"([^"]*)"|'([^']*)')/g;
+            let nm;
+            while ((nm = nameRe.exec(last)) !== null) {
+                const name = (nm[1] || nm[2] || "").trim();
+                if (name) names.push(name);
+            }
+            if (names.length > 0) return Array.from(new Set(names)).join(",");
         }
-        if (!last) return "";
-        const names = [];
-        const nameRe = /name\s*:\s*(?:"([^"]*)"|'([^']*)')/g;
-        let nm;
-        while ((nm = nameRe.exec(last)) !== null) {
-            const name = (nm[1] || nm[2] || "").trim();
-            if (name) names.push(name);
-        }
-        if (names.length === 0) return "";
-        return Array.from(new Set(names)).join(",");
+        return "";
     }
 
     // 合并同一课程的连续节次
