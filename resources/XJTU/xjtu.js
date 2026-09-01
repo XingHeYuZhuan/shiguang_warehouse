@@ -11,14 +11,13 @@ const BASE_URL = 'https://ehall.xjtu.edu.cn/jwapp/sys/wdkb/modules';
 /**
  * 将 SKZC 二进制位串解析为周次数组
  * 输入: "000001" → [6], "00000000000000001111" → [1,2,3,4]
- * SKZC 是20位二进制字符串，从右到左表示第1-20周
+ * SKZC 是二进制字符串，从左到右依次表示第1-20周，'1'表示上课
  */
 function parseWeeksFromBinary(skzc) {
     if (!skzc) return [];
     const weeks = [];
-    const reversed = skzc.split('').reverse();
-    for (let i = 0; i < reversed.length; i++) {
-        if (reversed[i] === '1') {
+    for (let i = 0; i < skzc.length; i++) {
+        if (skzc[i] === '1') {
             weeks.push(i + 1);
         }
     }
@@ -175,23 +174,46 @@ function buildCourseList(groupedCourses) {
 
 // ==================== 时间段配置 ====================
 
-const XJTU_TIME_SLOTS = [
-    { "number": 1,  "startTime": "08:00", "endTime": "08:45" },
-    { "number": 2,  "startTime": "08:55", "endTime": "09:40" },
-    { "number": 3,  "startTime": "10:00", "endTime": "10:45" },
-    { "number": 4,  "startTime": "10:55", "endTime": "11:40" },
-    { "number": 5,  "startTime": "14:00", "endTime": "14:45" },
-    { "number": 6,  "startTime": "14:55", "endTime": "15:40" },
-    { "number": 7,  "startTime": "16:00", "endTime": "16:45" },
-    { "number": 8,  "startTime": "16:55", "endTime": "17:40" },
-    { "number": 9,  "startTime": "19:00", "endTime": "19:45" },
-    { "number": 10, "startTime": "19:55", "endTime": "20:40" },
-    { "number": 11, "startTime": "20:50", "endTime": "21:35" }
+// 每节课50分钟，相邻节间休息10分钟，每两节之间休息20分钟
+// 早上8:00，下午夏令时14:30/冬令时14:00，晚上夏令时19:40/冬令时19:10
+const TIME_SLOTS_SUMMER = [
+    { "number": 1,  "startTime": "08:00", "endTime": "08:50" },
+    { "number": 2,  "startTime": "09:00", "endTime": "09:50" },
+    { "number": 3,  "startTime": "10:10", "endTime": "11:00" },
+    { "number": 4,  "startTime": "11:10", "endTime": "12:00" },
+    { "number": 5,  "startTime": "14:30", "endTime": "15:20" },
+    { "number": 6,  "startTime": "15:30", "endTime": "16:20" },
+    { "number": 7,  "startTime": "16:40", "endTime": "17:30" },
+    { "number": 8,  "startTime": "17:40", "endTime": "18:30" },
+    { "number": 9,  "startTime": "19:40", "endTime": "20:30" },
+    { "number": 10, "startTime": "20:40", "endTime": "21:30" },
+    { "number": 11, "startTime": "21:40", "endTime": "22:30" }
+];
+
+const TIME_SLOTS_WINTER = [
+    { "number": 1,  "startTime": "08:00", "endTime": "08:50" },
+    { "number": 2,  "startTime": "09:00", "endTime": "09:50" },
+    { "number": 3,  "startTime": "10:10", "endTime": "11:00" },
+    { "number": 4,  "startTime": "11:10", "endTime": "12:00" },
+    { "number": 5,  "startTime": "14:00", "endTime": "14:50" },
+    { "number": 6,  "startTime": "15:00", "endTime": "15:50" },
+    { "number": 7,  "startTime": "16:10", "endTime": "17:00" },
+    { "number": 8,  "startTime": "17:10", "endTime": "18:00" },
+    { "number": 9,  "startTime": "19:10", "endTime": "20:00" },
+    { "number": 10, "startTime": "20:10", "endTime": "21:00" },
+    { "number": 11, "startTime": "21:10", "endTime": "22:00" }
 ];
 
 async function importTimeSlots() {
     try {
-        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(XJTU_TIME_SLOTS));
+        const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
+            '选择作息时间',
+            JSON.stringify(['夏令时 (下午14:30 晚上19:40)', '冬令时 (下午14:00 晚上19:10)']),
+            0
+        );
+        if (selectedIndex === null) return;
+        const timeSlots = selectedIndex === 0 ? TIME_SLOTS_SUMMER : TIME_SLOTS_WINTER;
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
     } catch (e) {
         console.warn('时间段导入失败:', e);
     }
