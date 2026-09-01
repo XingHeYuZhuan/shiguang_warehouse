@@ -703,6 +703,11 @@ schools:
     initial: "G"
     resource_folder: "GDOU"
 
+  - id: "GDIT"
+    name: "广东科学技术职业学院"
+    initial: "G"
+    resource_folder: "GDIT"
+
   - id: "GUC"
     name: "吉利学院"
     initial: "J"
