@@ -25,6 +25,18 @@ const DEFAULT_TIME_SLOTS = [
     { number: 12, startTime: "21:25", endTime: "22:00" }
 ];
 
+function getErrorMessage(error) {
+    if (error && typeof error.message === "string" && error.message.trim()) return error.message;
+    if (typeof error === "string" && error.trim()) return error;
+    try {
+        const serialized = JSON.stringify(error);
+        if (serialized && serialized !== "{}") return serialized;
+    } catch (_) {
+        // Ignore serialization failures and use the generic fallback below.
+    }
+    return "未知错误";
+}
+
 function parsePosition(row) {
     const campus = String(row.XXXQDM_DISPLAY || "").trim();
     const room = String(row.JASMC || "").trim();
@@ -153,7 +165,7 @@ async function runImportFlow() {
         window.shiguangBridge.showToast(`成功导入 ${result.courses.length} 条课程记录（${result.xnxqdm}）。`);
         window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
-        window.shiguangBridge.showToast(`导入失败：${error.message}`);
+        window.shiguangBridge.showToast(`导入失败：${getErrorMessage(error)}`);
         console.error("NUIST adapter error", error);
     }
 }
