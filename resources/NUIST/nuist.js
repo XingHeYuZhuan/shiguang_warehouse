@@ -9,6 +9,22 @@ function parseWeeks(skzc) {
     return weeks;
 }
 
+// jc.do 不可用时的 NUIST 默认作息（已由接口确认）。
+const DEFAULT_TIME_SLOTS = [
+    { number: 1, startTime: "08:00", endTime: "08:45" },
+    { number: 2, startTime: "08:55", endTime: "09:40" },
+    { number: 3, startTime: "10:10", endTime: "10:55" },
+    { number: 4, startTime: "11:05", endTime: "11:50" },
+    { number: 5, startTime: "13:45", endTime: "14:30" },
+    { number: 6, startTime: "14:40", endTime: "15:25" },
+    { number: 7, startTime: "15:55", endTime: "16:40" },
+    { number: 8, startTime: "16:50", endTime: "17:35" },
+    { number: 9, startTime: "18:45", endTime: "19:30" },
+    { number: 10, startTime: "19:40", endTime: "20:25" },
+    { number: 11, startTime: "20:35", endTime: "21:20" },
+    { number: 12, startTime: "21:25", endTime: "22:00" }
+];
+
 function parsePosition(row) {
     const campus = String(row.XXXQDM_DISPLAY || "").trim();
     const room = String(row.JASMC || "").trim();
@@ -117,7 +133,14 @@ async function runImportFlow() {
         const semester = await fetchCurrentSemester();
         window.shiguangBridge.showToast(`当前学期：${semester.name}`);
         const result = await fetchCourses(semester.code);
-        const timeSlots = await fetchTimeSlots();
+        let timeSlots = DEFAULT_TIME_SLOTS;
+        try {
+            const fetchedTimeSlots = await fetchTimeSlots();
+            if (fetchedTimeSlots.length > 0) timeSlots = fetchedTimeSlots;
+        } catch (error) {
+            console.warn("NUIST time slot request failed, using defaults", error);
+            window.shiguangBridge.showToast("作息时间获取失败，已使用默认时间继续导入。");
+        }
         await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
             semesterStartDate: null,
             semesterTotalWeeks: 20,
@@ -126,9 +149,7 @@ async function runImportFlow() {
             firstDayOfWeek: 1
         }));
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(result.courses));
-        if (timeSlots.length > 0) {
-            await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-        }
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
         window.shiguangBridge.showToast(`成功导入 ${result.courses.length} 条课程记录（${result.xnxqdm}）。`);
         window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
