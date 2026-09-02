@@ -110,6 +110,61 @@ async function fetchCurrentSemester() {
     };
 }
 
+async function fetchSemesterList() {
+    const response = await fetch("/jwapp/sys/wdkb/modules/jshkcb/xnxqcx.do", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest"
+        },
+        body: "*order=-DM",
+        credentials: "include"
+    });
+    if (!response.ok) throw new Error(`学期列表接口请求失败（HTTP ${response.status}）`);
+    const payload = await response.json();
+    const rows = payload && payload.datas && payload.datas.xnxqcx && payload.datas.xnxqcx.rows;
+    if (!Array.isArray(rows)) throw new Error("学期列表返回数据格式异常。");
+    return rows.filter(item => item && item.DM).map(item => ({
+        code: String(item.DM),
+        name: String(item.MC || item.DM),
+        year: item.XNDM,
+        term: item.XQDM
+    }));
+}
+
+async function selectSemester() {
+    let semesters;
+    try {
+        semesters = await fetchSemesterList();
+    } catch (error) {
+        window.shiguangBridge.showToast(`获取学期列表失败：${getErrorMessage(error)}`);
+        return null;
+    }
+    if (semesters.length === 0) {
+        window.shiguangBridge.showToast("未查询到可用学期。");
+        return null;
+    }
+
+    let currentCode = null;
+    try {
+        currentCode = (await fetchCurrentSemester()).code;
+    } catch (error) {
+        console.warn("获取当前学期失败，将不设置默认选项", error);
+    }
+
+    const visibleSemesters = semesters.slice(0, 10);
+    const defaultIndex = currentCode
+        ? visibleSemesters.findIndex(item => item.code === currentCode)
+        : -1;
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "请选择学期",
+        JSON.stringify(visibleSemesters.map(item => item.name)),
+        defaultIndex
+    );
+    if (selectedIndex === null || selectedIndex < 0 || !visibleSemesters[selectedIndex]) return null;
+    return visibleSemesters[selectedIndex];
+}
+
 async function fetchTimeSlots() {
     const response = await fetch("/jwapp/sys/wdkb/modules/jshkcb/jc.do", {
         method: "POST",
@@ -141,9 +196,12 @@ async function runImportFlow() {
         );
         if (!confirmed) return;
 
-        window.shiguangBridge.showToast("正在获取课表...");
-        const semester = await fetchCurrentSemester();
-        window.shiguangBridge.showToast(`当前学期：${semester.name}`);
+        const semester = await selectSemester();
+        if (!semester) {
+            window.shiguangBridge.showToast("导入已取消。");
+            return;
+        }
+        window.shiguangBridge.showToast(`已选择学期：${semester.name}`);
         const result = await fetchCourses(semester.code);
         let timeSlots = DEFAULT_TIME_SLOTS;
         try {
