@@ -558,6 +558,11 @@ schools:
     initial: "N"
     resource_folder: "NJTECH"
 
+  - id: "NUIST"
+    name: "南京信息工程大学"
+    initial: "N"
+    resource_folder: "NUIST"
+
   - id: "CAUC"
     name: "中国民航大学"
     initial: "Z"
