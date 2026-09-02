@@ -88,6 +88,11 @@ schools:
     initial: "H"
     resource_folder: "HNSF"
 
+  - id: "HNNU"
+    name: "淮南师范学院"
+    initial: "H"
+    resource_folder: "HNNU"
+
   - id: "TARU"
     name: "塔里木大学"
     initial: "T"
