@@ -1,11 +1,11 @@
 // 青海师范大学研究生教务系统拾光课表适配脚本
-// 使用“课程及成绩 → 我的课程”的同源查询接口，不处理账号密码或统一身份认证。
+// 使用研究生教务系统的同源学期与课表接口，不处理账号密码或统一身份认证。
 
 (function () {
     "use strict";
 
     const EXPECTED_ORIGIN = "https://yjsxt.qhnu.edu.cn";
-    const EXPECTED_PAGE = "/Xs/kcgl/wdkc";
+    const SEMESTER_PATH = "/adminApi/kernel/config/xqgl/NoAuth";
     const SCHEDULE_PATH = "/adminApi/cloud-jx/api/xs/stuxkjg/NotAuth";
     // 来自学校公开前端配置。只读取这一项，不枚举或记录浏览器存储。
     const TOKEN_STORAGE_KEY = "sys-auth-token";
@@ -71,37 +71,10 @@
         return await window.shiguangBridgePromise.showAlert(title, message, buttonText || "确定");
     }
 
-    function assertPageContext() {
+    function assertSystemOrigin() {
         if (window.location.origin !== EXPECTED_ORIGIN) {
             throw new Error("请先进入青海师范大学研究生教务系统后再导入。");
         }
-        const pathname = window.location.pathname.replace(/\/$/, "");
-        if (pathname !== EXPECTED_PAGE) {
-            throw new Error("请进入“课程及成绩 → 我的课程”页面后再导入。");
-        }
-    }
-
-    function findLatestScheduleRequest() {
-        if (!window.performance || typeof window.performance.getEntriesByType !== "function") {
-            throw new Error("无法读取本页查询记录，请重新打开“我的课程”页面并点击查询。");
-        }
-
-        const entries = window.performance.getEntriesByType("resource");
-        for (let index = entries.length - 1; index >= 0; index -= 1) {
-            let resourceUrl;
-            try {
-                resourceUrl = new URL(entries[index].name, window.location.href);
-            } catch (error) {
-                continue;
-            }
-            if (resourceUrl.origin === EXPECTED_ORIGIN && resourceUrl.pathname === SCHEDULE_PATH) {
-                const semesterCode = resourceUrl.searchParams.get("xqcode");
-                if (semesterCode) {
-                    return semesterCode;
-                }
-            }
-        }
-        throw new Error("未找到学期查询记录。请先选择目标学期并点击“查询”，再执行导入。");
     }
 
     function getRuntimeToken() {
@@ -117,13 +90,7 @@
         return token.trim();
     }
 
-    async function fetchSchedulePage(semesterCode, page, runtimeToken) {
-        const requestUrl = new URL(SCHEDULE_PATH, EXPECTED_ORIGIN);
-        requestUrl.searchParams.set("page", String(page));
-        requestUrl.searchParams.set("size", "999");
-        requestUrl.searchParams.set("sort", "createTime,desc");
-        requestUrl.searchParams.set("xqcode", semesterCode);
-
+    async function requestJson(requestUrl, runtimeToken, resourceLabel) {
         let response;
         try {
             response = await fetch(requestUrl.toString(), {
@@ -135,87 +102,178 @@
                 }
             });
         } catch (error) {
-            throw new Error("课表请求未能发送，请检查网络并刷新“我的课程”页面后重试。");
+            throw new Error(resourceLabel + "请求未能发送，请检查网络后重试。");
         }
 
         if (response.status === 401 || response.status === 403) {
-            throw new Error("登录状态已失效或无课表访问权限，请重新登录并回到“我的课程”页面查询。");
+            throw new Error("登录状态已失效或无" + resourceLabel + "访问权限，请重新登录研究生教务系统后重试。");
         }
         if (!response.ok) {
-            throw new Error("课表请求失败（HTTP " + response.status + "），请稍后重试。");
+            throw new Error(resourceLabel + "请求失败（HTTP " + response.status + "），请稍后重试。");
         }
 
         const responseText = await response.text();
         if (/^\s*</.test(responseText)) {
-            throw new Error("课表接口返回了登录页面，请重新登录后重试。");
+            throw new Error(resourceLabel + "接口返回了登录页面，请重新登录后重试。");
         }
 
-        let payload;
         try {
-            payload = JSON.parse(responseText);
+            return JSON.parse(responseText);
         } catch (error) {
-            throw new Error("课表接口未返回有效 JSON，学校系统接口可能已调整。");
+            throw new Error(resourceLabel + "接口未返回有效 JSON，学校系统接口可能已调整。");
         }
-        return validatePageResponse(payload);
     }
 
-    async function fetchAllScheduleRecords(semesterCode) {
-        const runtimeToken = getRuntimeToken();
+    async function fetchAllSemesterOptions(runtimeToken) {
+        return await fetchAllPages(
+            async function (page) {
+                const requestUrl = new URL(SEMESTER_PATH, EXPECTED_ORIGIN);
+                requestUrl.searchParams.set("page", String(page));
+                requestUrl.searchParams.set("size", "999");
+                requestUrl.searchParams.set("sort", "xqdm,desc");
+                const payload = await requestJson(requestUrl, runtimeToken, "学期列表");
+                const pageResult = validatePageResponse(payload, "学期列表");
+                return {
+                    totalElements: pageResult.totalElements,
+                    content: pageResult.content.map(function (semester, index) {
+                        if (!semester || typeof semester !== "object" || Array.isArray(semester)) {
+                            throw new Error("学期列表第 " + (index + 1) + " 项结构异常。");
+                        }
+                        return {
+                            id: requireText(semester.id, "学期列表第 " + (index + 1) + " 项 id"),
+                            xqmc: requireText(semester.xqmc, "学期列表第 " + (index + 1) + " 项名称"),
+                            sfdq: semester.sfdq === null || semester.sfdq === undefined ? "" : String(semester.sfdq).trim()
+                        };
+                    })
+                };
+            },
+            function (semester) { return semester.id; },
+            {
+                empty: "学期列表为空，无法继续导入。",
+                totalChanged: "学期列表分页总数发生变化，请稍后重试。",
+                emptyPage: "学期列表在读取完成前返回空页，请稍后重试。",
+                duplicate: "学期列表出现重复 id，请稍后重试。",
+                overflow: "学期列表记录数超过接口声明总数，请稍后重试。",
+                incomplete: "学期列表未完整返回，请稍后重试。"
+            }
+        );
+    }
+
+    async function selectSemester(runtimeToken) {
+        const semesters = await fetchAllSemesterOptions(runtimeToken);
+        const currentSemester = semesters.find(function (semester) {
+            return String(semester.sfdq) === "0";
+        });
+        const seasonOrder = { "秋": 0, "夏": 1, "春": 2 };
+        const semesterEntries = semesters.map(function (semester, originalIndex) {
+            const match = /^(\d{4})年(春|夏|秋)季学期$/.exec(semester.xqmc);
+            return {
+                semester: semester,
+                originalIndex: originalIndex,
+                year: match ? Number(match[1]) : null,
+                season: match ? match[2] : null
+            };
+        }).sort(function (left, right) {
+            if (left.year !== null && right.year === null) return -1;
+            if (left.year === null && right.year !== null) return 1;
+            if (left.year !== null && right.year !== null) {
+                if (left.year !== right.year) return right.year - left.year;
+                const seasonDifference = seasonOrder[left.season] - seasonOrder[right.season];
+                if (seasonDifference !== 0) return seasonDifference;
+            }
+            return left.originalIndex - right.originalIndex;
+        });
+        const defaultIndex = currentSemester ? semesterEntries.findIndex(function (entry) {
+            return entry.semester === currentSemester;
+        }) : 0;
+        const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
+            "请选择导入学期",
+            JSON.stringify(semesterEntries.map(function (entry) {
+                return entry.semester === currentSemester ?
+                    entry.semester.xqmc + "（当前）" : entry.semester.xqmc;
+            })),
+            defaultIndex
+        );
+        if (selectedIndex === null || selectedIndex === undefined || selectedIndex === -1) return null;
+        if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= semesterEntries.length) {
+            throw new Error("无法识别所选学期，请重新导入。");
+        }
+        return semesterEntries[selectedIndex].semester;
+    }
+
+    async function fetchAllScheduleRecords(semesterCode, runtimeToken) {
+        return await fetchAllPages(
+            async function (page) {
+                const requestUrl = new URL(SCHEDULE_PATH, EXPECTED_ORIGIN);
+                requestUrl.searchParams.set("page", String(page));
+                requestUrl.searchParams.set("size", "999");
+                requestUrl.searchParams.set("sort", "createTime,desc");
+                requestUrl.searchParams.set("xqcode", semesterCode);
+                const payload = await requestJson(requestUrl, runtimeToken, "课表");
+                return validatePageResponse(payload, "课表");
+            },
+            function (record) { return JSON.stringify(record); },
+            {
+                empty: "所选学期暂无课程，未保存空课表。",
+                totalChanged: "课表分页总数发生变化，请稍后重新导入。",
+                emptyPage: "课表分页在读取完成前返回空页，请稍后重新导入。",
+                duplicate: "课表分页未继续前进，请稍后重新导入。",
+                overflow: "课表分页记录数超过接口声明总数，请稍后重新导入。",
+                incomplete: "课表记录未完整返回，请稍后重新导入。"
+            }
+        );
+    }
+
+    async function fetchAllPages(fetchPage, getSignature, messages) {
         const records = [];
-        const seenRecordSignatures = new Set();
+        const seenSignatures = new Set();
         let expectedTotal = null;
         let page = 0;
 
         while (expectedTotal === null || records.length < expectedTotal) {
-            const pageResult = await fetchSchedulePage(semesterCode, page, runtimeToken);
+            const pageResult = await fetchPage(page);
             if (expectedTotal === null) {
                 expectedTotal = pageResult.totalElements;
                 if (expectedTotal === 0 && pageResult.content.length === 0) {
-                    throw new Error("所选学期暂无课程，未保存空课表。");
+                    throw new Error(messages.empty);
                 }
             } else if (pageResult.totalElements !== expectedTotal) {
-                throw new Error("课表分页总数发生变化，请刷新页面重新查询后重试。");
+                throw new Error(messages.totalChanged);
             }
-
             if (pageResult.content.length === 0) {
-                throw new Error("课表分页在读取完成前返回空页，请刷新页面重新查询后重试。");
+                throw new Error(messages.emptyPage);
             }
 
-            const pageRecordSignatures = pageResult.content.map(function (record) {
-                return JSON.stringify(record);
+            pageResult.content.forEach(function (record) {
+                const signature = getSignature(record);
+                if (seenSignatures.has(signature)) {
+                    throw new Error(messages.duplicate);
+                }
+                seenSignatures.add(signature);
+                records.push(record);
             });
-            if (pageRecordSignatures.some(function (signature) {
-                return seenRecordSignatures.has(signature);
-            })) {
-                throw new Error("课表分页未继续前进，请刷新页面重新查询后重试。");
-            }
-            pageRecordSignatures.forEach(function (signature) {
-                seenRecordSignatures.add(signature);
-            });
-            records.push.apply(records, pageResult.content);
-
             if (records.length > expectedTotal) {
-                throw new Error("课表分页记录数超过接口声明总数，请刷新页面重新查询后重试。");
+                throw new Error(messages.overflow);
             }
             page += 1;
         }
-
         if (records.length !== expectedTotal) {
-            throw new Error("课表记录未完整返回，请刷新页面重新查询后重试。");
+            throw new Error(messages.incomplete);
         }
         return records;
     }
 
-    function validatePageResponse(payload) {
+    function validatePageResponse(payload, resourceLabel) {
+        const label = resourceLabel || "课表";
         if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-            throw new Error("课表接口返回结构异常：响应根节点不是对象。");
+            throw new Error(label + "接口返回结构异常：响应根节点不是对象。");
         }
         if (!Array.isArray(payload.content)) {
-            throw new Error("课表接口返回结构异常：缺少 content 数组。");
+            throw new Error(label + "接口返回结构异常：缺少 content 数组。");
         }
         const totalElements = payload.totalElements;
         if (!Number.isInteger(totalElements) || totalElements < 0) {
-            throw new Error("课表接口返回结构异常：totalElements 无效。");
+            throw new Error(label + "接口返回结构异常：totalElements 无效。");
         }
         return {
             content: payload.content,
@@ -485,7 +543,7 @@
             candidates.forEach(function (candidate) {
                 const actual = candidate[field] === null || candidate[field] === undefined ? "" : String(candidate[field]).trim();
                 if (expected && actual && expected !== actual) {
-                    throw new Error("课表记录中的学期信息不一致，请刷新页面重新查询。");
+                    throw new Error("课表记录中的学期信息不一致，请稍后重新导入。");
                 }
             });
             if (expected) result[field] = expected;
@@ -493,7 +551,7 @@
         return result;
     }
 
-    function buildCourseConfig(records, courses) {
+    function buildCourseConfig(records, courses, selectedSemesterName) {
         const semester = getConsistentSemester(records);
         const startDate = validateDateString(semester.ksrq);
         const endDate = validateDateString(semester.jsrq);
@@ -522,7 +580,8 @@
         if (startDate) config.semesterStartDate = startDate;
         return {
             config: config,
-            semesterName: typeof semester.xqmc === "string" && semester.xqmc.trim() ? semester.xqmc.trim() : "当前查询学期"
+            semesterName: typeof semester.xqmc === "string" && semester.xqmc.trim() ? semester.xqmc.trim() :
+                (selectedSemesterName || "当前查询学期")
         };
     }
 
@@ -557,7 +616,9 @@
     function assertBridgeCapabilities() {
         const promiseBridge = window.shiguangBridgePromise;
         const bridge = window.shiguangBridge;
-        if (!promiseBridge || typeof promiseBridge.saveCourseConfig !== "function" ||
+        if (!promiseBridge || typeof promiseBridge.showAlert !== "function" ||
+            typeof promiseBridge.showSingleSelection !== "function" ||
+            typeof promiseBridge.saveCourseConfig !== "function" ||
             typeof promiseBridge.savePresetTimeSlots !== "function" ||
             typeof promiseBridge.saveImportedCourses !== "function" ||
             !bridge || typeof bridge.notifyTaskCompletion !== "function") {
@@ -584,21 +645,17 @@
 
     async function runImportFlow() {
         try {
-            assertPageContext();
+            assertSystemOrigin();
             assertBridgeCapabilities();
-            const shouldStart = await showAlert(
-                "导入前确认",
-                "请确认已在“课程及成绩 → 我的课程”中选择目标学期，并点击过“查询”。",
-                "开始读取"
-            );
-            if (!shouldStart) return;
+            const runtimeToken = getRuntimeToken();
+            const selectedSemester = await selectSemester(runtimeToken);
+            if (!selectedSemester) return;
 
             showToast("正在读取青海师范大学研究生课表...");
-            const semesterCode = findLatestScheduleRequest();
-            const records = await fetchAllScheduleRecords(semesterCode);
+            const records = await fetchAllScheduleRecords(selectedSemester.id, runtimeToken);
             const courses = parseCourses(records);
             validateCourses(courses);
-            const semesterResult = buildCourseConfig(records, courses);
+            const semesterResult = buildCourseConfig(records, courses, selectedSemester.xqmc);
 
             const shouldSave = await showAlert(
                 "确认导入课程表",
@@ -625,20 +682,5 @@
         }
     }
 
-    const isNodeTestMode = typeof process !== "undefined" &&
-        process.versions && process.versions.node &&
-        typeof globalThis !== "undefined" && globalThis.__QHNU_TEST_MODE__ === true;
-    if (isNodeTestMode) {
-        globalThis.__QHNU_TEST__ = Object.freeze({
-            validatePageResponse: validatePageResponse,
-            fetchAllScheduleRecords: fetchAllScheduleRecords,
-            parseWeeks: parseWeeks,
-            parseScheduleFragments: parseScheduleFragments,
-            parseCourses: parseCourses,
-            buildCourseConfig: buildCourseConfig,
-            runImportFlow: runImportFlow
-        });
-    } else {
-        runImportFlow();
-    }
+    runImportFlow();
 })();
