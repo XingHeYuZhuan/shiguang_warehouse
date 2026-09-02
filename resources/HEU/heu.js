@@ -1,13 +1,18 @@
 // 哈尔滨工程大学(hrbeu.edu.cn) 本科课表适配脚本
-// 金智教务(Wisedu EMAP)平台，API方案
+// 金智教务(Wisedu EMAP)平台，参考官方金智适配案例
+// 支持：学期选择、实验课、调课/停课、API作息时间、开学日期
 
 var HEU_API = {
-    term: "/jwapp/sys/wdkb/modules/jshkcb/dqxnxq.do",
-    course: "/jwapp/sys/wdkb/modules/xskcb/cxxszhxqkb.do",
-    config: "/jwapp/sys/wdkb/modules/jshkcb/cxjcs.do"
+    semesterList: "/jwapp/sys/wdkb/modules/jshkcb/xnxqcx.do",
+    currentTerm:  "/jwapp/sys/wdkb/modules/jshkcb/dqxnxq.do",
+    course:       "/jwapp/sys/wdkb/modules/xskcb/cxxszhxqkb.do",
+    experiment:   "/jwapp/sys/wdkb/modules/syjxkcb/cxsyjxxskb.do",
+    change:       "/jwapp/sys/wdkb/modules/xskcb/xsdkkc.do",
+    timeSlots:    "/jwapp/sys/wdkb/modules/jshkcb/jc.do",
+    config:       "/jwapp/sys/wdkb/modules/jshkcb/cxjcs.do"
 };
 
-var HEU_TIME_SLOTS = [
+var DEFAULT_TIME_SLOTS = [
     { number: 1, startTime: "08:00", endTime: "08:45" },
     { number: 2, startTime: "08:50", endTime: "09:35" },
     { number: 3, startTime: "09:55", endTime: "10:40" },
@@ -23,31 +28,22 @@ var HEU_TIME_SLOTS = [
     { number: 13, startTime: "20:10", endTime: "20:55" }
 ];
 
-async function postJson(url, params) {
-    var options = { credentials: "include" };
-    if (params) {
-        options.method = "POST";
-        options.headers = { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" };
-        options.body = new URLSearchParams(params);
-    }
+var HEADERS = {
+    "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+    "x-requested-with": "XMLHttpRequest"
+};
+
+async function postApi(url, body) {
+    var options = { headers: HEADERS, method: "POST", credentials: "include" };
+    if (body) options.body = body;
     var resp = await fetch(url, options);
     if (!resp.ok) throw new Error("请求失败: " + resp.status);
-    var data = await resp.json();
-    if (data.code && data.code !== "0") throw new Error("教务系统拒绝请求");
-    return data;
+    return await resp.json();
 }
 
-function extractRows(data, key) {
-    if (data && data.datas) {
-        if (key && data.datas[key] && Array.isArray(data.datas[key].rows)) {
-            return data.datas[key].rows;
-        }
-        for (var k in data.datas) {
-            var v = data.datas[k];
-            if (v && Array.isArray(v.rows)) return v.rows;
-        }
-    }
-    return [];
+function getRows(data, key) {
+    return (data && data.datas && data.datas[key] && Array.isArray(data.datas[key].rows))
+        ? data.datas[key].rows : [];
 }
 
 function parseWeeksBitmap(skzc) {
@@ -59,174 +55,289 @@ function parseWeeksBitmap(skzc) {
     return weeks;
 }
 
-function parseWeeksText(text, maxWeek) {
-    if (!text) return [];
-    var cleaned = String(text).replace(/[第周]/g, "").replace(/，/g, ",");
-    var odd = /单/.test(cleaned);
-    var even = /双/.test(cleaned);
-    var weeks = [];
-    var seen = {};
-    var rangeRe = /(\d+)\s*[-~至到]\s*(\d+)/g;
-    var match;
-    while ((match = rangeRe.exec(cleaned)) !== null) {
-        for (var w = parseInt(match[1]); w <= parseInt(match[2]); w++) {
-            if (odd && w % 2 === 0) continue;
-            if (even && w % 2 !== 0) continue;
-            if (!seen[w]) { weeks.push(w); seen[w] = true; }
-        }
-    }
-    var singles = cleaned.replace(rangeRe, "").match(/\d+/g);
-    if (singles) {
-        for (var j = 0; j < singles.length; j++) {
-            var n = parseInt(singles[j]);
-            if (odd && n % 2 === 0) continue;
-            if (even && n % 2 !== 0) continue;
-            if (!seen[n] && n > 0 && n <= (maxWeek || 30)) { weeks.push(n); seen[n] = true; }
-        }
-    }
-    return weeks.sort(function(a, b) { return a - b; });
-}
+function parseSingleCourse(raw) {
+    var isExperiment = raw.SYXMMC !== undefined && raw.SYXMMC !== null;
+    var name = isExperiment ? raw.KCM + " - " + raw.SYXMMC : raw.KCM;
+    if (!isExperiment && raw.TYXMDM_DISPLAY) name += "(" + raw.TYXMDM_DISPLAY + ")";
 
-function detectTerm() {
-    try {
-        var el = document.querySelector("#dqxnxq2");
-        if (el && el.getAttribute("value")) return el.getAttribute("value");
-    } catch (e) {}
-    var now = new Date();
-    var y = now.getFullYear();
-    var m = now.getMonth();
-    if (m >= 1 && m <= 6) return (y - 1) + "-" + y + "-2";
-    return y + "-" + (y + 1) + "-1";
-}
+    var day = parseInt(raw.SKXQ);
+    var startSection = parseInt(raw.KSJC);
+    var endSection = parseInt(raw.JSJC);
+    var weeks = parseWeeksBitmap(raw.SKZC);
 
-function parseCourseRow(row) {
-    var day = parseInt(row.SKXQ, 10);
-    var startSection = parseInt(row.KSJC, 10);
-    var endSection = parseInt(row.JSJC, 10);
-    if (!row.KCM || isNaN(day) || isNaN(startSection) || isNaN(endSection)) return null;
-
-    var weeks = [];
-    if (row.SKZC) {
-        weeks = parseWeeksBitmap(row.SKZC);
-    } else if (row.ZCMC) {
-        weeks = parseWeeksText(row.ZCMC, 30);
-    }
-    if (!weeks.length) return null;
-
-    var name = String(row.KCM).trim();
-    if (row.TYXMDM_DISPLAY) name += "(" + row.TYXMDM_DISPLAY + ")";
+    if (!name || !day || !startSection || !endSection || weeks.length === 0) return null;
 
     return {
         name: name,
-        teacher: String(row.SKJS || row.JSM || "").trim() || "未知",
-        position: String(row.JASMC || row.JXLDM_DISPLAY || "").trim() || "待定",
+        teacher: raw.SKJS ? raw.SKJS.split("/")[0] : (raw.JSM || ""),
+        position: raw.JASMC || "待定",
         day: day,
         startSection: startSection,
         endSection: endSection,
-        weeks: weeks
+        weeks: weeks,
+        _kbId: raw.KBID,
+        _day: day,
+        _startSection: startSection,
+        _endSection: endSection
     };
 }
 
-function deduplicateCourses(rows) {
-    var index = {};
-    var courses = [];
-    for (var i = 0; i < rows.length; i++) {
-        var parsed = parseCourseRow(rows[i]);
-        if (!parsed) continue;
-        var key = parsed.day + "|" + parsed.startSection + "|" + parsed.endSection +
-                  "|" + parsed.name + "|" + parsed.teacher + "|" + parsed.position;
-        if (index[key] === undefined) {
-            index[key] = courses.length;
-            courses.push(parsed);
-        } else {
-            var existing = courses[index[key]];
-            parsed.weeks.forEach(function(w) {
-                if (existing.weeks.indexOf(w) === -1) existing.weeks.push(w);
+function applyCourseChanges(courses, changes) {
+    var count = 0;
+    for (var i = 0; i < changes.length; i++) {
+        var ch = changes[i];
+        var kbId = ch.KBID;
+        var weeksToRemove = parseWeeksBitmap(ch.SKZC);
+        var applied = false;
+
+        var affected = courses.filter(function(c) {
+            return c._kbId === kbId &&
+                c._day === parseInt(ch.SKXQ) &&
+                c._startSection === parseInt(ch.KSJC) &&
+                c._endSection === parseInt(ch.JSJC);
+        });
+
+        if (affected.length === 0) continue;
+
+        if (weeksToRemove.length > 0) {
+            affected.forEach(function(c) {
+                var before = c.weeks.length;
+                c.weeks = c.weeks.filter(function(w) { return weeksToRemove.indexOf(w) === -1; });
+                if (c.weeks.length < before) applied = true;
             });
         }
+
+        var isTimeChange = ch.TKLXDM === "01" || ch.TKLXDM === "03";
+        if (isTimeChange && ch.XSKZC && ch.XSKXQ && ch.XKSJC && ch.XJSJC) {
+            var newWeeks = parseWeeksBitmap(ch.XSKZC);
+            if (newWeeks.length > 0) {
+                var origTeacher = ch.YSKJS ? ch.YSKJS.split("/")[0] : "";
+                courses.push({
+                    name: ch.KCM,
+                    teacher: ch.XSKJS ? ch.XSKJS.split("/")[0] : origTeacher,
+                    position: ch.XJASMC || ch.JASMC || "待定",
+                    day: parseInt(ch.XSKXQ),
+                    startSection: parseInt(ch.XKSJC),
+                    endSection: parseInt(ch.XJSJC),
+                    weeks: newWeeks,
+                    _kbId: kbId,
+                    _day: parseInt(ch.XSKXQ),
+                    _startSection: parseInt(ch.XKSJC),
+                    _endSection: parseInt(ch.XJSJC)
+                });
+                applied = true;
+            }
+        }
+        if (applied) count++;
     }
-    courses.forEach(function(c) { c.weeks.sort(function(a, b) { return a - b; }); });
+    if (count > 0) window.shiguangBridge.showToast("已应用 " + count + " 条调课/停课变更。");
     return courses;
+}
+
+function cleanAndMerge(courses) {
+    var list = courses.map(function(c) {
+        return {
+            name: c.name || "",
+            teacher: c.teacher || "",
+            position: c.position || "",
+            day: c.day,
+            startSection: c.startSection,
+            endSection: c.endSection,
+            weeks: Array.isArray(c.weeks) ? c.weeks.slice().sort(function(a,b){return a-b;}) : []
+        };
+    }).filter(function(c) { return c.weeks.length > 0; });
+
+    // 阶段1: 合并连续节次
+    list.sort(function(a, b) {
+        return a.name.localeCompare(b.name) || a.teacher.localeCompare(b.teacher) ||
+            a.position.localeCompare(b.position) || (a.day||0)-(b.day||0) ||
+            a.weeks.join(",").localeCompare(b.weeks.join(",")) ||
+            (a.startSection||0)-(b.startSection||0);
+    });
+
+    var step1 = [];
+    var cur = list[0];
+    for (var i = 1; i < list.length; i++) {
+        var nxt = list[i];
+        var same = cur.name === nxt.name && cur.teacher === nxt.teacher &&
+            cur.position === nxt.position && cur.day === nxt.day &&
+            cur.weeks.join(",") === nxt.weeks.join(",");
+
+        if (same && cur.endSection + 1 === nxt.startSection) {
+            cur.endSection = nxt.endSection;
+        } else if (same && cur.startSection === nxt.startSection && cur.endSection === nxt.endSection) {
+            continue;
+        } else {
+            step1.push(cur);
+            cur = nxt;
+        }
+    }
+    step1.push(cur);
+
+    // 阶段2: 合并同节次的周次
+    step1.sort(function(a, b) {
+        return a.name.localeCompare(b.name) || a.teacher.localeCompare(b.teacher) ||
+            a.position.localeCompare(b.position) || (a.day||0)-(b.day||0) ||
+            (a.startSection||0)-(b.startSection||0) || (a.endSection||0)-(b.endSection||0);
+    });
+
+    var step2 = [];
+    cur = step1[0];
+    for (var j = 1; j < step1.length; j++) {
+        var n = step1[j];
+        if (cur.name === n.name && cur.teacher === n.teacher && cur.position === n.position &&
+            cur.day === n.day && cur.startSection === n.startSection && cur.endSection === n.endSection) {
+            var set = {};
+            cur.weeks.concat(n.weeks).forEach(function(w) { set[w] = true; });
+            cur.weeks = Object.keys(set).map(Number).sort(function(a,b){return a-b;});
+        } else {
+            step2.push(cur);
+            cur = n;
+        }
+    }
+    step2.push(cur);
+    return step2;
+}
+
+async function selectSemester() {
+    var semesterList = [];
+    try {
+        var data = await postApi(HEU_API.semesterList, "*order=-DM");
+        semesterList = getRows(data, "xnxqcx");
+    } catch (e) {
+        window.shiguangBridge.showToast("获取学期列表失败，请检查登录状态。");
+        return null;
+    }
+    if (semesterList.length === 0) {
+        window.shiguangBridge.showToast("未查询到学期数据。");
+        return null;
+    }
+
+    var defaultDM = null;
+    try {
+        var dqData = await postApi(HEU_API.currentTerm);
+        var dqRows = getRows(dqData, "dqxnxq");
+        if (dqRows.length > 0) defaultDM = dqRows[0].DM;
+    } catch (e) {}
+
+    var top = semesterList.slice(0, 10);
+    var names = top.map(function(s) { return s.MC || s.DM; });
+    var defaultIdx = -1;
+    if (defaultDM) {
+        for (var i = 0; i < top.length; i++) {
+            if (top[i].DM === defaultDM) { defaultIdx = i; break; }
+        }
+    }
+
+    var idx = await window.shiguangBridgePromise.showSingleSelection(
+        "请选择学期", JSON.stringify(names), defaultIdx
+    );
+    if (idx === null || idx === -1) return null;
+    return top[idx];
+}
+
+async function importTimeSlots() {
+    var slots = null;
+    try {
+        var data = await postApi(HEU_API.timeSlots);
+        var rows = getRows(data, "jc");
+        if (rows.length > 0) {
+            slots = rows.map(function(r) {
+                return { number: parseInt(r.DM), startTime: r.KSSJ, endTime: r.JSSJ };
+            });
+        }
+    } catch (e) {}
+
+    if (!slots || slots.length === 0) {
+        slots = DEFAULT_TIME_SLOTS;
+    }
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
+}
+
+async function fetchSemesterConfig(xn, xq) {
+    try {
+        var data = await postApi(HEU_API.config, "XN=" + xn + "&XQ=" + xq);
+        var row = getRows(data, "cxjcs")[0];
+        if (row) {
+            var rawDate = row.XQKSRQ;
+            return {
+                semesterStartDate: rawDate ? rawDate.split(" ")[0] : null,
+                semesterTotalWeeks: parseInt(row.ZZC) || 20
+            };
+        }
+    } catch (e) {}
+    return { semesterStartDate: null, semesterTotalWeeks: 20 };
 }
 
 async function runImportFlow() {
     var confirmed = await window.shiguangBridgePromise.showAlert(
         "哈尔滨工程大学课表导入",
-        "请确保已登录教务系统。\n登录后，进入课表页面，即可自动导入当前学期课表。",
-        "确定，开始导入"
+        "导入前请确保已登录教务系统。",
+        "好的，开始导入"
     );
     if (!confirmed) {
         window.shiguangBridge.showToast("已取消导入");
         return;
     }
 
-    window.shiguangBridge.showToast("正在获取学期信息...");
-
-    var termCode = "";
-    try {
-        var termData = await postJson(HEU_API.term);
-        var termRows = extractRows(termData, "dqxnxq");
-        if (termRows.length > 0 && termRows[0].DM) {
-            termCode = termRows[0].DM;
-        }
-    } catch (e) {
-        console.log("HEU: 学期API失败，使用自动检测: " + e.message);
+    var semester = await selectSemester();
+    if (!semester) {
+        window.shiguangBridge.showToast("导入已取消。");
+        return;
     }
-    if (!termCode) termCode = detectTerm();
-    console.log("HEU: 当前学期=" + termCode);
+    var XNXQDM = semester.DM;
+
+    window.shiguangBridge.showToast("正在获取作息时间...");
+    await importTimeSlots();
 
     window.shiguangBridge.showToast("正在获取课表数据...");
+    var courseData = await postApi(HEU_API.course, "XNXQDM=" + XNXQDM);
+    var rawCourses = getRows(courseData, "cxxszhxqkb");
 
-    var courseData = await postJson(HEU_API.course, { XNXQDM: termCode });
-    var courseRows = extractRows(courseData, "cxxszhxqkb");
-    console.log("HEU: API返回 " + courseRows.length + " 条原始记录");
+    // 获取实验课
+    var rawExpCourses = [];
+    try {
+        var expData = await postApi(HEU_API.experiment, "XNXQDM=" + XNXQDM);
+        rawExpCourses = getRows(expData, "cxsyjxxskb");
+    } catch (e) {
+        console.warn("HEU: 获取实验课失败:", e);
+    }
 
-    if (courseRows.length === 0) {
-        await window.shiguangBridgePromise.showAlert(
-            "导入提示",
-            "当前学期未查到课表数据，请确认已登录并有排课。",
-            "知道了"
-        );
+    var allRaw = rawCourses.concat(rawExpCourses);
+    if (allRaw.length === 0) {
+        await window.shiguangBridgePromise.showAlert("导入提示", "该学期未查到课程数据。", "知道了");
         return;
     }
 
-    var courses = deduplicateCourses(courseRows);
-    console.log("HEU: 去重后 " + courses.length + " 门课程");
+    if (rawExpCourses.length > 0) {
+        window.shiguangBridge.showToast("获取到 " + rawCourses.length + " 门理论课和 " + rawExpCourses.length + " 门实验课");
+    }
+
+    var parsed = allRaw.map(parseSingleCourse).filter(function(c) { return c !== null; });
+
+    // 获取调课数据
+    try {
+        var chData = await postApi(HEU_API.change, "XNXQDM=" + XNXQDM + "&*order=-SQSJ");
+        var rawChanges = getRows(chData, "xsdkkc");
+        if (rawChanges.length > 0) {
+            parsed = applyCourseChanges(parsed, rawChanges);
+        }
+    } catch (e) {
+        console.warn("HEU: 获取调课数据失败:", e);
+    }
+
+    var courses = cleanAndMerge(parsed);
 
     if (courses.length === 0) {
         window.shiguangBridge.showToast("课表解析结果为空");
         return;
     }
 
-    var totalWeeks = 20;
-    for (var i = 0; i < courseRows.length; i++) {
-        var len = String(courseRows[i].SKZC || "").length;
-        if (len > totalWeeks) totalWeeks = len;
-    }
-    var maxWeekInCourses = 0;
-    courses.forEach(function(c) {
-        var mw = Math.max.apply(null, c.weeks);
-        if (mw > maxWeekInCourses) maxWeekInCourses = mw;
-    });
-    if (maxWeekInCourses > totalWeeks) totalWeeks = maxWeekInCourses;
+    var config = await fetchSemesterConfig(semester.XNDM, semester.XQDM);
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 
-    await window.shiguangBridgePromise.savePresetTimeSlots(
-        JSON.stringify(HEU_TIME_SLOTS)
-    );
-    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
-        semesterStartDate: null,
-        semesterTotalWeeks: totalWeeks,
-        defaultClassDuration: 45,
-        defaultBreakDuration: 10,
-        firstDayOfWeek: 1
-    }));
-    await window.shiguangBridgePromise.saveImportedCourses(
-        JSON.stringify(courses)
-    );
-
-    window.shiguangBridge.showToast(
-        termCode + " 课表导入成功，共 " + courses.length + " 门课程"
-    );
+    window.shiguangBridge.showToast(XNXQDM + " 课表导入成功，共 " + courses.length + " 门课程");
     window.shiguangBridge.notifyTaskCompletion();
 }
 
