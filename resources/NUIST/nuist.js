@@ -1,10 +1,5 @@
 // 南京信息工程大学教务系统（jwxt.nuist.edu.cn）拾光课程表适配脚本
 
-function validateAcademicYear(input) {
-    if (/^\d{4}$/.test(String(input).trim())) return false;
-    return "请输入四位数字的起始学年，例如 2026。";
-}
-
 function parseWeeks(skzc) {
     const value = String(skzc || "");
     const weeks = [];
@@ -40,9 +35,7 @@ function parseCourse(row) {
     };
 }
 
-async function fetchCourses(academicYear, semesterIndex) {
-    const semester = semesterIndex === 0 ? 1 : 2;
-    const xnxqdm = `${academicYear}-${Number(academicYear) + 1}-${semester}`;
+async function fetchCourses(xnxqdm) {
     const response = await fetch("/jwapp/sys/wdkb/modules/xskcb/cxxszhxqkb.do", {
         method: "POST",
         headers: {
@@ -66,6 +59,27 @@ async function fetchCourses(academicYear, semesterIndex) {
     if (courses.length === 0) throw new Error("未找到包含有效时间的课程。");
     courses.sort((a, b) => a.day - b.day || a.startSection - b.startSection || a.name.localeCompare(b.name));
     return { courses, xnxqdm };
+}
+
+async function fetchCurrentSemester() {
+    const response = await fetch("/jwapp/sys/wdkb/modules/jshkcb/dqxnxq.do", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest"
+        },
+        body: "",
+        credentials: "include"
+    });
+    if (!response.ok) throw new Error(`当前学期接口请求失败（HTTP ${response.status}）`);
+    const payload = await response.json();
+    const rows = payload && payload.datas && payload.datas.dqxnxq && payload.datas.dqxnxq.rows;
+    const term = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    if (!term || !term.DM) throw new Error("未获取到当前学期信息。");
+    return {
+        code: String(term.DM),
+        name: String(term.MC || term.DM)
+    };
 }
 
 async function fetchTimeSlots() {
@@ -99,19 +113,10 @@ async function runImportFlow() {
         );
         if (!confirmed) return;
 
-        const currentYear = new Date().getFullYear();
-        const academicYear = await window.shiguangBridgePromise.showPrompt(
-            "选择学年", "请输入起始学年（例如 2026）", String(currentYear), "validateAcademicYear"
-        );
-        if (academicYear === null) return;
-
-        const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
-            "选择学期", JSON.stringify(["第一学期", "第二学期"]), 0
-        );
-        if (semesterIndex === null || semesterIndex < 0) return;
-
         window.shiguangBridge.showToast("正在获取课表...");
-        const result = await fetchCourses(String(academicYear).trim(), semesterIndex);
+        const semester = await fetchCurrentSemester();
+        window.shiguangBridge.showToast(`当前学期：${semester.name}`);
+        const result = await fetchCourses(semester.code);
         const timeSlots = await fetchTimeSlots();
         await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
             semesterStartDate: null,
