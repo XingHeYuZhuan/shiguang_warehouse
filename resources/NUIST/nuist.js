@@ -187,6 +187,32 @@ async function fetchTimeSlots() {
       .sort((a, b) => a.number - b.number);
 }
 
+async function fetchSemesterConfig(xnxqdm) {
+    const parts = String(xnxqdm || "").split("-");
+    if (parts.length < 3) return { semesterStartDate: null, semesterTotalWeeks: 20 };
+    const response = await fetch("/jwapp/sys/wdkb/modules/jshkcb/cxjcs.do", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest"
+        },
+        body: `XN=${encodeURIComponent(`${parts[0]}-${parts[1]}`)}&XQ=${encodeURIComponent(parts[2])}`,
+        credentials: "include"
+    });
+    if (!response.ok) throw new Error(`学期配置接口请求失败（HTTP ${response.status}）`);
+    const payload = await response.json();
+    const rows = payload && payload.datas && payload.datas.cxjcs && payload.datas.cxjcs.rows;
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row) return { semesterStartDate: null, semesterTotalWeeks: 20 };
+    const rawDate = row.XQKSRQ || row.XQKSRQ_DISPLAY || row.KSRQ;
+    const startDate = rawDate ? String(rawDate).split(/[ T]/)[0] : null;
+    const totalWeeks = Number.parseInt(row.ZZC || row.ZCZ || row.ZC, 10);
+    return {
+        semesterStartDate: /^\d{4}-\d{2}-\d{2}$/.test(startDate || "") ? startDate : null,
+        semesterTotalWeeks: Number.isFinite(totalWeeks) && totalWeeks > 0 ? totalWeeks : 20
+    };
+}
+
 async function runImportFlow() {
     try {
         const confirmed = await window.shiguangBridgePromise.showAlert(
@@ -203,6 +229,13 @@ async function runImportFlow() {
         }
         window.shiguangBridge.showToast(`已选择学期：${semester.name}`);
         const result = await fetchCourses(semester.code);
+        let semesterConfig = { semesterStartDate: null, semesterTotalWeeks: 20 };
+        try {
+            semesterConfig = await fetchSemesterConfig(semester.code);
+        } catch (error) {
+            console.warn("获取学期配置失败，将使用默认配置", error);
+            window.shiguangBridge.showToast("开学日期获取失败，已使用默认配置继续导入。");
+        }
         let timeSlots = DEFAULT_TIME_SLOTS;
         try {
             const fetchedTimeSlots = await fetchTimeSlots();
@@ -212,8 +245,7 @@ async function runImportFlow() {
             window.shiguangBridge.showToast("作息时间获取失败，已使用默认时间继续导入。");
         }
         await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
-            semesterStartDate: null,
-            semesterTotalWeeks: 20,
+            ...semesterConfig,
             defaultClassDuration: 45,
             defaultBreakDuration: 10,
             firstDayOfWeek: 1
