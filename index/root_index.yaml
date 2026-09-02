@@ -897,3 +897,8 @@ schools:
     name: "西安交通大学"
     initial: "X"
     resource_folder: "XJTU"
+
+  - id: "QHNU"
+    name: "青海师范大学"
+    initial: "Q"
+    resource_folder: "QHNU"
