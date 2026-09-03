@@ -927,3 +927,8 @@ schools:
     name: "南阳师范学院"
     initial: "N"
     resource_folder: "NYNU"
+
+  - id: "NCHU"
+    name: "南昌航空大学"
+    initial: "N"
+    resource_folder: "NCHU"
