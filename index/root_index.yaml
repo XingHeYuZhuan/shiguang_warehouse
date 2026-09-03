@@ -917,3 +917,8 @@ schools:
     name: "武汉科技大学"
     initial: "W"
     resource_folder: "WUST"
+
+  - id: "NCHU"
+    name: "南昌航空大学"
+    initial: "N"
+    resource_folder: "NCHU"
