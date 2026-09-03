@@ -393,6 +393,11 @@ schools:
     initial: "G"
     resource_folder: "GLMU"
 
+  - id: "GXMU"
+    name: "广西医科大学"
+    initial: "G"
+    resource_folder: "GXMU"
+
   - id: "NJFU"
     name: "南京林业大学"
     initial: "N"
@@ -917,6 +922,11 @@ schools:
     name: "武汉科技大学"
     initial: "W"
     resource_folder: "WUST"
+
+  - id: "NYNU"
+    name: "南阳师范学院"
+    initial: "N"
+    resource_folder: "NYNU"
 
   - id: "NCHU"
     name: "南昌航空大学"
