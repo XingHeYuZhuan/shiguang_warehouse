@@ -892,3 +892,8 @@ schools:
     name: "西安交通大学"
     initial: "X"
     resource_folder: "XJTU"
+
+  - id: "WUST"
+    name: "武汉科技大学"
+    initial: "W"
+    resource_folder: "WUST"
