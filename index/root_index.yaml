@@ -88,6 +88,11 @@ schools:
     initial: "H"
     resource_folder: "HNSF"
 
+  - id: "HNNU"
+    name: "淮南师范学院"
+    initial: "H"
+    resource_folder: "HNNU"
+
   - id: "TARU"
     name: "塔里木大学"
     initial: "T"
@@ -558,6 +563,11 @@ schools:
     initial: "N"
     resource_folder: "NJTECH"
 
+  - id: "NUIST"
+    name: "南京信息工程大学"
+    initial: "N"
+    resource_folder: "NUIST"
+
   - id: "CAUC"
     name: "中国民航大学"
     initial: "Z"
@@ -853,6 +863,11 @@ schools:
     initial: "H"
     resource_folder: "HAUST"
 
+  - id: "HRBEU"
+    name: "哈尔滨工程大学"
+    initial: "H"
+    resource_folder: "HRBEU"
+
   - id: "HIT"
     name: "哈尔滨工业大学"
     initial: "H"
@@ -892,6 +907,11 @@ schools:
     name: "西安交通大学"
     initial: "X"
     resource_folder: "XJTU"
+
+  - id: "QHNU"
+    name: "青海师范大学"
+    initial: "Q"
+    resource_folder: "QHNU"
 
   - id: "WUST"
     name: "武汉科技大学"

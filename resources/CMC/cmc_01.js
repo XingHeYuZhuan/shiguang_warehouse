@@ -15,16 +15,14 @@ function parseWeeks(weekStr) {
 // 解析按周场地字符串
 function parseVenueWeeks(jxcdmc2) {
     const venueMap = new Map();
-    let lastRoom = null;
     String(jxcdmc2 || "").split(",").forEach(part => {
         const match = part.trim().match(/^(.*?)-(\d+)$/);
         if (!match) return;
-        const room = match[1].trim();
         const week = parseInt(match[2], 10);
-        if (room) lastRoom = room;
-        if (!lastRoom || isNaN(week)) return;
-        if (!venueMap.has(lastRoom)) venueMap.set(lastRoom, []);
-        venueMap.get(lastRoom).push(week);
+        if (isNaN(week)) return;
+        const key = match[1].trim() || "不用场地";
+        if (!venueMap.has(key)) venueMap.set(key, []);
+        venueMap.get(key).push(week);
     });
     return venueMap;
 }
@@ -38,7 +36,7 @@ function resolvePosition(item) {
 }
 
 function cleanTeacherName(raw) {
-    return String(raw || "").replace(/\[[^\]]*\]/g, "").trim();
+    return [...new Set(String(raw || "").replace(/\[[^\]]*\]/g, "").split(",").map(n => n.trim()).filter(Boolean))].join(",");
 }
 
 // 课表接口数据
