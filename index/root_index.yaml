@@ -917,3 +917,8 @@ schools:
     name: "武汉科技大学"
     initial: "W"
     resource_folder: "WUST"
+
+  - id: "NYNU"
+    name: "南阳师范学院"
+    initial: "N"
+    resource_folder: "NYNU"
