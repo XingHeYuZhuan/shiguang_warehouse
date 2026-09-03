@@ -932,3 +932,8 @@ schools:
     name: "南昌航空大学"
     initial: "N"
     resource_folder: "NCHU"
+    
+  - id: "HPU"
+    name: "河南理工大学"
+    initial: "H"
+    resource_folder: "HPU"
