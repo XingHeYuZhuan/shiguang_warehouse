@@ -912,3 +912,8 @@ schools:
     name: "青海师范大学"
     initial: "Q"
     resource_folder: "QHNU"
+
+  - id: "WUST"
+    name: "武汉科技大学"
+    initial: "W"
+    resource_folder: "WUST"
