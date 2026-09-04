@@ -245,8 +245,8 @@ function parseCourses(rawCourses){
 
         const sectionMatch = raw.jcdm.match(/\d{2}/g);
         if (!sectionMatch) {
-            console.error(`课程节次解析失败，原始数据：${raw.jcdm}，跳过该课程。`);
-            continue;
+            console.error(`课程节次解析失败，原始数据：${raw.jcdm}。`);
+            throw new Error(`课程 ${raw.kcmc} 节次解析失败，原始数据：${raw.jcdm}。联系开发者解决此问题。`);
         }
 
         const sections = sectionMatch.map(Number);
@@ -256,8 +256,8 @@ function parseCourses(rawCourses){
         // 周次
         const week = Number(raw.zc);
         if (isNaN(week)) {
-            console.error(`课程周次解析失败，原始数据：${raw.zc}，跳过该课程。`);
-            continue;
+            console.error(`课程周次解析失败，原始数据：${raw.zc}。`);
+            throw new Error(`课程 ${raw.kcmc} 周次解析失败，原始数据：${raw.zc}。联系开发者解决此问题。`);
         }
 
         const course = {
