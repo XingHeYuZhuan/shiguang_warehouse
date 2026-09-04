@@ -1,6 +1,22 @@
 // 大连工程学院教务系统（jw.dlutci.edu.cn）拾光课表导入适配脚本
 // 基于智慧教务(app)系统，接口为 xskcb.do 获取课表、xnxqcx.do 选择学期
 
+// 大连工程学院作息时间表（第1-12节）
+const DLUTCI_TIME_SLOTS = [
+    { number: 1,  startTime: "08:10", endTime: "08:55" },
+    { number: 2,  startTime: "09:00", endTime: "09:45" },
+    { number: 3,  startTime: "10:15", endTime: "11:00" },
+    { number: 4,  startTime: "11:05", endTime: "11:50" },
+    { number: 5,  startTime: "13:20", endTime: "14:05" },
+    { number: 6,  startTime: "14:10", endTime: "14:55" },
+    { number: 7,  startTime: "15:15", endTime: "16:00" },
+    { number: 8,  startTime: "16:00", endTime: "16:45" },
+    { number: 9,  startTime: "17:45", endTime: "18:30" },
+    { number: 10, startTime: "18:30", endTime: "19:15" },
+    { number: 11, startTime: "19:35", endTime: "20:20" },
+    { number: 12, startTime: "20:20", endTime: "21:05" }
+];
+
 // 周次位图解析：SKZC 为"0"/"1"串，第 i 位为"1"表示第 i+1 周有课
 function parseWeeks(skzc) {
     const value = String(skzc || "");
@@ -145,6 +161,17 @@ async function fetchCourses(xnxqdm) {
     return transformSchedule(payload);
 }
 
+// 保存预设作息时间（失败仅告警，不阻断课程导入）
+async function saveTimeSlots(timeSlots) {
+    if (!timeSlots || timeSlots.length === 0) return;
+    try {
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+        console.log("JS: 作息时间保存成功");
+    } catch (error) {
+        console.error("JS: 作息时间保存失败:", error);
+    }
+}
+
 async function runImportFlow() {
     if (isLoginPage()) {
         window.shiguangBridge.showToast("导入失败：请先登录教务系统！");
@@ -177,6 +204,8 @@ async function runImportFlow() {
 
         window.shiguangBridge.showToast(`正在保存 ${courses.length} 门课程...`);
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses, null, 2));
+
+        await saveTimeSlots(DLUTCI_TIME_SLOTS);
 
         window.shiguangBridge.showToast(`课程导入成功，共导入 ${courses.length} 门课程！`);
         window.shiguangBridge.notifyTaskCompletion();
