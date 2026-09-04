@@ -1,7 +1,7 @@
 // 文件: gdut.js
 
-if (typeof Strings === 'undefined') {
-    var Strings = {
+if (typeof url_strings === 'undefined') {
+    var url_strings = {
         BASE_URL: "https://jxfw.gdut.edu.cn",
         GET_WEEK_COURSES_API_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!getKbRq.action",
         GET_ALL_COURSES_API_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!getDataList.action",
@@ -92,7 +92,7 @@ function extractFirstDay(dateInfoJsonData) {
 }
 
 async function fetchStartDate(semesterId) {
-    const url = `${Strings.GET_WEEK_COURSES_API_URL}?xnxqdm=${semesterId}&zc=1`;
+    const url = `${url_strings.GET_WEEK_COURSES_API_URL}?xnxqdm=${semesterId}&zc=1`;
     
     try {
         console.log(`正在获取学期开始日期。学期代码：${semesterId}`);
@@ -148,11 +148,11 @@ async function fetchCourses(semesterId){
         formData.append('sort', 'kxh');
         formData.append('order', 'asc');
 
-        const response = await fetch(Strings.GET_ALL_COURSES_API_URL, {
+        const response = await fetch(url_strings.GET_ALL_COURSES_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Referer': Strings.BASE_URL
+                'Referer': url_strings.BASE_URL
             },
             body: formData.toString(),
             credentials: 'include'
@@ -206,12 +206,12 @@ async function fetchCourses(semesterId){
 async function checkSemesterIsOpened(semesterId) {
     console.log(`正在检查学期 ${semesterId} 是否已开放课表查询...`);
 
-    const url = `${Strings.GET_ALL_COURSES_HTML_URL}?xnxqdm=${semesterId}`;
+    const url = `${url_strings.GET_ALL_COURSES_HTML_URL}?xnxqdm=${semesterId}`;
     
     const response = await fetch(url, {
         method: 'GET',
         headers: {
-            'Referer': Strings.GET_ALL_COURSES_HTML_URL_REFERRER
+            'Referer': url_strings.GET_ALL_COURSES_HTML_URL_REFERRER
         },
         credentials: 'include'
     });
