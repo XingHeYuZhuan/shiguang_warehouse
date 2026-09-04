@@ -38,7 +38,7 @@ function mapCourseRecord(record) {
     const weeks = parseWeeks(record.zc || "");
     if (weeks.length === 0) return null;
 
-    const day = parseInt(record.qsxq, 10);
+    const day = parseInt(record.xq, 10);
     const startSection = parseInt(record.ps, 10);
     const endSection = parseInt(record.pe, 10);
     if (!day || day < 1 || day > 7) return null;
