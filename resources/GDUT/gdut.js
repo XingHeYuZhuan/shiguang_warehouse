@@ -261,9 +261,9 @@ function parseCourses(rawCourses){
         }
 
         const course = {
-            name: raw.kcmc.trim(),
-            teacher: (raw.teaxms || "").trim(),
-            position: (raw.jxcdmc || "").trim(),
+            name: decodeHtmlEntities(raw.kcmc).trim(),
+            teacher: decodeHtmlEntities(raw.teaxms || "").trim(),
+            position: decodeHtmlEntities(raw.jxcdmc || "").trim(),
             day: Number(raw.xq),
             startSection: startSection,
             endSection: endSection,
@@ -275,6 +275,18 @@ function parseCourses(rawCourses){
     }
 
     return courses;
+}
+
+/**
+ * 解码 HTML 实体字符为普通文本
+ * @param {string} text 需要解码的文本
+ * @returns {string} 解码后的文本，输入为空时返回空字符串
+ */
+function decodeHtmlEntities(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.innerHTML = text;
+    return div.textContent || div.innerText || '';
 }
 
 /**
