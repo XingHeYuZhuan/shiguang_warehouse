@@ -156,12 +156,13 @@ function parseGridSchedule() {
 //  - 表格行结构: 课程信息行(课程号/课序号/课程名/教师...) 之后可跟 1 行或多行"排课行"
 //  - 或 div 布局: innerText 中课程信息行与排课行相邻
 // 排课字符串形如: "1-18周全周 星期一 下午56节 天山堂A504"
-const WEEK_DAY_PATTERN = /([第]?[0-9,\-，]+周(?:全周|单周|双周)?)\s*(星期[一二三四五六日天])\s*((?:上午|下午|晚上|晚)?\s*\d+(?:-\d+)?节)\s*(\S+)/;
-const WEEK_DAY_PATTERN_NO_POS = /([第]?[0-9,\-，]+周(?:全周|单周|双周)?)\s*(星期[一二三四五六日天])\s*((?:上午|下午|晚上|晚)?\s*\d+(?:-\d+)?节)/;
+const WEEK_DAY_PATTERN = /([第]?[0-9,\-，]+周(?:全周|单周|双周)?)\s*(星期[一二三四五六日天]|周[一二三四五六日天])\s*((?:上午|下午|晚上|晚)?\s*\d+(?:-\d+)?节)\s*(\S+)/;
+const WEEK_DAY_PATTERN_NO_POS = /([第]?[0-9,\-，]+周(?:全周|单周|双周)?)\s*(星期[一二三四五六日天]|周[一二三四五六日天])\s*((?:上午|下午|晚上|晚)?\s*\d+(?:-\d+)?节)/;
 const DAY_MAP = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "日": 7, "天": 7 };
 
 function dayNum(dayText) {
-    return DAY_MAP[String(dayText).replace("星期", "")] || 0;
+    // 兼容 "星期一" / "周一" / "礼拜一" / "星期天"
+    return dayFromText(dayText);
 }
 
 // 从文本片段数组中提取课程信息 (课程号 + 课程名 + 教师)
@@ -465,7 +466,7 @@ function collectProbe() {
             doc.querySelectorAll("td").forEach(cd => {
                 const t = (cd.textContent || "").trim();
                 if (/^\d{3,}[a-zA-Z]*(\(\d+\))?$/.test(t) && t.length <= 12) codeCells++;
-                if (/[0-9]+周/.test(t) && /星期[一二三四五六日天]/.test(t)) schedCells++;
+                if (/[0-9]+周/.test(t) && /(?:星期|周)[一二三四五六日天]/.test(t)) schedCells++;
             });
         } catch (e) {}
     });
