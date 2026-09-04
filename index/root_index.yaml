@@ -393,6 +393,11 @@ schools:
     initial: "G"
     resource_folder: "GLMU"
 
+  - id: "GXMU"
+    name: "广西医科大学"
+    initial: "G"
+    resource_folder: "GXMU"
+
   - id: "NJFU"
     name: "南京林业大学"
     initial: "N"
@@ -572,6 +577,11 @@ schools:
     name: "中国民航大学"
     initial: "Z"
     resource_folder: "CAUC"
+
+  - id: "DLUTCI"
+    name: "大连工程学院"
+    initial: "D"
+    resource_folder: "DLUTCI"
 
   - id: "ECJTU"
     name: "华东交通大学"
@@ -793,6 +803,11 @@ schools:
     initial: "L"
     resource_folder: "LUT"
 
+  - id: "LZU"
+    name: "兰州大学"
+    initial: "L"
+    resource_folder: "LZU"
+
   - id: "SYSU"
     name: "中山大学"
     initial: "Z"
@@ -917,3 +932,18 @@ schools:
     name: "武汉科技大学"
     initial: "W"
     resource_folder: "WUST"
+
+  - id: "NYNU"
+    name: "南阳师范学院"
+    initial: "N"
+    resource_folder: "NYNU"
+
+  - id: "NCHU"
+    name: "南昌航空大学"
+    initial: "N"
+    resource_folder: "NCHU"
+    
+  - id: "HPU"
+    name: "河南理工大学"
+    initial: "H"
+    resource_folder: "HPU"
