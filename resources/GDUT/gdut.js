@@ -26,34 +26,39 @@ async function stepDescriptionAlert() {
 }
 
 async function selectSemesterSelection(){
+    // 教务系统识别学期的规则为：学年年份 + 学期编号。
+    // 学年年份与实际年份并不相等，例如：2025-2026 学年（2025 学年）秋季学期对应实际年份为 2025，春季学期对应实际年份为 2026；
+    // 2026-2027 学年（2026 学年）秋季学期对应实际年份为 2026，春季学期对应实际年份为 2027。
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
+
     const currentSemester = currentMonth >= 7 || currentMonth <= 1 ? 1 : 2;
-
+    let currentSemesterYear = currentSemester === 1 ? currentYear : currentYear - 1;
+    currentSemesterYear = currentMonth <= 1 ? currentSemesterYear - 1 : currentSemesterYear;
     const nextSemester = currentSemester === 1 ? 2 : 1;
-    const nextSemesterYear = currentSemester === 1 ? currentYear : currentYear + 1;
+    const nextSemesterYear = currentSemester === 1 ? currentSemesterYear : currentSemesterYear + 1;
 
-    const presetSemetersId = [];
-    const presetSemestersName = [];
+    const presetSemestersIds = [];
+    const presetSemestersNames = [];
 
-    for (let year = nextSemesterYear; year >= nextSemesterYear - 3; year--){
-        for (let semester = nextSemester; semester >= 1; semester--){
-            presetSemetersId.push(`${year}0${semester}`);
-            const semesterName = `${year} 年${semester === 1 ? "秋季" : "春季"} (${year}-${year + 1} 学年第${semester}学期)`;
-            presetSemestersName.push(semesterName);
+    for (let semesterYear = nextSemesterYear; semesterYear >= nextSemesterYear - 6; semesterYear--){
+        for (let semester = semesterYear === nextSemesterYear ? nextSemester : 2; semester >= 1; semester--){
+            presetSemestersIds.push(`${semesterYear}0${semester}`);
+            const semesterName = `${semester === 1 ? semesterYear : semesterYear + 1}年${semester === 1 ? "秋季" : "春季"} (${semesterYear}-${semesterYear + 1} 学年第${semester}学期)`;
+            presetSemestersNames.push(semesterName);
         }
     }
 
     try {
         const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
             "选择要导入的学期",
-            JSON.stringify(presetSemestersName),
+            JSON.stringify(presetSemestersNames),
             1
         );
-        if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < presetSemetersId.length) {
-            console.log("用户选择了: " + presetSemestersName[selectedIndex] + " (索引: " + selectedIndex + ")");
-            return presetSemetersId[selectedIndex];
+        if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < presetSemestersIds.length) {
+            console.log("用户选择了: " + presetSemestersNames[selectedIndex] + " (索引: " + selectedIndex + ")");
+            return presetSemestersIds[selectedIndex];
         } else {
             console.log("用户取消了选择。");
             return null;
