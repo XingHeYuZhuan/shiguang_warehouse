@@ -1,8 +1,0 @@
-adapters:
-  - adapter_id: "DUTC_01"
-    adapter_name: "大连理工大学城市学院教务系统"
-    category: "BACHELOR_AND_ASSOCIATE"
-    asset_js_path: "dutci.js"
-    import_url: "https://jw.dlutci.edu.cn"
-    maintainer: "Haooz"
-    description: "大连理工大学城市学院智慧教务系统课表导入，登录教务系统后，进入课表页面直接点击导入即可"
