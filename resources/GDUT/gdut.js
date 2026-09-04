@@ -1,7 +1,7 @@
 // 文件: gdut.js
 
-if (typeof Strings === 'undefined') {
-    var Strings = {
+if (typeof url_strings === 'undefined') {
+    var url_strings = {
         BASE_URL: "https://jxfw.gdut.edu.cn",
         GET_WEEK_COURSES_API_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!getKbRq.action",
         GET_ALL_COURSES_API_URL: "https://jxfw.gdut.edu.cn/xsgrkbcx!getDataList.action",
@@ -10,11 +10,15 @@ if (typeof Strings === 'undefined') {
     };
 }
 
+/**
+ * 展示导入课程确认弹窗
+ * @returns {Promise<boolean>} 是否确认执行导入课程操作
+ */
 async function stepDescriptionAlert() {
     try {
         const confirmed = await window.shiguangBridgePromise.showAlert(
             "提示",
-            "即将执行导入课程操作，确保当前处于已登录状态（无需打开课程表页面）",
+            "即将执行导入课程操作，确保当前已登录到教务系统（无需打开课程表页面）",
             "确认"
         );
         
@@ -25,35 +29,44 @@ async function stepDescriptionAlert() {
     }
 }
 
+/**
+ * 展示学期选择弹窗
+ * @returns {Promise<string>} 选择的学期代码
+ */
 async function selectSemesterSelection(){
+    // 教务系统识别学期的规则为：学年年份 + 学期编号。
+    // 学年年份与实际年份并不相等，例如：2025-2026 学年（2025 学年）秋季学期对应实际年份为 2025，春季学期对应实际年份为 2026；
+    // 2026-2027 学年（2026 学年）秋季学期对应实际年份为 2026，春季学期对应实际年份为 2027。
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
+
     const currentSemester = currentMonth >= 7 || currentMonth <= 1 ? 1 : 2;
-
+    let currentSemesterYear = currentSemester === 1 ? currentYear : currentYear - 1;
+    currentSemesterYear = currentMonth <= 1 ? currentSemesterYear - 1 : currentSemesterYear;
     const nextSemester = currentSemester === 1 ? 2 : 1;
-    const nextSemesterYear = currentSemester === 1 ? currentYear : currentYear + 1;
+    const nextSemesterYear = currentSemester === 1 ? currentSemesterYear : currentSemesterYear + 1;
 
-    const presetSemetersId = [];
-    const presetSemestersName = [];
+    const presetSemestersIds = [];
+    const presetSemestersNames = [];
 
-    for (let year = nextSemesterYear; year >= nextSemesterYear - 3; year--){
-        for (let semester = nextSemester; semester >= 1; semester--){
-            presetSemetersId.push(`${year}0${semester}`);
-            const semesterName = `${year} 年${semester === 1 ? "秋季" : "春季"} (${year}-${year + 1} 学年第${semester}学期)`;
-            presetSemestersName.push(semesterName);
+    for (let semesterYear = nextSemesterYear; semesterYear >= nextSemesterYear - 6; semesterYear--){
+        for (let semester = semesterYear === nextSemesterYear ? nextSemester : 2; semester >= 1; semester--){
+            presetSemestersIds.push(`${semesterYear}0${semester}`);
+            const semesterName = `${semester === 1 ? semesterYear : semesterYear + 1}年${semester === 1 ? "秋季" : "春季"} (${semesterYear}-${semesterYear + 1} 学年第${semester}学期)`;
+            presetSemestersNames.push(semesterName);
         }
     }
 
     try {
         const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
             "选择要导入的学期",
-            JSON.stringify(presetSemestersName),
+            JSON.stringify(presetSemestersNames),
             1
         );
-        if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < presetSemetersId.length) {
-            console.log("用户选择了: " + presetSemestersName[selectedIndex] + " (索引: " + selectedIndex + ")");
-            return presetSemetersId[selectedIndex];
+        if (selectedIndex !== null && selectedIndex >= 0 && selectedIndex < presetSemestersIds.length) {
+            console.log("用户选择了: " + presetSemestersNames[selectedIndex] + " (索引: " + selectedIndex + ")");
+            return presetSemestersIds[selectedIndex];
         } else {
             console.log("用户取消了选择。");
             return null;
@@ -65,6 +78,11 @@ async function selectSemesterSelection(){
     }
 }
 
+/**
+ * 从 JSON 格式的日期信息数据中提取第一个周一的日期
+ * @param {string} dateInfoJsonData JSON 格式的日期信息数据
+ * @returns {string|null} 找到的第一个周一的日期字符串，未找到时返回 null
+ */
 function extractFirstDay(dateInfoJsonData) {
     try {
         const jsonArray = JSON.parse(dateInfoJsonData);
@@ -86,8 +104,13 @@ function extractFirstDay(dateInfoJsonData) {
     }
 }
 
+/**
+ * 获取学期开始日期（第一个周一），获取失败时返回当前日期
+ * @param {string} semesterId 学期代码
+ * @returns {Promise<Date>} 学期开始日期，获取失败时返回当前日期
+ */
 async function fetchStartDate(semesterId) {
-    const url = `${Strings.GET_WEEK_COURSES_API_URL}?xnxqdm=${semesterId}&zc=1`;
+    const url = `${url_strings.GET_WEEK_COURSES_API_URL}?xnxqdm=${semesterId}&zc=1`;
     
     try {
         console.log(`正在获取学期开始日期。学期代码：${semesterId}`);
@@ -125,11 +148,14 @@ async function fetchStartDate(semesterId) {
     }
 }
 
+/**
+ * 获取指定学期的课程数据并转换为课程对象列表
+ * @param {string} semesterId 学期代码
+ * @returns {Promise<Array<Object>|null>} 课程对象列表，获取失败时返回 null
+ */
 async function fetchCourses(semesterId){
     try {
         console.log(`正在获取学期 ${semesterId} 的课程数据...`);
-
-        const rawCourses = [];
 
         // 理论上此处应分页遍历处理，但分页处理将导致教务系统返回错误的数据（课程重复和缺失）。
         // 此处假设总课程数量总是小于 1000，并设置一页的最大课程数量为 1000。
@@ -143,11 +169,11 @@ async function fetchCourses(semesterId){
         formData.append('sort', 'kxh');
         formData.append('order', 'asc');
 
-        const response = await fetch(Strings.GET_ALL_COURSES_API_URL, {
+        const response = await fetch(url_strings.GET_ALL_COURSES_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Referer': Strings.BASE_URL
+                'Referer': url_strings.BASE_URL
             },
             body: formData.toString(),
             credentials: 'include'
@@ -167,23 +193,7 @@ async function fetchCourses(semesterId){
             throw new Error('学期未开放课表查询！');
         }
 
-        for (const row of rawData.rows) {
-            for (const existingCourse of rawCourses) {
-                if (row.xq === existingCourse.xq 
-                    && row.zc === existingCourse.zc 
-                    && row.kcmc === existingCourse.kcmc 
-                    && row.jcdm === existingCourse.jcdm 
-                    && row.kxh === existingCourse.kxh) {
-                    console.error(`检查到有与现有课程重复的课程: `);
-                    console.error(row);
-                    console.error(`已有课程：`);
-                    console.error(existingCourse);
-                    window.shiguangBridge.showToast(`导入课程失败: ${row.kcmc} 意外地出现了重复的课程。请联系开发者解决此问题。`);
-                    return null;
-                }
-            }
-            rawCourses.push(row);
-        }
+        const rawCourses = rawData.rows;
 
         console.log(`成功获取学期 ${semesterId} 的课程数据，共 ${rawCourses.length} 条记录。`);
 
@@ -198,15 +208,20 @@ async function fetchCourses(semesterId){
     }
 }
 
+/**
+ * 检查指定学期的课表查询是否已开放
+ * @param {string} semesterId 学期代码
+ * @returns {Promise<boolean>} 已开放时返回 true，未开放时返回 false
+ */
 async function checkSemesterIsOpened(semesterId) {
     console.log(`正在检查学期 ${semesterId} 是否已开放课表查询...`);
 
-    const url = `${Strings.GET_ALL_COURSES_HTML_URL}?xnxqdm=${semesterId}`;
+    const url = `${url_strings.GET_ALL_COURSES_HTML_URL}?xnxqdm=${semesterId}`;
     
     const response = await fetch(url, {
         method: 'GET',
         headers: {
-            'Referer': Strings.GET_ALL_COURSES_HTML_URL_REFERRER
+            'Referer': url_strings.GET_ALL_COURSES_HTML_URL_REFERRER
         },
         credentials: 'include'
     });
@@ -217,6 +232,11 @@ async function checkSemesterIsOpened(semesterId) {
     return !html.includes("本学期课表还未开放，请稍后查询！");
 }
 
+/**
+ * 将原始课程数据转换为标准课程对象列表
+ * @param {Array<Object>} rawCourses 原始课程数据列表
+ * @returns {Array<Object>} 转换后的课程对象列表
+ */
 function parseCourses(rawCourses){
     console.log(`正在转换原始课程数据...`);
 
@@ -225,8 +245,8 @@ function parseCourses(rawCourses){
 
         const sectionMatch = raw.jcdm.match(/\d{2}/g);
         if (!sectionMatch) {
-            console.error(`课程节次解析失败，原始数据：${raw.jcdm}，跳过该课程。`);
-            continue;
+            console.error(`课程节次解析失败，原始数据：${raw.jcdm}。`);
+            throw new Error(`课程 ${raw.kcmc} 节次解析失败，原始数据：${raw.jcdm}。联系开发者解决此问题。`);
         }
 
         const sections = sectionMatch.map(Number);
@@ -236,14 +256,14 @@ function parseCourses(rawCourses){
         // 周次
         const week = Number(raw.zc);
         if (isNaN(week)) {
-            console.error(`课程周次解析失败，原始数据：${raw.zc}，跳过该课程。`);
-            continue;
+            console.error(`课程周次解析失败，原始数据：${raw.zc}。`);
+            throw new Error(`课程 ${raw.kcmc} 周次解析失败，原始数据：${raw.zc}。联系开发者解决此问题。`);
         }
 
         const course = {
-            name: raw.kcmc.trim(),
-            teacher: (raw.teaxms || "").trim(),
-            position: (raw.jxcdmc || "").trim(),
+            name: decodeHtmlEntities(raw.kcmc).trim(),
+            teacher: decodeHtmlEntities(raw.teaxms || "").trim(),
+            position: decodeHtmlEntities(raw.jxcdmc || "").trim(),
             day: Number(raw.xq),
             startSection: startSection,
             endSection: endSection,
@@ -257,6 +277,22 @@ function parseCourses(rawCourses){
     return courses;
 }
 
+/**
+ * 解码 HTML 实体字符为普通文本
+ * @param {string} text 需要解码的文本
+ * @returns {string} 解码后的文本，输入为空时返回空字符串
+ */
+function decodeHtmlEntities(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.innerHTML = text;
+    return div.textContent || div.innerText || '';
+}
+
+/**
+ * 将课程列表导入到应用
+ * @param {Array<Object>} courses 课程对象列表
+ */
 async function saveCourses(courses){
     try {
         console.log("正在尝试导入课程...");
@@ -273,6 +309,9 @@ async function saveCourses(courses){
     }
 }
 
+/**
+ * 导入预设时间段
+ */
 async function setPresetTimeSlots() {
     const presetTimeSlots = [
         { "number": 1, "startTime": "08:30", "endTime": "09:15" },
@@ -306,6 +345,10 @@ async function setPresetTimeSlots() {
     }
 }
 
+/**
+ * 导入课表配置
+ * @param {Object} config 课表配置对象
+ */
 async function saveConfig(config) {
     try {
         console.log("正在尝试导入课表配置...");
