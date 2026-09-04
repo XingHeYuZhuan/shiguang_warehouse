@@ -793,6 +793,11 @@ schools:
     initial: "L"
     resource_folder: "LUT"
 
+  - id: "LZU"
+    name: "兰州大学"
+    initial: "L"
+    resource_folder: "LZU"
+
   - id: "SYSU"
     name: "中山大学"
     initial: "Z"
