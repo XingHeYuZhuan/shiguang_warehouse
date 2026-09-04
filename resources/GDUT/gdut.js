@@ -10,6 +10,10 @@ if (typeof url_strings === 'undefined') {
     };
 }
 
+/**
+ * 展示导入课程确认弹窗
+ * @returns {Promise<boolean>} 是否确认执行导入课程操作
+ */
 async function stepDescriptionAlert() {
     try {
         const confirmed = await window.shiguangBridgePromise.showAlert(
@@ -25,6 +29,10 @@ async function stepDescriptionAlert() {
     }
 }
 
+/**
+ * 展示学期选择弹窗
+ * @returns {Promise<string>} 选择的学期代码
+ */
 async function selectSemesterSelection(){
     // 教务系统识别学期的规则为：学年年份 + 学期编号。
     // 学年年份与实际年份并不相等，例如：2025-2026 学年（2025 学年）秋季学期对应实际年份为 2025，春季学期对应实际年份为 2026；
@@ -70,6 +78,11 @@ async function selectSemesterSelection(){
     }
 }
 
+/**
+ * 从 JSON 格式的日期信息数据中提取第一个周一的日期
+ * @param {string} dateInfoJsonData JSON 格式的日期信息数据
+ * @returns {string|null} 找到的第一个周一的日期字符串，未找到时返回 null
+ */
 function extractFirstDay(dateInfoJsonData) {
     try {
         const jsonArray = JSON.parse(dateInfoJsonData);
@@ -91,6 +104,11 @@ function extractFirstDay(dateInfoJsonData) {
     }
 }
 
+/**
+ * 获取学期开始日期（第一个周一），获取失败时返回当前日期
+ * @param {string} semesterId 学期代码
+ * @returns {Promise<Date>} 学期开始日期，获取失败时返回当前日期
+ */
 async function fetchStartDate(semesterId) {
     const url = `${url_strings.GET_WEEK_COURSES_API_URL}?xnxqdm=${semesterId}&zc=1`;
     
@@ -130,6 +148,11 @@ async function fetchStartDate(semesterId) {
     }
 }
 
+/**
+ * 获取指定学期的课程数据并转换为课程对象列表
+ * @param {string} semesterId 学期代码
+ * @returns {Promise<Array<Object>|null>} 课程对象列表，获取失败时返回 null
+ */
 async function fetchCourses(semesterId){
     try {
         console.log(`正在获取学期 ${semesterId} 的课程数据...`);
@@ -203,6 +226,11 @@ async function fetchCourses(semesterId){
     }
 }
 
+/**
+ * 检查指定学期的课表查询是否已开放
+ * @param {string} semesterId 学期代码
+ * @returns {Promise<boolean>} 已开放时返回 true，未开放时返回 false
+ */
 async function checkSemesterIsOpened(semesterId) {
     console.log(`正在检查学期 ${semesterId} 是否已开放课表查询...`);
 
@@ -222,6 +250,11 @@ async function checkSemesterIsOpened(semesterId) {
     return !html.includes("本学期课表还未开放，请稍后查询！");
 }
 
+/**
+ * 将原始课程数据转换为标准课程对象列表
+ * @param {Array<Object>} rawCourses 原始课程数据列表
+ * @returns {Array<Object>} 转换后的课程对象列表
+ */
 function parseCourses(rawCourses){
     console.log(`正在转换原始课程数据...`);
 
@@ -262,6 +295,10 @@ function parseCourses(rawCourses){
     return courses;
 }
 
+/**
+ * 将课程列表导入到应用
+ * @param {Array<Object>} courses 课程对象列表
+ */
 async function saveCourses(courses){
     try {
         console.log("正在尝试导入课程...");
@@ -278,6 +315,9 @@ async function saveCourses(courses){
     }
 }
 
+/**
+ * 导入预设时间段
+ */
 async function setPresetTimeSlots() {
     const presetTimeSlots = [
         { "number": 1, "startTime": "08:30", "endTime": "09:15" },
@@ -311,6 +351,10 @@ async function setPresetTimeSlots() {
     }
 }
 
+/**
+ * 导入课表配置
+ * @param {Object} config 课表配置对象
+ */
 async function saveConfig(config) {
     try {
         console.log("正在尝试导入课表配置...");
