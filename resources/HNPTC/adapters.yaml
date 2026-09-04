@@ -1,0 +1,9 @@
+# resources/HNPTC/adapters.yaml
+adapters:
+  - adapter_id: "HNPTC_01"
+    adapter_name: "湖南邮电职业技术学院教务"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "hnptc_01.js"
+    import_url: "http://jx.189jxt.com:10081/"
+    maintainer: "小漫君"
+    description: "湖南邮电职业技术学院湘邮教学管理平台（正方V6）课表导入，非本校开发者适配，如有误建议提交issues"

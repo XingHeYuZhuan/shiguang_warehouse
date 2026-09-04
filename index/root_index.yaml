@@ -123,6 +123,11 @@ schools:
     initial: "H"
     resource_folder: "HNVCC"
 
+  - id: "HNPTC"
+    name: "湖南邮电职业技术学院"
+    initial: "H"
+    resource_folder: "HNPTC"
+
   - id: "IMUT"
     name: "内蒙古工业大学"
     initial: "N"
