@@ -18,7 +18,7 @@ async function stepDescriptionAlert() {
     try {
         const confirmed = await window.shiguangBridgePromise.showAlert(
             "提示",
-            "即将执行导入课程操作，确保当前处于已登录状态（无需打开课程表页面）",
+            "即将执行导入课程操作，确保当前已登录到教务系统（无需打开课程表页面）",
             "确认"
         );
         
@@ -157,8 +157,6 @@ async function fetchCourses(semesterId){
     try {
         console.log(`正在获取学期 ${semesterId} 的课程数据...`);
 
-        const rawCourses = [];
-
         // 理论上此处应分页遍历处理，但分页处理将导致教务系统返回错误的数据（课程重复和缺失）。
         // 此处假设总课程数量总是小于 1000，并设置一页的最大课程数量为 1000。
         const pageSize = 1000;
@@ -195,23 +193,7 @@ async function fetchCourses(semesterId){
             throw new Error('学期未开放课表查询！');
         }
 
-        for (const row of rawData.rows) {
-            for (const existingCourse of rawCourses) {
-                if (row.xq === existingCourse.xq 
-                    && row.zc === existingCourse.zc 
-                    && row.kcmc === existingCourse.kcmc 
-                    && row.jcdm === existingCourse.jcdm 
-                    && row.kxh === existingCourse.kxh) {
-                    console.error(`检查到有与现有课程重复的课程: `);
-                    console.error(row);
-                    console.error(`已有课程：`);
-                    console.error(existingCourse);
-                    window.shiguangBridge.showToast(`导入课程失败: ${row.kcmc} 意外地出现了重复的课程。请联系开发者解决此问题。`);
-                    return null;
-                }
-            }
-            rawCourses.push(row);
-        }
+        const rawCourses = rawData.rows;
 
         console.log(`成功获取学期 ${semesterId} 的课程数据，共 ${rawCourses.length} 条记录。`);
 
