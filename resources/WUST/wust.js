@@ -4,6 +4,20 @@
 	"use strict";
 
 	var SCHEDULE_PATH = "/jsxsd/xskb/xskb_list.do";
+	var DEFAULT_TIME_SLOTS = [
+		{ number: 1, startTime: "08:20", endTime: "09:05" },
+		{ number: 2, startTime: "09:15", endTime: "10:00" },
+		{ number: 3, startTime: "10:20", endTime: "11:05" },
+		{ number: 4, startTime: "11:15", endTime: "12:00" },
+		{ number: 5, startTime: "14:00", endTime: "14:45" },
+		{ number: 6, startTime: "14:55", endTime: "15:40" },
+		{ number: 7, startTime: "16:00", endTime: "16:45" },
+		{ number: 8, startTime: "16:55", endTime: "17:40" },
+		{ number: 9, startTime: "18:40", endTime: "19:25" },
+		{ number: 10, startTime: "19:35", endTime: "20:20" },
+		{ number: 11, startTime: "20:40", endTime: "21:25" },
+		{ number: 12, startTime: "21:35", endTime: "22:20" }
+	];
 	function toast(message) {
 		if (window.shiguangBridge && window.shiguangBridge.showToast) {
 			window.shiguangBridge.showToast(message);
@@ -114,14 +128,16 @@
 		Array.from(doc.querySelectorAll("#kbtable tr")).forEach(function (row) {
 			var header = row.querySelector("th");
 			if (!header) return;
-			var match = normalizeText(header.textContent).match(/^(\d+).*?(\d{1,2}:\d{2})\s*[-~至]\s*(\d{1,2}:\d{2})/);
+			var match = normalizeText(header.textContent).match(/^(?:第\s*)?(\d+).*?(\d{1,2}:\d{2})\s*[-~至]\s*(\d{1,2}:\d{2})/);
 			if (!match) return;
 			var number = parseInt(match[1], 10);
-			if (!slots.has(number)) {
+			if (number > 0 && !slots.has(number)) {
 				slots.set(number, { number: number, startTime: match[2].padStart(5, "0"), endTime: match[3].padStart(5, "0") });
 			}
 		});
-		return Array.from(slots.values()).sort(function (a, b) { return a.number - b.number; });
+		return slots.size > 0
+			? Array.from(slots.values()).sort(function (a, b) { return a.number - b.number; })
+			: DEFAULT_TIME_SLOTS.slice();
 	}
 
 	function getSemesterId(doc) {
@@ -151,10 +167,10 @@
 			defaultClassDuration: 45,
 			defaultBreakDuration: 5
 		};
-		if (window.shiguangBridgePromise.saveCourseConfig) {
+		if (window.shiguangBridgePromise && window.shiguangBridgePromise.saveCourseConfig) {
 			await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 		}
-		if (timeSlots.length > 0 && window.shiguangBridgePromise.savePresetTimeSlots) {
+		if (timeSlots.length > 0 && window.shiguangBridgePromise && window.shiguangBridgePromise.savePresetTimeSlots) {
 			await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
 		}
 		return await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
