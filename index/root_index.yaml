@@ -578,6 +578,11 @@ schools:
     initial: "Z"
     resource_folder: "CAUC"
 
+  - id: "DUTC"
+    name: "大连理工大学城市学院"
+    initial: "D"
+    resource_folder: "DUTC"
+
   - id: "ECJTU"
     name: "华东交通大学"
     initial: "H"
