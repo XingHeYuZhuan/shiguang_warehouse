@@ -4,5 +4,5 @@ adapters:
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "nuist.js"
     import_url: "https://jwxt.nuist.edu.cn/"
-    maintainer: "社区贡献者"
+    maintainer: "wild0408"
     description: "南京信息工程大学金智教务系统课表适配"
