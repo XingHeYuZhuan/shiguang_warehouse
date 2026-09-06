@@ -83,7 +83,10 @@ function getErrorMessage(error) {
 }
 
 async function requestJson(url, options) {
-    const response = await fetch(url, options);
+    const response = await fetch(url, Object.assign({
+        credentials: "include",
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+    }, options));
     if (!response.ok) throw new Error(`接口请求失败（HTTP ${response.status}）`);
     return response.json();
 }
