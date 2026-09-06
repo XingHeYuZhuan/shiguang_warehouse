@@ -82,10 +82,42 @@ function getErrorMessage(error) {
     return "未知错误";
 }
 
+// 从页面存储中提取 JWT 鉴权 token（金智系统常见 key + 全量扫描兜底）
+function getAuthToken() {
+    const keys = ["Authorization", "access_token", "token", "X-Access-Token", "x-token", "auth_token", "jwt", "user_token"];
+    for (const k of keys) {
+        try {
+            const v = window.localStorage.getItem(k) || window.sessionStorage.getItem(k);
+            if (v && v.includes("eyJ")) return v;
+        } catch (_) {
+            // Ignore storage access errors.
+        }
+    }
+    // 全量扫描：找直接以 eyJ 开头（JWT）或 JSON 包装中含 eyJ 的字符串
+    const stores = [window.localStorage, window.sessionStorage];
+    for (const store of stores) {
+        try {
+            for (let i = 0; i < store.length; i++) {
+                const raw = store.getItem(store.key(i));
+                if (!raw) continue;
+                if (raw.startsWith("eyJ")) return raw;
+                const m = raw.match(/"([^"]*eyJ[^"]*)"/);
+                if (m) return m[1];
+            }
+        } catch (_) {
+            // Ignore storage access errors.
+        }
+    }
+    return null;
+}
+
 async function requestJson(url, options) {
+    const token = getAuthToken();
+    const headers = { "X-Requested-With": "XMLHttpRequest" };
+    if (token) headers["Authorization"] = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
     const response = await fetch(url, Object.assign({
         credentials: "include",
-        headers: { "X-Requested-With": "XMLHttpRequest" }
+        headers
     }, options));
     if (!response.ok) throw new Error(`接口请求失败（HTTP ${response.status}）`);
     return response.json();
