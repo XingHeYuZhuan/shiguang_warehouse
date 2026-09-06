@@ -23,7 +23,10 @@ function toast(message) {
 
 async function alertUser(title, message) {
     if (window.shiguangBridgePromise && typeof window.shiguangBridgePromise.showAlert === 'function') {
-        return await window.shiguangBridgePromise.showAlert(title, message, '确定');
+        // 原生侧以字符串 "true"/"false" 回传结果（WebBridgeHandler.resolveJsPromise），
+        // 字符串 "false" 在 JS 中为真值，这里统一归一化为布尔，保证取消能正确终止流程
+        const confirmed = await window.shiguangBridgePromise.showAlert(title, message, '确定');
+        return confirmed === true || confirmed === 'true';
     }
     alert(title + '\n' + message);
     return true;
@@ -358,10 +361,9 @@ function mergeAndDistinctCourses(courses) {
         weeks: Array.isArray(c.weeks) ? [...c.weeks].sort((a, b) => a - b) : []
     }));
 
-    // 阶段 1：合并连续节次与完全重复记录
-    // 北工商调整（官方允许按学校特殊情况修改）：同一门课跨大节时教师/教室可能不同
-    // （如 JAVA核心编程 1-2节在工2-107、3-4节在工2-401机房），故合并条件放宽为
-    // 名称+星期+周次一致且节次连续，教师与教室沿用第一段；完全重复的记录仍然去重。
+    // 阶段 1：合并连续节次与完全重复记录（前提：名称、教师、地点、星期、周次一致，官方严格条件）
+    // 注：北工商同一门课跨大节时教师/教室可能不同（如 1-2节与3-4节不同教室），
+    //     严格模式下将保留为两条独立记录，由应用侧按节次相邻展示。
     list.sort((a, b) => {
         return a.name.localeCompare(b.name) ||
                a.teacher.localeCompare(b.teacher) ||
@@ -379,6 +381,8 @@ function mergeAndDistinctCourses(courses) {
 
         const isSameCourseAndWeeks =
             current.name === next.name &&
+            current.teacher === next.teacher &&
+            current.position === next.position &&
             current.day === next.day &&
             current.weeks.join(',') === next.weeks.join(',');
 
@@ -446,7 +450,10 @@ async function promptSemesterStartDate() {
         '',
         'validateSemesterStartDate'
     );
-    return (input && String(input).trim()) ? String(input).trim() : null;
+    // 原生侧取消时回传字符串 "null"，一并按取消处理
+    if (input === null || input === undefined || input === 'null') return null;
+    const trimmed = String(input).trim();
+    return trimmed ? trimmed : null;
 }
 
 async function saveCourseConfig(rawCourses) {
