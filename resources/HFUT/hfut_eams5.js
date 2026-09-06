@@ -59,12 +59,24 @@
 
   function cleanText(value) {
     if (value === null || value === undefined) return "";
+    if (!["string", "number", "boolean", "bigint"].includes(typeof value)) return "";
     return String(value).replace(/\s+/g, " ").trim();
   }
 
+  function firstText(values) {
+    for (let index = 0; index < values.length; index += 1) {
+      const text = cleanText(values[index]);
+      if (text) return text;
+    }
+    return "";
+  }
+
   function positiveInteger(value) {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    if (typeof value !== "string" && typeof value !== "number") return null;
+    const text = cleanText(value);
+    if (!/^\d+$/.test(text)) return null;
+    const parsed = Number(text);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
   }
 
   function uniqueSortedNumbers(values) {
@@ -101,10 +113,11 @@
   }
 
   function normalizeWeekday(value, date) {
-    const direct = WEEKDAY_NAMES[cleanText(value).toUpperCase()];
+    const text = cleanText(value);
+    const direct = WEEKDAY_NAMES[text.toUpperCase()];
     if (direct) return direct;
 
-    const textMatch = cleanText(value).match(/(?:星期|周)?([一二三四五六日天1-7])/);
+    const textMatch = text.match(/^(?:星期|周)([一二三四五六日天1-7])$/);
     if (textMatch && WEEKDAY_NAMES[textMatch[1]]) return WEEKDAY_NAMES[textMatch[1]];
 
     return weekdayFromDate(date);
@@ -135,15 +148,27 @@
     return hour + ":" + minute;
   }
 
+  function firstTimeMinutes(values) {
+    for (let index = 0; index < values.length; index += 1) {
+      const minutes = timeToMinutes(values[index]);
+      if (minutes !== null) return minutes;
+    }
+    return null;
+  }
+
   function normalizeCourseUnits(rawUnits) {
     return asArray(rawUnits)
       .map(function (unit, index) {
-        const startMinutes = timeToMinutes(unit && (unit.startTimeText || unit.startTime));
-        const endMinutes = timeToMinutes(unit && (unit.endTimeText || unit.endTime));
+        const startMinutes = firstTimeMinutes([unit && unit.startTimeText, unit && unit.startTime]);
+        const endMinutes = firstTimeMinutes([unit && unit.endTimeText, unit && unit.endTime]);
         if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) return null;
 
         return {
-          number: positiveInteger(unit.indexNo || unit.number || unit.index) || index + 1,
+          number:
+            positiveInteger(unit && unit.indexNo) ||
+            positiveInteger(unit && unit.number) ||
+            positiveInteger(unit && unit.index) ||
+            index + 1,
           startMinutes: startMinutes,
           endMinutes: endMinutes,
           startTime: formatMinutes(startMinutes),
@@ -154,8 +179,8 @@
   }
 
   function resolveCourseSlot(schedule, units) {
-    const startMinutes = timeToMinutes(schedule.startTimeText || schedule.startTime);
-    const endMinutes = timeToMinutes(schedule.endTimeText || schedule.endTime);
+    const startMinutes = firstTimeMinutes([schedule.startTimeText, schedule.startTime]);
+    const endMinutes = firstTimeMinutes([schedule.endTimeText, schedule.endTime]);
     if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) return null;
 
     const startIndex = units.findIndex(function (unit) {
@@ -214,21 +239,33 @@
   }
 
   function scheduleWeeks(schedule, semesterStartDate) {
-    const raw = schedule.weekIndexes || schedule.weekIndices || schedule.weekIndex;
-    let weeks = [];
-    if (Array.isArray(raw)) {
-      weeks = uniqueSortedNumbers(raw);
-    } else if (raw !== null && raw !== undefined) {
-      weeks = /^\d+$/.test(cleanText(raw))
-        ? uniqueSortedNumbers([raw])
-        : parseWeekText(raw);
+    const candidates = [schedule.weekIndexes, schedule.weekIndices, schedule.weekIndex];
+    for (let index = 0; index < candidates.length; index += 1) {
+      const raw = candidates[index];
+      if (raw === null || raw === undefined || raw === "") continue;
+      const weeks = Array.isArray(raw)
+        ? uniqueSortedNumbers(raw)
+        : /^\d+$/.test(cleanText(raw))
+          ? uniqueSortedNumbers([raw])
+          : parseWeekText(raw);
+      if (weeks.length > 0) return weeks;
     }
 
-    if (weeks.length === 0) {
-      const derived = weekFromDate(schedule.date, semesterStartDate);
-      if (derived) weeks.push(derived);
-    }
-    return weeks;
+    const derived = weekFromDate(schedule.date, semesterStartDate);
+    return derived ? [derived] : [];
+  }
+
+  function teacherName(teacher) {
+    if (!teacher || typeof teacher !== "object") return cleanText(teacher);
+    return firstText([
+      teacher.nameZh,
+      teacher.name,
+      teacher.personName,
+      teacher.person && teacher.person.nameZh,
+      teacher.person && teacher.person.name,
+      teacher.teacher && teacher.teacher.nameZh,
+      teacher.teacher && teacher.teacher.name,
+    ]);
   }
 
   function lessonTeachers(lesson) {
@@ -236,7 +273,7 @@
       new Set(
         asArray(lesson && lesson.teacherAssignmentList)
           .map(function (teacher) {
-            return cleanText(teacher && (teacher.name || teacher.personName));
+            return teacherName(teacher);
           })
           .filter(Boolean)
       )
@@ -244,52 +281,75 @@
   }
 
   function scheduleTeacher(schedule, lesson) {
-    return (
-      cleanText(schedule.personName || schedule.teacherName || (schedule.teacher && schedule.teacher.name)) ||
-      lessonTeachers(lesson)
-    );
+    return firstText([schedule.personName, schedule.teacherName]) || teacherName(schedule.teacher) || lessonTeachers(lesson);
   }
 
   function schedulePosition(schedule) {
     const room = schedule.room;
     if (room && typeof room === "object") {
-      const roomName = cleanText(room.nameZh || room.name);
-      const buildingName = cleanText(room.building && (room.building.nameZh || room.building.name));
-      const campus = cleanText(
-        room.building && room.building.campus && (room.building.campus.nameZh || room.building.campus.name)
-      );
+      const roomName = firstText([room.nameZh, room.name]);
+      const buildingName = firstText([room.building && room.building.nameZh, room.building && room.building.name]);
+      const campus = firstText([
+        room.building && room.building.campus && room.building.campus.nameZh,
+        room.building && room.building.campus && room.building.campus.name,
+      ]);
       if (roomName) {
         return Array.from(new Set([campus, buildingName, roomName].filter(Boolean))).join(" ");
       }
     }
-    return cleanText(schedule.customPlace || schedule.placeName || schedule.roomName || room);
+    const roomText = typeof room === "string" ? room : "";
+    return firstText([schedule.customPlace, schedule.placeName, schedule.roomName, roomText]);
   }
 
   function flagValue(flags, lessonId) {
     if (!flags) return undefined;
-    if (typeof flags.get === "function") return flags.get(lessonId) || flags.get(String(lessonId));
+    if (typeof flags.get === "function") {
+      if (typeof flags.has === "function") {
+        if (flags.has(lessonId)) return flags.get(lessonId);
+        if (flags.has(String(lessonId))) return flags.get(String(lessonId));
+        return undefined;
+      }
+      const direct = flags.get(lessonId);
+      return direct === undefined ? flags.get(String(lessonId)) : direct;
+    }
     return flags[lessonId] !== undefined ? flags[lessonId] : flags[String(lessonId)];
   }
 
   function isPublished(flags, lessonId) {
+    if (!flags) return true;
     const value = flagValue(flags, lessonId);
-    if (value === undefined || value === null || value === "") return true;
+    if (value === undefined || value === null || value === "") return false;
     if (typeof value === "object") {
-      return cleanText(value.flag || value.state || value.value).toLowerCase() === "publish";
+      return firstText([value.flag, value.state, value.value]).toLowerCase() === "publish";
     }
     return cleanText(value).toLowerCase() === "publish";
   }
 
   function courseName(schedule, lesson) {
-    return cleanText(
-      (lesson && (lesson.courseName || lesson.nameZh || lesson.name)) || schedule.courseName || schedule.lessonName
-    );
+    return firstText([
+      lesson && lesson.courseName,
+      lesson && lesson.nameZh,
+      lesson && lesson.name,
+      schedule.courseName,
+      schedule.lessonName,
+    ]);
   }
 
   function slotSignature(slot) {
     return slot.isCustomTime
       ? ["custom", slot.customStartTime, slot.customEndTime]
       : ["section", slot.startSection, slot.endSection];
+  }
+
+  function courseStartMinutes(course, units) {
+    if (course.isCustomTime) {
+      const customStart = timeToMinutes(course.customStartTime);
+      return customStart === null ? Number.POSITIVE_INFINITY : customStart;
+    }
+    const unit = units.find(function (candidate) {
+      return candidate.number === course.startSection;
+    });
+    return unit ? unit.startMinutes : Number.POSITIVE_INFINITY;
   }
 
   function convertScheduleData(options) {
@@ -313,7 +373,7 @@
       if (!name || !day || day < 1 || day > 7 || weeks.length === 0 || !slot) return;
 
       const baseKey = JSON.stringify([
-        String(schedule.lessonId === undefined ? name : schedule.lessonId),
+        String(schedule.lessonId === undefined || schedule.lessonId === null ? name : schedule.lessonId),
         String(schedule.scheduleGroupId === undefined ? "" : schedule.scheduleGroupId),
         day,
       ].concat(slotSignature(slot)));
@@ -372,11 +432,33 @@
     });
 
     courses.sort(function (left, right) {
-      const leftTime = left.startSection || timeToMinutes(left.customStartTime) || 0;
-      const rightTime = right.startSection || timeToMinutes(right.customStartTime) || 0;
+      const leftTime = courseStartMinutes(left, units);
+      const rightTime = courseStartMinutes(right, units);
       return left.day - right.day || leftTime - rightTime || left.name.localeCompare(right.name, "zh-CN");
     });
     return courses;
+  }
+
+  function parseRenderedSections(value) {
+    const text = cleanText(value);
+    let match = text.match(/^从第\s*(\d+)\s*节开始[，,\s]*连\s*(\d+)\s*节$/);
+    if (match) {
+      const start = positiveInteger(match[1]);
+      const count = positiveInteger(match[2]);
+      return start && count ? { startSection: start, endSection: start + count - 1 } : null;
+    }
+
+    match = text.match(/^(?:第)?\s*(\d+)\s*[~～\-—至]\s*(\d+)\s*(?:节)?$/);
+    if (match) {
+      const start = positiveInteger(match[1]);
+      const end = positiveInteger(match[2]);
+      return start && end && end >= start ? { startSection: start, endSection: end } : null;
+    }
+
+    const sections = uniqueSortedNumbers(text.replace(/节/g, "").split(/[,，、\s]+/));
+    return sections.length > 0
+      ? { startSection: sections[0], endSection: sections[sections.length - 1] }
+      : null;
   }
 
   function parseRenderedCardText(text, day) {
@@ -389,20 +471,20 @@
 
     const name = normalized.shift();
     const details = normalized.join(" ");
-    const match = details.match(/^(.*?)\s*\(([^()]*)周\)\s*(?:星期|周)?[一二三四五六日天1-7]?\s*\(([\d\s,，、]+)\)\s*$/);
+    const match = details.match(/^(.*)\s*\(([^()]*)周\)\s*(?:星期|周)?[一二三四五六日天1-7]?\s*\(([^()]*)\)\s*$/);
     if (!match) return null;
 
-    const sections = uniqueSortedNumbers(match[3].split(/[,，、\s]+/));
+    const sections = parseRenderedSections(match[3]);
     const weeks = parseWeekText(match[2]);
-    if (!name || sections.length === 0 || weeks.length === 0 || day < 1 || day > 7) return null;
+    if (!name || !sections || weeks.length === 0 || day < 1 || day > 7) return null;
 
     return {
       name: name,
       teacher: "",
       position: cleanText(match[1]),
       day: day,
-      startSection: sections[0],
-      endSection: sections[sections.length - 1],
+      startSection: sections.startSection,
+      endSection: sections.endSection,
       weeks: weeks,
     };
   }
@@ -447,38 +529,38 @@
 
   function semesterOptions(rootObject) {
     const semesterData = asArray(rootObject.semesters);
-    const byId = new Map(
-      semesterData.map(function (semester) {
-        return [String(semester.id), semester];
-      })
-    );
     const select = rootObject.document && rootObject.document.querySelector
       ? rootObject.document.querySelector("#allSemesters")
       : null;
 
-    let options = [];
+    const options = [];
+    const optionIndexes = new Map();
+    semesterData.forEach(function (semester) {
+      const id = cleanText(semester && semester.id);
+      if (!id || optionIndexes.has(id)) return;
+      optionIndexes.set(id, options.length);
+      options.push(Object.assign({}, semester, {
+        id: id,
+        label: firstText([semester.nameZh, semester.name, semester.nameEn, id]),
+      }));
+    });
+
     if (select && select.options) {
-      options = Array.from(select.options).map(function (option) {
-        const data = byId.get(String(option.value)) || {};
-        return Object.assign({}, data, {
-          id: String(option.value),
-          label: cleanText(option.textContent || option.innerText || data.nameZh || data.name),
-        });
+      Array.from(select.options).forEach(function (option) {
+        const id = cleanText(option.value);
+        if (!id) return;
+        const label = firstText([option.textContent, option.innerText, id]);
+        if (optionIndexes.has(id)) {
+          const index = optionIndexes.get(id);
+          options[index] = Object.assign({}, options[index], { label: label || options[index].label });
+          return;
+        }
+        optionIndexes.set(id, options.length);
+        options.push({ id: id, label: label });
       });
     }
 
-    if (options.length === 0) {
-      options = semesterData.map(function (semester) {
-        return Object.assign({}, semester, {
-          id: String(semester.id),
-          label: cleanText(semester.nameZh || semester.name || semester.nameEn || semester.id),
-        });
-      });
-    }
-
-    const selectedId = cleanText(
-      (select && select.value) || (rootObject.currentSemester && rootObject.currentSemester.id) || ""
-    );
+    const selectedId = firstText([select && select.value, rootObject.currentSemester && rootObject.currentSemester.id]);
     const defaultIndex = Math.max(0, options.findIndex(function (semester) {
       return semester.id === selectedId;
     }));
@@ -569,6 +651,7 @@
           }),
         });
 
+    let layoutUnavailable = false;
     const layoutPromise = metadata.timeTableLayoutId === null || metadata.timeTableLayoutId === undefined
       ? Promise.resolve({ result: { courseUnitList: [] } })
       : requestJson(rootObject, base + "/ws/schedule-table/timetable-layout", {
@@ -579,6 +662,9 @@
             "X-Requested-With": "XMLHttpRequest",
           },
           body: JSON.stringify({ timeTableLayoutId: metadata.timeTableLayoutId }),
+        }).catch(function () {
+          layoutUnavailable = true;
+          return { result: { courseUnitList: [] } };
         });
 
     const responses = await Promise.all([datumPromise, layoutPromise]);
@@ -590,6 +676,7 @@
       courseUnits: asArray(layout.courseUnitList),
       weekIndices: asArray(metadata.weekIndices),
       publishedFlags: metadata.lessonId2Flag,
+      layoutUnavailable: layoutUnavailable,
     };
   }
 
@@ -618,11 +705,10 @@
       }, [])
     );
     let totalWeeks = Math.max.apply(null, uniqueSortedNumbers(allWeeks).concat([0]));
-    if (!totalWeeks && parseIsoDate(semester.startDate) !== null && parseIsoDate(semester.endDate) !== null) {
-      totalWeeks = Math.ceil(
-        (parseIsoDate(semester.endDate) - parseIsoDate(semester.startDate) + DAY_MILLISECONDS) /
-          (7 * DAY_MILLISECONDS)
-      );
+    const startTimestamp = parseIsoDate(semester.startDate);
+    const endTimestamp = parseIsoDate(semester.endDate);
+    if (!totalWeeks && startTimestamp !== null && endTimestamp !== null && endTimestamp >= startTimestamp) {
+      totalWeeks = Math.ceil((endTimestamp - startTimestamp + DAY_MILLISECONDS) / (7 * DAY_MILLISECONDS));
     }
 
     const durations = units.map(function (unit) {
@@ -635,7 +721,7 @@
     });
 
     return {
-      semesterStartDate: parseIsoDate(semester.startDate) === null ? null : semester.startDate,
+      semesterStartDate: startTimestamp === null ? null : semester.startDate,
       semesterTotalWeeks: totalWeeks || 20,
       defaultClassDuration: mostCommon(durations, 45),
       defaultBreakDuration: mostCommon(breaks, 10),
@@ -670,10 +756,13 @@
       try {
         snapshot = await fetchEams5Snapshot(rootObject, pageContext, semester);
         units = normalizeCourseUnits(snapshot.courseUnits);
+        if (units.length === 0 && semester.id === pageContext.selectedSemesterId) {
+          units = renderedTimeSlots(rootObject.document);
+        }
         courses = convertScheduleData({
           lessonList: snapshot.lessonList,
           scheduleList: snapshot.scheduleList,
-          courseUnits: snapshot.courseUnits,
+          courseUnits: units,
           publishedFlags: snapshot.publishedFlags,
           semesterStartDate: semester.startDate,
         });
@@ -686,12 +775,22 @@
         if (!fallbackUsed) throw apiError;
       }
 
+      if (courses.length === 0 && semester.id === pageContext.selectedSemesterId) {
+        const renderedCourses = parseRenderedSchedule(rootObject.document);
+        if (renderedCourses.length > 0) {
+          courses = renderedCourses;
+          if (units.length === 0) units = renderedTimeSlots(rootObject.document);
+          fallbackUsed = true;
+        }
+      }
+
       if (courses.length === 0) {
         throw new Error("所选学期没有可导入的已发布课程");
       }
 
       await promiseBridge.saveImportedCourses(JSON.stringify(courses));
       const warnings = [];
+      if (snapshot.layoutUnavailable) warnings.push("教务作息接口不可用，已按页面作息或实际时间导入");
       if (units.length > 0) {
         try {
           await promiseBridge.savePresetTimeSlots(JSON.stringify(units.map(function (unit) {
