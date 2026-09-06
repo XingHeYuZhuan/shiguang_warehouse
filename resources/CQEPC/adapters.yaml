@@ -1,5 +1,8 @@
-- name: 正方教务系统
-  url: http://jw.cqepc.cn/jwglxt/xtgl/login_slogin.html
-  provider: provider.js
-  parser: parser.js
-  timer: timer.js
+adapters:
+  - adapter_id: "CQEPC_01"
+    adapter_name: "重庆航天职业技术学院"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "cqepc.js"
+    import_url: "http://jw.cqepc.cn/jwglxt/xtgl/login_slogin.html"
+    maintainer: "yang01"
+    description: "重庆航天职业技术学院教务入，请登录"
