@@ -952,3 +952,8 @@ schools:
     name: "河南理工大学"
     initial: "H"
     resource_folder: "HPU"
+
+  - id: "CQEPC"
+  name: "重庆航天职业技术学院"
+  initial: "C"
+  resource_folder: "CQEPC"
