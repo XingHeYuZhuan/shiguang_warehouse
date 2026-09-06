@@ -588,6 +588,11 @@ schools:
     initial: "D"
     resource_folder: "DLUTCI"
 
+  - id: "DZU"
+    name: "德州学院"
+    initial: "D"
+    resource_folder: "DZU"
+
   - id: "ECJTU"
     name: "华东交通大学"
     initial: "H"
@@ -807,6 +812,11 @@ schools:
     name: "兰州理工大学"
     initial: "L"
     resource_folder: "LUT"
+
+  - id: "LZU"
+    name: "兰州大学"
+    initial: "L"
+    resource_folder: "LZU"
 
   - id: "SYSU"
     name: "中山大学"
