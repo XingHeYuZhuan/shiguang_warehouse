@@ -4,5 +4,5 @@ adapters:
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "hfut_eams5.js"
     import_url: "https://jxglstu.hfut.edu.cn/eams5-student/login"
-    maintainer: "@Pectics"
+    maintainer: "Pectics"
     description: "登录后打开个人课表再执行导入；支持动态学期、星期一至星期日、逐周教师/教室变化及教务作息时间。"
