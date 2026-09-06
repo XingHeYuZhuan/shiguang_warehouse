@@ -954,6 +954,6 @@ schools:
     resource_folder: "HPU"
 
   - id: "CQEPC"
-  name: "重庆航天职业技术学院"
-  initial: "C"
-  resource_folder: "CQEPC"
+    name: "重庆航天职业技术学院"
+    initial: "C"
+    resource_folder: "CQEPC"
