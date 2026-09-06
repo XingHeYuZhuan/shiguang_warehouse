@@ -967,3 +967,8 @@ schools:
     name: "重庆航天职业技术学院"
     initial: "C"
     resource_folder: "CQEPC"
+
+  - id: "SCNU"
+    name: "华南师范大学"
+    initial: "H"
+    resource_folder: "SCNU"
