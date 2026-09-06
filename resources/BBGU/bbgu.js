@@ -247,16 +247,7 @@ async function runImportFlow() {
         return;
     }
 
-    const alertConfirmed = await window.shiguangBridgePromise.showAlert(
-        "教务系统课表导入",
-        "导入前请确保您已登录教务系统，建议在课表页面进行导入",
-        "好的，开始导入"
-    );
-    if (!alertConfirmed) {
-        window.shiguangBridge.showToast("用户取消了导入。");
-        return;
-    }
-
+    window.shiguangBridge.showToast("正在获取学期信息...");
     try {
         const semester = await selectSemester();
         if (!semester) {
