@@ -957,3 +957,8 @@ schools:
     name: "河南理工大学"
     initial: "H"
     resource_folder: "HPU"
+
+  - id: "HFUT"
+    name: "合肥工业大学"
+    initial: "H"
+    resource_folder: "HFUT"
