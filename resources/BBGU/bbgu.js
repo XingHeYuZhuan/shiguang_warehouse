@@ -174,6 +174,23 @@ async function saveTimeSlots(timeSlots) {
     }
 }
 
+// 保存课表配置（开学日期、总周数；失败仅告警，不阻断课程导入）
+async function saveCourseConfig(semester, courses) {
+    try {
+        const dateDiffDays = (new Date(semester.endDate) - new Date(semester.beginDate)) / 86400000;
+        const weeksByDate = Math.round(dateDiffDays / 7);
+        const maxCourseWeek = Math.max(0, ...courses.map(c => Math.max(...c.weeks)));
+        const config = {
+            semesterStartDate: semester.beginDate,
+            semesterTotalWeeks: Math.max(maxCourseWeek, weeksByDate || 20)
+        };
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+        console.log(`JS: 课表配置保存成功（开学 ${config.semesterStartDate}，共 ${config.semesterTotalWeeks} 周）`);
+    } catch (error) {
+        console.error("JS: 课表配置保存失败:", error);
+    }
+}
+
 async function runImportFlow() {
     if (isLoginPage()) {
         window.shiguangBridge.showToast("导入失败：请先登录教务系统！");
@@ -201,6 +218,8 @@ async function runImportFlow() {
         const courses = await fetchCourses(semester.id);
         window.shiguangBridge.showToast(`正在保存 ${courses.length} 门课程...`);
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses, null, 2));
+
+        await saveCourseConfig(semester, courses);
 
         const timeSlots = await fetchTimeSlots(semester.id);
         await saveTimeSlots(timeSlots);
