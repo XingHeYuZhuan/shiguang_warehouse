@@ -583,6 +583,11 @@ schools:
     initial: "D"
     resource_folder: "DLUTCI"
 
+  - id: "DZU"
+    name: "德州学院"
+    initial: "D"
+    resource_folder: "DZU"
+
   - id: "ECJTU"
     name: "华东交通大学"
     initial: "H"
