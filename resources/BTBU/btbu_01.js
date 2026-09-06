@@ -144,21 +144,14 @@ function parseWeeksAndSections(text) {
     else if (parity === 2) result.weeks = result.weeks.filter(w => w % 2 === 0);
     result.weeks = Array.from(new Set(result.weeks)).sort((a, b) => a - b);
 
-    // 4) 节次部分：“[01-02节]” → [1, 2]
+    // 4) 节次部分：“[01-02节]”→[1,2]，“[03-04-05节]”→[3,4,5]
+    //    北工商存在三小节连排（如 03-04-05），直接提取方括号内全部数字
     const secMatch = str.match(/\[([^\]]*)\]/);
     if (secMatch) {
-        const secStr = secMatch[1].replace(/节/g, '');
-        for (let seg of secStr.split(/[,，、]/)) {
-            seg = seg.trim();
-            if (!seg) continue;
-            const range = seg.match(/^(\d+)\s*[-–—~]\s*(\d+)$/);
-            if (range) {
-                let a = parseInt(range[1], 10);
-                let b = parseInt(range[2], 10);
-                if (a > b) { const t = a; a = b; b = t; }
-                for (let s = a; s <= b; s++) result.sections.push(s);
-            } else {
-                const s = parseInt(seg, 10);
+        const nums = secMatch[1].match(/\d+/g);
+        if (nums) {
+            for (let i = 0; i < nums.length; i++) {
+                const s = parseInt(nums[i], 10);
                 if (!isNaN(s)) result.sections.push(s);
             }
         }
@@ -167,46 +160,120 @@ function parseWeeksAndSections(text) {
     return result;
 }
 
+// 清理课程名称文本：剥离课程编号/课号前缀与后缀，返回纯课名（可能为空）
+function cleanCourseName(text) {
+    let name = String(text || '').trim();
+    if (!name) return '';
+    // “课程编号：XXX”（kchConfig 里的编号已在 DOM 层移除，这里兜底）
+    name = name.replace(/课程编号\s*[:：]?\s*[A-Z0-9]+/gi, '');
+    // 行首字母开头的短编码（如 CS101、GS140001），后随中文/空白/括号才剔除，
+    // 避免误伤 “MATLAB程序设计” 等以字母开头的真实课名
+    name = name.replace(/^[A-Za-z]{1,6}\d{2,10}[A-Za-z]?(?=[\u4e00-\u9fa5\s（(])\s*/, '');
+    // 行首长编码（北工商形如 080901C4S2007：连续字母数字≥8位且含数字，后随中文/括号）
+    name = name.replace(/^[A-Za-z0-9]{8,16}(?=[\u4e00-\u9fa5（(])/, function (m) {
+        return /\d/.test(m) ? '' : m;
+    });
+    // 行首纯数字编码（如 “14000101高等数学”）
+    name = name.replace(/^\d{5,12}(?=[\u4e00-\u9fa5\s（(])\s*/, '');
+    // 行尾编码（如 “高等数学01110037”“高等数学（01110037）”）
+    name = name.replace(/[（(][0-9A-Za-z]{5,16}[)）]\s*$/, '');
+    name = name.replace(/([\u4e00-\u9fa5）)])(\d{5,12}[A-Za-z]?)\s*$/, '$1');
+    return name.trim();
+}
+
+// 是否为“纯编号”文本（不含中文），兼容北工商形态 "080901C4S2007"、纯数字 "01110037"、"GS140001"
+function isPureCourseCode(text) {
+    if (/[\u4e00-\u9fa5]/.test(text)) return false;
+    if (/^\d{6,16}$/.test(text)) return true;
+    return /^[A-Z0-9]{6,16}$/.test(text) && /\d/.test(text) && /[A-Za-z]/.test(text);
+}
+
 // 解析一个课表格子（.kbcontent / .kbcontent1）内的课程信息，追加到 out
-function parseCellInto(cellDiv, day, out) {
-    const fonts = cellDiv.getElementsByTagName('font');
+// 北工商真实结构（依据 samples/xskb_list.html 校准）：
+//   课名 = 无 title 的外层 font，内嵌 <font class="kchConfig">（含 hint 与纯编号）+ <br> + 课名；
+//   元数据 font 带 title：教师 / 周次(节次) / 教室 / 教学楼 / 通知单编号 / 班级 / 备注 / 课程二维码；
+//   周次文本形如 “1-16(周)[01-02节]”“1-16(周)[03-04-05节]”“9(周)”；
+//   教务渲染的隐藏 kbcontent1 与可见 kbcontent 内容重复，由 parseTimetable 负责跳过。
+function parseCellInto(cellDiv, day, out, rowSections) {
+    const allFonts = cellDiv.getElementsByTagName('font');
+    const fonts = [];
+    for (let i = 0; i < allFonts.length; i++) {
+        // 跳过嵌套在另一个 font 内部的 font（kchConfig/hint 会随外层整体清理）
+        if (allFonts[i].parentElement && allFonts[i].parentElement.tagName === 'FONT') continue;
+        fonts.push(allFonts[i]);
+    }
+
     let current = null;
+    let pendingCode = null; // 尚未等到课名的纯编号
+
+    const pushCurrent = function () {
+        if (current) {
+            // 无 [节次] 括号时，用所在行标签的节次范围兜底（如 “1~2节”）
+            if (current.sections.length === 0 && rowSections) {
+                for (let s = rowSections[0]; s <= rowSections[1]; s++) current.sections.push(s);
+            }
+            out.push(current);
+            current = null;
+        }
+    };
+    const startCourse = function (name) {
+        pushCurrent();
+        current = { name: name, position: '', teacher: '', weeks: [], day: day, sections: [] };
+    };
 
     for (let j = 0; j < fonts.length; j++) {
         const f = fonts[j];
         const title = f.getAttribute('title') || '';
 
         if (!title) {
-            // 无 title 的 font 通常是课程名称（同格多门课之间以 “------” 分隔）
             const tempNode = f.cloneNode(true);
             const kchElements = tempNode.getElementsByClassName('kchConfig');
             while (kchElements.length > 0) kchElements[0].parentNode.removeChild(kchElements[0]);
 
-            let name = tempNode.textContent.replace(/课程编号\s*[:：]?\s*[A-Z0-9]+/gi, '').trim();
-            // 仅剔除形如课程编码的前缀（字母段+数字段，且后随中文/空白/括号），
-            // 避免误伤 “MATLAB程序设计”“CS101Python程序设计” 等以字母开头的真实课名
-            name = name.replace(/^[A-Za-z]{1,6}\d{2,10}[A-Za-z]?(?=[\u4e00-\u9fa5\s（(])\s*/, '').trim();
-            name = name.replace(/^\d{6,12}\s*/, '').trim();
-
-            if (name && !/^[-—\s]+$/.test(name)) {
-                if (current) out.push(current);
-                current = { name: name, position: '', teacher: '', weeks: [], day: day, sections: [] };
+            const text = tempNode.textContent.replace(/\u00a0/g, ' ').trim();
+            if (!text || /^[-—\s]+$/.test(text)) {
+                // 同格两门课之间的 “------” 分隔线：结算上一门
+                pushCurrent();
+                pendingCode = null;
+                continue;
             }
-        } else if (current) {
-            const text = f.textContent.trim();
-            // title 兼容 “教师/老师” 两种强智写法
-            if (title.indexOf('教师') !== -1 || title.indexOf('老师') !== -1) {
-                current.teacher = text;
-            } else if (title.indexOf('周次') !== -1) {
-                const parsed = parseWeeksAndSections(text);
-                current.weeks = parsed.weeks;
-                current.sections = parsed.sections;
-            } else if (title.indexOf('教室') !== -1) {
-                current.position = text;
+
+            // 关键：用清理后的名字判断是否课名，避免 “课程编号：XXX” 被清成纯编号后误当成课名
+            const name = cleanCourseName(text);
+            if (name && /[\u4e00-\u9fa5]/.test(name)) {
+                startCourse(name);
+                pendingCode = null;
+            } else if (name && isPureCourseCode(name)) {
+                if (!current) pendingCode = name; // 编号在课名之前单独出现，先暂存
+                // 课程已开始时出现的编号只是附加信息，忽略
+            }
+        } else if (title.indexOf('课程') !== -1 && title.indexOf('周次') === -1) {
+            // title=“课程名称”（其他强智变体的结构）
+            const name = cleanCourseName(f.textContent.trim());
+            if (name) startCourse(name);
+            pendingCode = null;
+        } else {
+            if (!current && pendingCode) {
+                // 编号后直接跟元数据且始终无课名：以编号兜底建课，避免丢课
+                startCourse(pendingCode);
+            }
+            pendingCode = null;
+            if (current) {
+                const text = f.textContent.trim();
+                // title 兼容 “教师/老师” 两种强智写法
+                if (title.indexOf('教师') !== -1 || title.indexOf('老师') !== -1) {
+                    current.teacher = text;
+                } else if (title.indexOf('周次') !== -1) {
+                    const parsed = parseWeeksAndSections(text);
+                    current.weeks = parsed.weeks;
+                    current.sections = parsed.sections;
+                } else if (title.indexOf('教室') !== -1) {
+                    current.position = text;
+                }
             }
         }
     }
-    if (current) out.push(current);
+    pushCurrent();
 }
 
 function parseTimetable(doc) {
@@ -219,11 +286,20 @@ function parseTimetable(doc) {
 
     const result = [];
     for (let r = 0; r < rows.length; r++) {
+        // 行标签里的节次范围（北工商形如 “1~2节 (01,02小节) 08:00-09:35”），作为无 [节次] 括号时的兜底
+        const firstCell = rows[r].querySelector('th,td');
+        const labelMatch = firstCell ? String(firstCell.textContent).match(/(\d+)\s*[~～]\s*(\d+)\s*节/) : null;
+        const rowSections = labelMatch ? [parseInt(labelMatch[1], 10), parseInt(labelMatch[2], 10)] : null;
+
         const cells = rows[r].querySelectorAll('.kbcontent, .kbcontent1');
         if (cells.length === 0) continue;
 
         for (let i = 0; i < cells.length; i++) {
             const cellDiv = cells[i];
+            // 北工商的 kbcontent1 是 display:none 的缩略副本，与同格 kbcontent 内容重复，跳过
+            // （其他强智变体中可见的 kbcontent1 表示同格第二门课，不受影响）
+            if (cellDiv.style && cellDiv.style.display === 'none') continue;
+
             const ownerCell = cellDiv.closest('td,th');
             if (!ownerCell) continue;
 
@@ -234,7 +310,7 @@ function parseTimetable(doc) {
             const day = colDayMap[col] !== undefined ? colDayMap[col] : col + 1;
             if (day < 1 || day > 7) continue;
 
-            parseCellInto(cellDiv, day, result);
+            parseCellInto(cellDiv, day, result, rowSections);
         }
     }
     return result;
@@ -282,7 +358,10 @@ function mergeAndDistinctCourses(courses) {
         weeks: Array.isArray(c.weeks) ? [...c.weeks].sort((a, b) => a - b) : []
     }));
 
-    // 阶段 1：合并连续节次与完全重复记录（前提：名称、教师、地点、星期、周次一致）
+    // 阶段 1：合并连续节次与完全重复记录
+    // 北工商调整（官方允许按学校特殊情况修改）：同一门课跨大节时教师/教室可能不同
+    // （如 JAVA核心编程 1-2节在工2-107、3-4节在工2-401机房），故合并条件放宽为
+    // 名称+星期+周次一致且节次连续，教师与教室沿用第一段；完全重复的记录仍然去重。
     list.sort((a, b) => {
         return a.name.localeCompare(b.name) ||
                a.teacher.localeCompare(b.teacher) ||
@@ -300,8 +379,6 @@ function mergeAndDistinctCourses(courses) {
 
         const isSameCourseAndWeeks =
             current.name === next.name &&
-            current.teacher === next.teacher &&
-            current.position === next.position &&
             current.day === next.day &&
             current.weeks.join(',') === next.weeks.join(',');
 
