@@ -3,17 +3,69 @@
 (function () {
 	"use strict";
 
+	// 教务系统课表接口地址。
 	var SCHEDULE_PATH = "/jsxsd/xskb/xskb_list.do";
+	// 黄家湖校区的默认节次时间。
+	var DEFAULT_TIME_SLOTS = [
+		{ number: 1, startTime: "08:20", endTime: "09:05" },
+		{ number: 2, startTime: "09:15", endTime: "10:00" },
+		{ number: 3, startTime: "10:20", endTime: "11:05" },
+		{ number: 4, startTime: "11:15", endTime: "12:00" },
+		{ number: 5, startTime: "14:00", endTime: "14:45" },
+		{ number: 6, startTime: "14:55", endTime: "15:40" },
+		{ number: 7, startTime: "16:00", endTime: "16:45" },
+		{ number: 8, startTime: "16:55", endTime: "17:40" },
+		{ number: 9, startTime: "18:40", endTime: "19:25" },
+		{ number: 10, startTime: "19:35", endTime: "20:20" },
+		{ number: 11, startTime: "20:40", endTime: "21:25" },
+		{ number: 12, startTime: "21:35", endTime: "22:20" }
+	];
+	// 校区选项，选择结果用于确定课程时间。
+	var CAMPUS_OPTIONS = ["黄家湖校区", "青山校区"];
+
+	// 根据校区生成对应的节次时间，青山校区上午前四节提前。
+	function getCampusTimeSlots(campusIndex) {
+		var timeSlots = DEFAULT_TIME_SLOTS.map(function (slot) {
+			return {
+				number: slot.number,
+				startTime: slot.startTime,
+				endTime: slot.endTime
+			};
+		});
+		if (campusIndex !== 1) return timeSlots;
+
+		return timeSlots.map(function (slot) {
+			var minutes = slot.number <= 2 ? 20 : (slot.number <= 4 ? 10 : 0);
+			if (minutes === 0) return slot;
+			return {
+				number: slot.number,
+				startTime: shiftTime(slot.startTime, -minutes),
+				endTime: shiftTime(slot.endTime, -minutes)
+			};
+		});
+	}
+
+	// 按指定分钟数调整 HH:mm 格式的时间。
+	function shiftTime(time, offsetMinutes) {
+		var parts = time.split(":").map(Number);
+		var totalMinutes = parts[0] * 60 + parts[1] + offsetMinutes;
+		var hours = Math.floor(totalMinutes / 60).toString().padStart(2, "0");
+		var minutes = (totalMinutes % 60).toString().padStart(2, "0");
+		return hours + ":" + minutes;
+	}
+	// 通过应用桥接 API 显示提示信息。
 	function toast(message) {
 		if (window.shiguangBridge && window.shiguangBridge.showToast) {
 			window.shiguangBridge.showToast(message);
 		}
 	}
 
+	// 清理教务页面文本中的空格和非断行空格。
 	function normalizeText(value) {
 		return (value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 	}
 
+	// 将周次文本解析为排序后的周次数组。
 	function parseWeeks(value) {
 		var text = normalizeText(value).replace(/\(周\)|周/g, "");
 		var weeks = new Set();
@@ -28,6 +80,7 @@
 		return Array.from(weeks).sort(function (a, b) { return a - b; });
 	}
 
+	// 将节次文本解析为连续的节次数组。
 	function parsePeriods(value) {
 		var match = normalizeText(value).match(/\[([^\]]+)\]/);
 		if (!match) return [];
@@ -40,6 +93,7 @@
 		return periods;
 	}
 
+	// 查找主页面或同源 iframe 中的课表文档。
 	function findScheduleDocument() {
 		if (document.querySelector("#kbtable")) return document;
 		return Array.from(document.querySelectorAll("iframe")).reduce(function (found, frame) {
@@ -53,6 +107,7 @@
 		}, null);
 	}
 
+	// 解析单个课程块，生成应用需要的课程对象。
 	function parseCourseBlock(block) {
 		var holder = document.createElement("div");
 		holder.innerHTML = block;
@@ -78,6 +133,7 @@
 		};
 	}
 
+	// 遍历课表单元格，解析课程并合并重复的课程记录。
 	function parseCourses(doc) {
 		var table = doc.querySelector("#kbtable");
 		if (!table) return [];
@@ -109,26 +165,27 @@
 		});
 	}
 
-	function parseTimeSlots(doc) {
-		var slots = new Map();
-		Array.from(doc.querySelectorAll("#kbtable tr")).forEach(function (row) {
-			var header = row.querySelector("th");
-			if (!header) return;
-			var match = normalizeText(header.textContent).match(/^(\d+).*?(\d{1,2}:\d{2})\s*[-~至]\s*(\d{1,2}:\d{2})/);
-			if (!match) return;
-			var number = parseInt(match[1], 10);
-			if (!slots.has(number)) {
-				slots.set(number, { number: number, startTime: match[2].padStart(5, "0"), endTime: match[3].padStart(5, "0") });
-			}
-		});
-		return Array.from(slots.values()).sort(function (a, b) { return a.number - b.number; });
+	// 使用 v2 桥接 API 让用户选择上课校区。
+	async function selectCampus() {
+		var selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
+			"选择上课校区",
+			JSON.stringify(CAMPUS_OPTIONS),
+			0
+		);
+		if (selectedIndex === null || selectedIndex < 0 || selectedIndex >= CAMPUS_OPTIONS.length) {
+			toast("已取消导入");
+			return null;
+		}
+		return selectedIndex;
 	}
 
+	// 获取当前页面选择的学期编号。
 	function getSemesterId(doc) {
 		var select = doc.querySelector("#xnxq01id");
 		return select ? select.value : "";
 	}
 
+	// 请求指定学期的课表页面并解析为文档对象。
 	async function fetchScheduleDocument(semesterId) {
 		var body = "cj0701id=&zc=&demo=&xnxq01id=" + encodeURIComponent(semesterId) + "&sfFD=1&wkbkc=1";
 		var response = await fetch(SCHEDULE_PATH, {
@@ -141,6 +198,7 @@
 		return new DOMParser().parseFromString(await response.text(), "text/html");
 	}
 
+	// 保存课程配置、校区时间段和课程数据。
 	async function saveData(courses, timeSlots) {
 		var maxWeek = Math.max.apply(null, courses.map(function (course) {
 			return Math.max.apply(null, course.weeks);
@@ -151,17 +209,20 @@
 			defaultClassDuration: 45,
 			defaultBreakDuration: 5
 		};
-		if (window.shiguangBridgePromise.saveCourseConfig) {
+		if (window.shiguangBridgePromise && window.shiguangBridgePromise.saveCourseConfig) {
 			await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 		}
-		if (timeSlots.length > 0 && window.shiguangBridgePromise.savePresetTimeSlots) {
+		if (timeSlots.length > 0 && window.shiguangBridgePromise && window.shiguangBridgePromise.savePresetTimeSlots) {
 			await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
 		}
 		return await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 	}
 
+	// 编排校区选择、课表获取、解析和保存的完整导入流程。
 	async function runImport() {
 		try {
+			var campusIndex = await selectCampus();
+			if (campusIndex === null) return;
 			var currentDoc = findScheduleDocument() || document;
 			var semesterId = getSemesterId(currentDoc);
 			var scheduleDoc = currentDoc.querySelector("#kbtable") ? currentDoc : await fetchScheduleDocument(semesterId);
@@ -170,7 +231,7 @@
 				toast("未解析到课程，请确认已登录且课表页面已加载完成");
 				return;
 			}
-			var saved = await saveData(courses, parseTimeSlots(scheduleDoc));
+			var saved = await saveData(courses, getCampusTimeSlots(campusIndex));
 			if (!saved) {
 				toast("课程导入失败");
 				return;
@@ -183,6 +244,7 @@
 		}
 	}
 
+	// 检查桥接 API 可用后启动导入流程。
 	if (window.shiguangBridgePromise && window.shiguangBridgePromise.saveImportedCourses) {
 		runImport();
 	}
