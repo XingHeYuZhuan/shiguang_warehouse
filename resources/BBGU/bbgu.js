@@ -174,15 +174,30 @@ async function saveTimeSlots(timeSlots) {
     }
 }
 
+// 获取当前学期最大周次（失败返回 null）
+async function fetchMaxWeek(sessionId) {
+    try {
+        const payload = await requestJson(
+            `https://zhjw.bbgu.edu.cn/api/timetable/course/maxWeek/${encodeURIComponent(sessionId)}`
+        );
+        const weeks = Number(payload && payload.data);
+        return weeks > 0 ? weeks : null;
+    } catch (error) {
+        console.error("JS: 获取最大周次失败:", error);
+        return null;
+    }
+}
+
 // 保存课表配置（开学日期、总周数；失败仅告警，不阻断课程导入）
 async function saveCourseConfig(semester, courses) {
     try {
         const dateDiffDays = (new Date(semester.endDate) - new Date(semester.beginDate)) / 86400000;
         const weeksByDate = Math.round(dateDiffDays / 7);
         const maxCourseWeek = Math.max(0, ...courses.map(c => Math.max(...c.weeks)));
+        const maxWeek = await fetchMaxWeek(semester.id);
         const config = {
             semesterStartDate: semester.beginDate,
-            semesterTotalWeeks: Math.max(maxCourseWeek, weeksByDate || 20)
+            semesterTotalWeeks: maxWeek || Math.max(maxCourseWeek, weeksByDate || 20)
         };
         await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
         console.log(`JS: 课表配置保存成功（开学 ${config.semesterStartDate}，共 ${config.semesterTotalWeeks} 周）`);
