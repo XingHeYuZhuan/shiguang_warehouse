@@ -28,6 +28,11 @@ schools:
     initial: "U"
     resource_folder: "urp_jiaowu"
 
+  - id: "BBGU"
+    name: "北部湾大学"
+    initial: "B"
+    resource_folder: "BBGU"
+
   - id: "BUPT"
     name: "北京邮电大学"
     initial: "B"
@@ -582,6 +587,11 @@ schools:
     name: "大连工程学院"
     initial: "D"
     resource_folder: "DLUTCI"
+
+  - id: "DZU"
+    name: "德州学院"
+    initial: "D"
+    resource_folder: "DZU"
 
   - id: "ECJTU"
     name: "华东交通大学"
