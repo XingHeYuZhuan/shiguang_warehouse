@@ -1,0 +1,5 @@
+- name: 正方教务系统
+  url: http://jw.cqepc.cn/jwglxt/xtgl/login_slogin.html
+  provider: provider.js
+  parser: parser.js
+  timer: timer.js
