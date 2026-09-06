@@ -93,6 +93,11 @@ schools:
     initial: "H"
     resource_folder: "HNSF"
 
+  - id: "HIST"
+    name: "河南科技学院"
+    initial: "H"
+    resource_folder: "HIST"
+
   - id: "HNNU"
     name: "淮南师范学院"
     initial: "H"
