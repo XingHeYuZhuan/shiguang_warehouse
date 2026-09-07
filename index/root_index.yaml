@@ -108,6 +108,11 @@ schools:
     initial: "T"
     resource_folder: "TARU"
 
+  - id: "MASU"
+    name: "马鞍山学院"
+    initial: "M"
+    resource_folder: "MASU"
+
   - id: "MMPT"
     name: "茂名职业技术学院"
     initial: "M"
@@ -972,3 +977,8 @@ schools:
     name: "北京工商大学"
     initial: "B"
     resource_folder: "BTBU"
+    
+  - id: "SCNU"
+    name: "华南师范大学"
+    initial: "H"
+    resource_folder: "SCNU"
