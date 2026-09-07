@@ -1,0 +1,8 @@
+adapters:
+  - adapter_id: "SCNU_01"
+    adapter_name: "华南师范大学本科教务系统"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "scnu.js"
+    import_url: "https://jwxt.scnu.edu.cn/xtgl/login_slogin.html"
+    maintainer: "YewFence"
+    description: "登录后进入个人课表查询，选择学年学期后导入；按校区获取作息，自动识别开学日期与总周数。独立实验预约安排需另行核对。"
