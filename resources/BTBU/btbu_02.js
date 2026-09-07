@@ -11,6 +11,9 @@
 //   WebVPN 包装形态：https://vpn.btbu.edu.cn/{https|https-443}/<站点哈希>/jsxsd/...
 //   → 通过 location.pathname 中 '/jsxsd/' 的位置自动推导前缀，直连与 WebVPN 通用
 //
+// 传输方式：隐藏表单 + iframe 提交（与浏览器真实表单导航同语义）。
+//   实测 WebVPN（深澜 wengine 会 hook window.fetch 并破坏 POST）与校园网直连均可靠。
+//
 // 输出数据：CourseJsonModel（不输出 id/color/remark 内部字段）
 // 桥接 API 使用 v2 规范的 window.shiguangBridge / window.shiguangBridgePromise
 
@@ -565,11 +568,12 @@ async function importPresetTimeSlots() {
     }
 }
 
-// 通过隐藏表单 + 隐藏 iframe 提交（等价于页面内真实表单导航，
-// Sec-Fetch-Dest: iframe / Referer 语义与浏览器一致）。
+// 通过隐藏表单 + 隐藏 iframe 提交（与浏览器真实表单导航同语义，
+// Sec-Fetch-Dest: iframe / Referer 均与浏览器一致）。
 // 实测：WebVPN 环境下深澜 wengine 会 hook window.fetch 并破坏 POST 请求，
-// 而真实表单导航四个学期全部成功 —— 故此方法为主策略。
+// 而真实表单导航四个学期全部成功 —— 故为唯一的课表传输方式。
 // 超时可经 window.__BTBU_FORM_TIMEOUT_MS__ 覆盖（默认 8000ms，移动网络经 WebVPN 较慢）。
+// 返回提交后 iframe 内的 document（无论是否含课表，由调用方判定），异常时返回 null。
 function submitViaHiddenForm(action, body) {
     return new Promise(function (resolve) {
         try {
@@ -597,7 +601,7 @@ function submitViaHiddenForm(action, body) {
                 settled = true;
                 try { if (form.parentNode) form.parentNode.removeChild(form); } catch (e) {}
                 setTimeout(function () { try { if (frame.parentNode) frame.parentNode.removeChild(frame); } catch (e) {} }, 1000);
-                resolve(doc && doc.getElementById && doc.getElementById('timetable') ? doc : null);
+                resolve(doc || null);
             };
             frame.addEventListener('load', function () {
                 try {
@@ -620,9 +624,9 @@ function submitViaHiddenForm(action, body) {
 
 /**
  * 编排整个课程导入流程：
- *   推导接口前缀 → 拉取课表页（学期列表）→ 弹窗选学期 → POST 拉取对应学期课表
- *   （响应异常时自动回退 GET 查询串）→ 解析合并 → 保存。
- *   任何一步取消或失败都立即退出；失败弹窗内含响应诊断信息；notifyTaskCompletion 只在成功后调用。
+ *   推导接口前缀 → 拉取课表页（学期列表）→ 弹窗选学期 → 隐藏表单+iframe 拉取对应学期课表
+ *   → 解析合并 → 保存。任何一步取消或失败都立即退出；失败弹窗内含响应诊断信息；
+ *   notifyTaskCompletion 只在成功后调用。
  */
 async function runImportFlow() {
     try {
@@ -659,62 +663,28 @@ async function runImportFlow() {
         const semester = semesters[picked];
         const kbjcmsid = parseKbjcmsid(listDoc);
 
-        // 3. 请求所选学期的课表（请求体与浏览器抓包一致）
-        //    三级策略：隐藏表单+iframe（主策略，WebVPN 实测四学期全部成功）
-        //              → POST fetch → GET fetch
+        // 3. 请求所选学期的课表（请求体与浏览器抓包一致，经隐藏表单+iframe 提交）
         toast('正在获取 ' + semester.label + ' 课表...');
         const body = 'cj0701id=&zc=&demo=&xnxq01id=' + encodeURIComponent(semester.value) +
             '&sfFD=1&wkbkc=1&kbjcmsid=' + encodeURIComponent(kbjcmsid);
         let tableDoc = null;
-        let via = '';
-        let lastPage = null; // 最后一次响应（供诊断，避免重复请求）
-
-        // 主策略：隐藏表单 + iframe（与浏览器真实导航同语义；WebVPN 下深澜会破坏 fetch POST）
         const frameDoc = await submitViaHiddenForm(listUrl, body);
-        if (frameDoc) { tableDoc = frameDoc; via = '表单+iframe'; }
+        if (frameDoc && frameDoc.getElementById('timetable')) tableDoc = frameDoc;
 
         if (!tableDoc) {
-            try {
-                const postPage = await fetchPage(listUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-                    body: body
-                });
-                lastPage = postPage;
-                const postDoc = new DOMParser().parseFromString(postPage.text, 'text/html');
-                via = 'POST ' + postPage.text.length + '字节' + (postPage.url && postPage.url !== listUrl ? '，重定向至 ' + postPage.url : '');
-                if (postDoc.getElementById('timetable')) tableDoc = postDoc;
-            } catch (e) {
-                via = 'POST 异常: ' + (e && e.message ? e.message : e);
-            }
-        }
-        if (!tableDoc) {
-            try {
-                const getPage = await fetchPage(listUrl + '?' + body);
-                lastPage = getPage;
-                const getDoc = new DOMParser().parseFromString(getPage.text, 'text/html');
-                if (getDoc.getElementById('timetable')) {
-                    tableDoc = getDoc;
-                    via = 'GET回退 ' + getPage.text.length + '字节';
-                }
-            } catch (e) { /* 回退失败则走下方诊断 */ }
-        }
-        if (!tableDoc) {
-            // 兜底诊断：展示最后一次响应的关键特征，便于远程定位
-            const diagDoc = lastPage ? new DOMParser().parseFromString(lastPage.text, 'text/html') : null;
-            const title = diagDoc ? (diagDoc.title || '').trim() : '(无响应)';
-            const hasTable = !!(diagDoc && diagDoc.getElementById('timetable'));
-            const hasKb = !!(diagDoc && diagDoc.querySelector('.kbcontent'));
-            const loginLike = /Logon\.do|登录|统一身份/.test((diagDoc && diagDoc.body ? diagDoc.body.textContent : '') || '');
-            const excerpt = (diagDoc && diagDoc.body ? diagDoc.body.textContent : '').replace(/\s+/g, ' ').trim().slice(0, 120);
+            // 兜底诊断：展示提交后 iframe 内页面的关键特征，便于远程定位
+            const title = frameDoc ? (frameDoc.title || '').trim() : '(无响应)';
+            const hasKb = !!(frameDoc && frameDoc.querySelector('.kbcontent'));
+            const loginLike = /Logon\.do|登录|统一身份/.test((frameDoc && frameDoc.body ? frameDoc.body.textContent : '') || '');
+            const excerpt = (frameDoc && frameDoc.body ? frameDoc.body.textContent : '').replace(/\s+/g, ' ').trim().slice(0, 120);
             await alertUser(
                 '未获取到课表数据',
-                '诊断：' + via + '；页面标题：' + (title || '(空)') +
-                '；含课表表格：' + (hasTable ? '是' : '否') +
+                '诊断：表单+iframe 提交' +
+                '；页面标题：' + (title || '(空)') +
                 '；含课程格子：' + (hasKb ? '是' : '否') +
                 '；疑似登录页：' + (loginLike ? '是' : '否') +
                 '；正文摘录：' + (excerpt || '(空)') +
-                '。请将此弹窗截图反馈给维护者。'
+                '。请确认已登录教务系统后重试，或将此弹窗截图反馈给维护者。'
             );
             return;
         }
