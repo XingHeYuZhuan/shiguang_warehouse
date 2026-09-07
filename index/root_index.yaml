@@ -973,6 +973,16 @@ schools:
     initial: "C"
     resource_folder: "CQEPC"
 
+  - id: "BTBU"
+    name: "北京工商大学"
+    initial: "B"
+    resource_folder: "BTBU"
+
+  - id: "SCNU"
+    name: "华南师范大学"
+    initial: "H"
+    resource_folder: "SCNU"
+
   - id: "LYIT"
     name: "洛阳理工学院"
     initial: "L"
