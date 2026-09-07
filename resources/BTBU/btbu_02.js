@@ -1,12 +1,12 @@
-// 北京工商大学(btbu.edu.cn) 拾光课程表适配脚本 · API 直连版（BTBU_02）
-// 教务系统：强智（jsxsd）· 数据接口：/jsxsd/xskb/xskb_list.do（与官方参考 HHTC 同款接口）
+// 北京工商大学(btbu.edu.cn) 拾光课程表适配脚本 · API解析（BTBU_02）
+// 教务系统：强智（jsxsd）· 数据接口：/jsxsd/xskb/xskb_list.do
 // 使用流程：登录教务系统（校园网直连或 WebVPN 均可）→ 进入任意教务页面 → 点击一键导入
-//           脚本自动获取学期列表供选择，无需手动进入课表页面
+// 自动获取学期列表
 // 维护者：lztttt（出现解析问题请提交 issue 或 PR）
 //
 // 接口说明（依据 webvpn 抓包与 samples/xskb_list.html 校准）：
 //   GET  {jsxsd前缀}/xskb/xskb_list.do          → 课表页（含学期下拉 xnxq01id 与课程模式 kbjcmsid）
-//   POST {jsxsd前缀}/xskb/xskb_list.do          → 切换学期后的课表页（HTML，复用 btbu_01 的解析器）
+//   POST {jsxsd前缀}/xskb/xskb_list.do          → 切换学期后的课表页（HTML，按真实页面结构解析）
 //   请求体：cj0701id=&zc=&demo=&xnxq01id=学年-学期&sfFD=1&wkbkc=1&kbjcmsid=课程模式ID
 //   WebVPN 包装形态：https://vpn.btbu.edu.cn/{https|https-443}/<站点哈希>/jsxsd/...
 //   → 通过 location.pathname 中 '/jsxsd/' 的位置自动推导前缀，直连与 WebVPN 通用
@@ -79,8 +79,7 @@ async function fetchPage(url, options) {
 }
 
 // =========================================================================
-// 课表解析（与 BTBU_01 保持一致，依据真实页面结构校准；API 返回整页 HTML，
-// 直接用 DOMParser 构建文档后按相同规则解析）
+// 课表解析（依据真实页面结构校准；API 返回整页 HTML，经 DOMParser 构建文档后解析）
 // =========================================================================
 
 // 星期文本 → 数字（1=周一 … 7=周日），无法识别返回 0
@@ -166,7 +165,7 @@ function parseWeeksAndSections(text) {
     result.weeks = Array.from(new Set(result.weeks)).sort((a, b) => a - b);
 
     // 4) 节次部分：“[01-02节]”→[1,2]，“[03-04-05节]”→[3,4,5]
-    //    北工商存在三小节连排（如 03-04-05），直接提取方括号内全部数字
+    //    存在三小节连排（如 03-04-05），直接提取方括号内全部数字
     const secMatch = str.match(/\[([^\]]*)\]/);
     if (secMatch) {
         const nums = secMatch[1].match(/\d+/g);
@@ -302,7 +301,6 @@ function parseTimetable(doc) {
 
     const rows = Array.from(table.querySelectorAll('tr'));
     const colDayMap = buildColumnDayMap(rows);
-    console.log('[BTBU] 表头校准（列号→星期）:', JSON.stringify(colDayMap));
 
     const result = [];
     for (let r = 0; r < rows.length; r++) {
@@ -540,7 +538,7 @@ async function saveCourses(courses) {
 }
 
 async function importPresetTimeSlots() {
-    // 北工商作息时间表（13 节）；如与校历作息不符，在此调整即可
+    // 北工商作息时间表（13 节）
     const timeSlots = [
         { number: 1, startTime: '08:00', endTime: '08:45' },
         { number: 2, startTime: '08:50', endTime: '09:35' },
@@ -625,8 +623,7 @@ function submitViaHiddenForm(action, body) {
 /**
  * 编排整个课程导入流程：
  *   推导接口前缀 → 拉取课表页（学期列表）→ 弹窗选学期 → 隐藏表单+iframe 拉取对应学期课表
- *   → 解析合并 → 保存。任何一步取消或失败都立即退出；失败弹窗内含响应诊断信息；
- *   notifyTaskCompletion 只在成功后调用。
+ *   → 解析合并 → 保存。任何一步取消或失败都立即退出；notifyTaskCompletion 只在成功后调用。
  */
 async function runImportFlow() {
     try {
@@ -672,30 +669,20 @@ async function runImportFlow() {
         if (frameDoc && frameDoc.getElementById('timetable')) tableDoc = frameDoc;
 
         if (!tableDoc) {
-            // 兜底诊断：展示提交后 iframe 内页面的关键特征，便于远程定位
-            const title = frameDoc ? (frameDoc.title || '').trim() : '(无响应)';
-            const hasKb = !!(frameDoc && frameDoc.querySelector('.kbcontent'));
-            const loginLike = /Logon\.do|登录|统一身份/.test((frameDoc && frameDoc.body ? frameDoc.body.textContent : '') || '');
-            const excerpt = (frameDoc && frameDoc.body ? frameDoc.body.textContent : '').replace(/\s+/g, ' ').trim().slice(0, 120);
             await alertUser(
                 '未获取到课表数据',
-                '诊断：表单+iframe 提交' +
-                '；页面标题：' + (title || '(空)') +
-                '；含课程格子：' + (hasKb ? '是' : '否') +
-                '；疑似登录页：' + (loginLike ? '是' : '否') +
-                '；正文摘录：' + (excerpt || '(空)') +
-                '。请确认已登录教务系统后重试，或将此弹窗截图反馈给维护者。'
+                '请确认已登录教务系统后重试；如多次失败，请重新登录后再试或反馈给维护者。'
             );
             return;
         }
 
-        // 4. 解析与合并（与 BTBU_01 相同的解析规则）
+        // 4. 解析与合并（依据真实页面结构校准的解析规则）
         toast('正在解析课表...');
         const rawCourses = parseTimetable(tableDoc);
         if (rawCourses.length === 0) {
             await alertUser(
                 '未解析到课程',
-                semester.label + ' 的课表页面已获取（含课表表格），但表格中没有课程内容——该学期可能暂未发布课表数据。'
+                semester.label + ' 的课表页面已获取，但表格中没有课程内容——该学期可能暂未发布课表数据。'
             );
             return;
         }
