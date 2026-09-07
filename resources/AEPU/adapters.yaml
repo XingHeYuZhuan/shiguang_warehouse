@@ -1,0 +1,8 @@
+adapters:
+  - adapter_id: "AEPU_01"
+    adapter_name: "安徽电气工程职业技术学院教务系统"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "aepu.js"
+    import_url: "https://zt.aepu.com.cn/http/webvpn72eac4eb4dc8e2a039c8b6f3caab24955193a4ad25c9584e88a49b450bf0ce50/authserver/login?service=https%3A%2F%2Fzt.aepu.com.cn%2Fenlink%2Fapi%2Fclient%2Fcallback%2Fcas"
+    maintainer: "Haooz"
+    description: "安徽电气工程职业技术学院教务系统课表导入，请先登录并进入“我的课表”页面，再点击导入！"
