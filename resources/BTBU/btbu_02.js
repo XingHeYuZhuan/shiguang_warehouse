@@ -565,6 +565,51 @@ async function importPresetTimeSlots() {
     }
 }
 
+// 通过隐藏表单 + 隐藏 iframe 提交（等价于页面内真实表单导航，
+// Sec-Fetch-Dest: iframe / Referer 语义与浏览器一致，规避 XHR 差异处理）
+function submitViaHiddenForm(action, body) {
+    return new Promise(function (resolve) {
+        try {
+            const frame = document.createElement('iframe');
+            frame.name = 'btbuPostFrame' + Date.now();
+            frame.style.display = 'none';
+            const form = document.createElement('form');
+            form.action = action;
+            form.method = 'POST';
+            form.target = frame.name;
+            new URLSearchParams(body).forEach(function (v, k) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = k;
+                input.value = v;
+                form.appendChild(input);
+            });
+            document.body.appendChild(frame);
+            document.body.appendChild(form);
+
+            let settled = false;
+            const finish = function (doc) {
+                if (settled) return;
+                settled = true;
+                try { if (form.parentNode) form.parentNode.removeChild(form); } catch (e) {}
+                setTimeout(function () { try { if (frame.parentNode) frame.parentNode.removeChild(frame); } catch (e) {} }, 1000);
+                resolve(doc && doc.getElementById && doc.getElementById('timetable') ? doc : null);
+            };
+            frame.addEventListener('load', function () {
+                try {
+                    const d = frame.contentDocument;
+                    if (!d || d.location.href === 'about:blank') return; // 初始空页，忽略
+                    finish(d);
+                } catch (e) { finish(null); }
+            });
+            setTimeout(function () {
+                try { finish(frame.contentDocument); } catch (e) { finish(null); }
+            }, 3000);
+            form.submit();
+        } catch (e) { resolve(null); }
+    });
+}
+
 // =========================================================================
 // 流程编排
 // =========================================================================
@@ -610,13 +655,14 @@ async function runImportFlow() {
         const semester = semesters[picked];
         const kbjcmsid = parseKbjcmsid(listDoc);
 
-        // 3. 请求所选学期的课表（请求体与浏览器抓包一致；POST 异常时自动回退 GET 查询串）
+        // 3. 请求所选学期的课表（请求体与浏览器抓包一致）
+        //    三级策略：POST 表单体 → GET 查询串 → 隐藏表单+iframe 提交（模拟真实导航）
         toast('正在获取 ' + semester.label + ' 课表...');
         const body = 'cj0701id=&zc=&demo=&xnxq01id=' + encodeURIComponent(semester.value) +
             '&sfFD=1&wkbkc=1&kbjcmsid=' + encodeURIComponent(kbjcmsid);
         let tableDoc = null;
         let via = '';
-        let lastPage = null; // 最后一次课表响应（供诊断，避免重复请求）
+        let lastPage = null; // 最后一次响应（供诊断，避免重复请求）
         try {
             const postPage = await fetchPage(listUrl, {
                 method: 'POST',
@@ -639,7 +685,11 @@ async function runImportFlow() {
                     tableDoc = getDoc;
                     via = 'GET回退 ' + getPage.text.length + '字节';
                 }
-            } catch (e) { /* 回退失败则走下方诊断 */ }
+            } catch (e) { /* 回退失败则走下一级 */ }
+        }
+        if (!tableDoc) {
+            const frameDoc = await submitViaHiddenForm(listUrl, body);
+            if (frameDoc) { tableDoc = frameDoc; via = '表单+iframe'; }
         }
         if (!tableDoc) {
             // 兜底诊断：展示最后一次响应的关键特征，便于远程定位
@@ -648,13 +698,15 @@ async function runImportFlow() {
             const hasTable = !!(diagDoc && diagDoc.getElementById('timetable'));
             const hasKb = !!(diagDoc && diagDoc.querySelector('.kbcontent'));
             const loginLike = /Logon\.do|登录|统一身份/.test((diagDoc && diagDoc.body ? diagDoc.body.textContent : '') || '');
+            const excerpt = (diagDoc && diagDoc.body ? diagDoc.body.textContent : '').replace(/\s+/g, ' ').trim().slice(0, 120);
             await alertUser(
                 '未获取到课表数据',
                 '诊断：' + via + '；页面标题：' + (title || '(空)') +
                 '；含课表表格：' + (hasTable ? '是' : '否') +
                 '；含课程格子：' + (hasKb ? '是' : '否') +
                 '；疑似登录页：' + (loginLike ? '是' : '否') +
-                '。请将此弹窗截图反馈给维护者。'
+                '；正文摘录：' + (excerpt || '(空)') +
+                '。请将此弹窗截图反馈给维护者；也可尝试切换桌面模式后重试。'
             );
             return;
         }
