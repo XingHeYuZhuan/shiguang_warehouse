@@ -69,10 +69,10 @@ function getJsxsdBase() {
     return path.slice(0, idx); // 直连：''；WebVPN：'/https/777264...b' 或 '/https-443/777...b'
 }
 
-async function fetchText(url, options) {
+async function fetchPage(url, options) {
     const res = await fetch(url, Object.assign({ credentials: 'include' }, options || {}));
-    if (!res.ok) throw new Error('请求失败（HTTP ' + res.status + '），请检查登录状态');
-    return await res.text();
+    const text = await res.text();
+    return { ok: res.ok, status: res.status, url: res.url, text: text };
 }
 
 // =========================================================================
@@ -572,7 +572,8 @@ async function importPresetTimeSlots() {
 /**
  * 编排整个课程导入流程：
  *   推导接口前缀 → 拉取课表页（学期列表）→ 弹窗选学期 → POST 拉取对应学期课表
- *   → 解析合并 → 保存。任何一步取消或失败都立即退出；notifyTaskCompletion 只在成功后调用。
+ *   （响应异常时自动回退 GET 查询串）→ 解析合并 → 保存。
+ *   任何一步取消或失败都立即退出；失败弹窗内含响应诊断信息；notifyTaskCompletion 只在成功后调用。
  */
 async function runImportFlow() {
     try {
@@ -588,13 +589,13 @@ async function runImportFlow() {
 
         // 1. 拉取课表页，提取学期列表
         toast('正在获取学期信息...');
-        const listHtml = await fetchText(listUrl);
-        const listDoc = new DOMParser().parseFromString(listHtml, 'text/html');
+        const listPage = await fetchPage(listUrl);
+        const listDoc = new DOMParser().parseFromString(listPage.text, 'text/html');
         const semesters = parseSemesterOptions(listDoc);
         if (semesters.length === 0) {
             await alertUser(
                 '未获取到学期列表',
-                '课表页返回异常，可能是登录已失效。请重新登录教务系统后再点击导入。'
+                '课表页返回异常（HTTP ' + listPage.status + '，' + listPage.text.length + ' 字节），可能是登录已失效。请重新登录教务系统后再点击导入。'
             );
             return;
         }
@@ -609,16 +610,54 @@ async function runImportFlow() {
         const semester = semesters[picked];
         const kbjcmsid = parseKbjcmsid(listDoc);
 
-        // 3. 请求所选学期的课表（请求体与浏览器抓包一致）
+        // 3. 请求所选学期的课表（请求体与浏览器抓包一致；POST 异常时自动回退 GET 查询串）
         toast('正在获取 ' + semester.label + ' 课表...');
         const body = 'cj0701id=&zc=&demo=&xnxq01id=' + encodeURIComponent(semester.value) +
             '&sfFD=1&wkbkc=1&kbjcmsid=' + encodeURIComponent(kbjcmsid);
-        const tableHtml = await fetchText(listUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: body
-        });
-        const tableDoc = new DOMParser().parseFromString(tableHtml, 'text/html');
+        let tableDoc = null;
+        let via = '';
+        let lastPage = null; // 最后一次课表响应（供诊断，避免重复请求）
+        try {
+            const postPage = await fetchPage(listUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                body: body
+            });
+            lastPage = postPage;
+            const postDoc = new DOMParser().parseFromString(postPage.text, 'text/html');
+            via = 'POST ' + postPage.text.length + '字节' + (postPage.url && postPage.url !== listUrl ? '，重定向至 ' + postPage.url : '');
+            if (postDoc.getElementById('timetable')) tableDoc = postDoc;
+        } catch (e) {
+            via = 'POST 异常: ' + (e && e.message ? e.message : e);
+        }
+        if (!tableDoc) {
+            try {
+                const getPage = await fetchPage(listUrl + '?' + body);
+                lastPage = getPage;
+                const getDoc = new DOMParser().parseFromString(getPage.text, 'text/html');
+                if (getDoc.getElementById('timetable')) {
+                    tableDoc = getDoc;
+                    via = 'GET回退 ' + getPage.text.length + '字节';
+                }
+            } catch (e) { /* 回退失败则走下方诊断 */ }
+        }
+        if (!tableDoc) {
+            // 兜底诊断：展示最后一次响应的关键特征，便于远程定位
+            const diagDoc = lastPage ? new DOMParser().parseFromString(lastPage.text, 'text/html') : null;
+            const title = diagDoc ? (diagDoc.title || '').trim() : '(无响应)';
+            const hasTable = !!(diagDoc && diagDoc.getElementById('timetable'));
+            const hasKb = !!(diagDoc && diagDoc.querySelector('.kbcontent'));
+            const loginLike = /Logon\.do|登录|统一身份/.test((diagDoc && diagDoc.body ? diagDoc.body.textContent : '') || '');
+            await alertUser(
+                '未获取到课表数据',
+                '诊断：' + via + '；页面标题：' + (title || '(空)') +
+                '；含课表表格：' + (hasTable ? '是' : '否') +
+                '；含课程格子：' + (hasKb ? '是' : '否') +
+                '；疑似登录页：' + (loginLike ? '是' : '否') +
+                '。请将此弹窗截图反馈给维护者。'
+            );
+            return;
+        }
 
         // 4. 解析与合并（与 BTBU_01 相同的解析规则）
         toast('正在解析课表...');
@@ -626,7 +665,7 @@ async function runImportFlow() {
         if (rawCourses.length === 0) {
             await alertUser(
                 '未解析到课程',
-                semester.label + ' 没有解析到有效课程。可能该学期暂无课表数据，或登录已失效。'
+                semester.label + ' 的课表页面已获取（含课表表格），但表格中没有课程内容——该学期可能暂未发布课表数据。'
             );
             return;
         }
