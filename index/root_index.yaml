@@ -983,7 +983,7 @@ schools:
     initial: "H"
     resource_folder: "SCNU"
 
-  - id: "LYIT"
+  - id: "LIT"
     name: "洛阳理工学院"
     initial: "L"
-    resource_folder: "LYIT"
+    resource_folder: "LIT"
