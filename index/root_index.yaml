@@ -118,6 +118,11 @@ schools:
     initial: "M"
     resource_folder: "MMPT"
 
+  - id: "MKU"
+    name: "闽南科技学院"
+    initial: "M"
+    resource_folder: "MKU"
+
   - id: "SWJTU"
     name: "西南交通大学"
     initial: "X"
@@ -992,7 +997,7 @@ schools:
     name: "安徽电气工程职业技术学院"
     initial: "A"
     resource_folder: "AEPU"
-    
+
   - id: "SUSTECH"
     name: "南方科技大学"
     initial: "N"
