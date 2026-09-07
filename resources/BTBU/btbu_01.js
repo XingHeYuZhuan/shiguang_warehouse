@@ -3,11 +3,14 @@
 // 使用流程：登录教务 → 培养管理 → 我的课表 → 学期理论课表 → 选择学期 → 点击一键导入
 // 维护者：lztttt（出现解析问题请提交 issue 或 PR）
 //
-// 规范依据：
+// 输出数据：CourseJsonModel（name/teacher/position/day/startSection/endSection/weeks，
+//           不输出 id/color/remark 内部字段）
+//
+// 实现要点：
 //   - 桥接 API 使用 v2 规范的 window.shiguangBridge / window.shiguangBridgePromise
-//   - 星期几由表头(星期一~星期日)校准的列位置推导，不依赖单元格 id 的书写惯例
-//   - 周次解析保留 (单)/(双) 标记并按单双周过滤
-//   - 引入官方《课程合并与去重函数》处理 1-2节+3-4节 合并、单双周合并与去重
+//   - 星期几由表头（星期一~星期日）校准的列位置推导，不依赖单元格 id 的书写惯例
+//   - 周次解析保留 (单)/(双) 标记并按单双周过滤；节次支持 [03-04-05节] 三小节连排
+//   - 合并去重采用官方《课程合并与去重函数》（严格条件：同课同教师同教室才合并）
 
 // =========================================================================
 // 桥接封装（浏览器 Alpha 调试时自动降级为 alert/console）
@@ -61,8 +64,9 @@ function findScheduleDocument() {
 
 // =========================================================================
 // 课表解析：按行列位置定位星期（表头校准），不依赖 kbcontent 的 id 书写惯例
-// 说明：强智新版课表单元格 id 的“星期/节次”顺序存在版本差异，官方参考适配
-//      （HHTC/STCNCHU）均采用位置法，此处与其保持一致并增加表头校准与 colspan 兼容。
+// 说明：官方参考适配（HHTC/STCNCHU）均采用位置法。北工商实际 id 形如
+//      “GUID-列-槽位”（各格 GUID 不同、不含行号），无法作为定位依据，
+//      故与官方保持一致，并增加表头校准与 colspan 兼容。
 // =========================================================================
 
 // 星期文本 → 数字（1=周一 … 7=周日），无法识别返回 0
@@ -104,16 +108,16 @@ function gridColumnIndexOf(cell) {
 
 /**
  * 解析“周次(节次)”文本 → { weeks: Number[], sections: Number[] }
- * 兼容格式：
- *   "1-16周[01-02节]"、"1-8,10-16(周)[03-04节]"、"5(周)[05-06节]"
- *   "1-15周(单)[01-02节]"、"2-16(双)[01-02节]" 等单双周写法
+ * 兼容格式（前两种为北工商实页形态）：
+ *   "1-16(周)[01-02节]"、"1-16(周)[03-04-05节]"（三小节连排）、"9(周)"（单周）
+ *   "1-8,10-16(周)[03-04节]"（分段）、"1-15周(单)[01-02节]"、"2-16(双)[01-02节]"（单双周）
  */
 function parseWeeksAndSections(text) {
     const result = { weeks: [], sections: [] };
     const str = String(text || '').trim();
     if (!str) return result;
 
-    // 1) 单双周标记（不能随分隔符一起丢掉）
+    // 1) 先识别单双周标记（(单)/(双)），全周课程无标记
     let parity = 0; // 1=单周 2=双周
     if (/双/.test(str)) parity = 2;
     else if (/单/.test(str)) parity = 1;
@@ -362,8 +366,9 @@ function mergeAndDistinctCourses(courses) {
     }));
 
     // 阶段 1：合并连续节次与完全重复记录（前提：名称、教师、地点、星期、周次一致，官方严格条件）
-    // 注：北工商同一门课跨大节时教师/教室可能不同（如 1-2节与3-4节不同教室），
-    //     严格模式下将保留为两条独立记录，由应用侧按节次相邻展示。
+    // 注：北工商同一门课跨大节时教师/教室可能不同（如 JAVA核心编程 1-2节与3-4节不同教室），
+    //     严格模式下保留为两条独立记录；如确有合并需要，去掉 isSameCourseAndWeeks 中的
+    //     teacher/position 比较即可（合并后沿用第一段的教师与教室）。
     list.sort((a, b) => {
         return a.name.localeCompare(b.name) ||
                a.teacher.localeCompare(b.teacher) ||
@@ -494,6 +499,7 @@ async function saveCourses(courses) {
 }
 
 async function importPresetTimeSlots() {
+    // 北工商作息时间表（13 节）；如与校历作息不符，在此调整即可
     const timeSlots = [
         { number: 1, startTime: '08:00', endTime: '08:45' },
         { number: 2, startTime: '08:50', endTime: '09:35' },
