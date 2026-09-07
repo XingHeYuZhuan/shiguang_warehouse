@@ -8,9 +8,9 @@
 //
 // 实现要点：
 //   - 桥接 API 使用 v2 规范的 window.shiguangBridge / window.shiguangBridgePromise
-//   - 星期几由表头（星期一~星期日）校准的列位置推导，不依赖单元格 id 的书写惯例
+//   - 星期几由表头（星期一~星期日）校准的列位置推导
 //   - 周次解析保留 (单)/(双) 标记并按单双周过滤；节次支持 [03-04-05节] 三小节连排
-//   - 合并去重采用官方《课程合并与去重函数》（严格条件：同课同教师同教室才合并）
+//   - 采用官方函数合并去重
 
 // =========================================================================
 // 桥接封装（浏览器 Alpha 调试时自动降级为 alert/console）
@@ -63,10 +63,8 @@ function findScheduleDocument() {
 }
 
 // =========================================================================
-// 课表解析：按行列位置定位星期（表头校准），不依赖 kbcontent 的 id 书写惯例
-// 说明：官方参考适配（HHTC/STCNCHU）均采用位置法。北工商实际 id 形如
-//      “GUID-列-槽位”（各格 GUID 不同、不含行号），无法作为定位依据，
-//      故与官方保持一致，并增加表头校准与 colspan 兼容。
+// 课表解析：按行列位置定位星期（表头校准），
+// 说明：参考官方适配 并增加表头校准与 colspan 兼容。
 // =========================================================================
 
 // 星期文本 → 数字（1=周一 … 7=周日），无法识别返回 0
@@ -350,7 +348,6 @@ function convertCourses(rawCourses) {
 /**
  * 节次与周次合并去重函数
  * 来源：官方 Wiki《课程合并与去重函数》
- * https://github.com/XingHeYuZhuan/shiguangschedule/wiki/课程合并与去重函数
  * 功能：连续节次合并(1-2节+3-4节→1-4节)、同节次周次合并(单双周)、完全去重、周次排序
  */
 function mergeAndDistinctCourses(courses) {
@@ -366,7 +363,7 @@ function mergeAndDistinctCourses(courses) {
     }));
 
     // 阶段 1：合并连续节次与完全重复记录（前提：名称、教师、地点、星期、周次一致，官方严格条件）
-    // 注：北工商同一门课跨大节时教师/教室可能不同（如 JAVA核心编程 1-2节与3-4节不同教室），
+    // 注：同一门课跨大节时教师/教室可能不同（如 JAVA核心编程 1-2节与3-4节不同教室），
     //     严格模式下保留为两条独立记录；如确有合并需要，去掉 isSameCourseAndWeeks 中的
     //     teacher/position 比较即可（合并后沿用第一段的教师与教室）。
     list.sort((a, b) => {
@@ -451,7 +448,7 @@ async function promptSemesterStartDate() {
     }
     const input = await window.shiguangBridgePromise.showPrompt(
         '学期开始日期',
-        '请输入本学期第一周的周一日期（YYYY-MM-DD），软件将据此校准当前周次。\n如不清楚可点击取消跳过，稍后可在软件内设置。',
+        '请输入本学期第一周的周一日期（YYYY-MM-DD）\n 点击取消跳过、后续可在软件内设置。',
         '',
         'validateSemesterStartDate'
     );
@@ -499,7 +496,7 @@ async function saveCourses(courses) {
 }
 
 async function importPresetTimeSlots() {
-    // 北工商作息时间表（13 节）；如与校历作息不符，在此调整即可
+    // 作息时间表（13 节）
     const timeSlots = [
         { number: 1, startTime: '08:00', endTime: '08:45' },
         { number: 2, startTime: '08:50', endTime: '09:35' },
