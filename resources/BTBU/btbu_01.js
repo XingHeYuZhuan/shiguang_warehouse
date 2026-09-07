@@ -464,7 +464,6 @@ async function saveCourseConfig(rawCourses) {
 
     const config = {
         semesterTotalWeeks: maxWeek > 0 ? maxWeek : 20,
-        firstDayOfWeek: 1,
         defaultBreakDuration: 5
     };
     if (startDate) {
