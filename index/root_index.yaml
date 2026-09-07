@@ -982,3 +982,8 @@ schools:
     name: "华南师范大学"
     initial: "H"
     resource_folder: "SCNU"
+
+  - id: "AEPU"
+    name: "安徽电气工程职业技术学院"
+    initial: "A"
+    resource_folder: "AEPU"
