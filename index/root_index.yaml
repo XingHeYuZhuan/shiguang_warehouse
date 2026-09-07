@@ -993,3 +993,7 @@ schools:
     initial: "A"
     resource_folder: "AEPU"
     
+  - id: "SUSTECH"
+    name: "南方科技大学"
+    initial: "N"
+    resource_folder: "SUSTECH"
