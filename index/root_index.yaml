@@ -108,6 +108,11 @@ schools:
     initial: "T"
     resource_folder: "TARU"
 
+  - id: "MASU"
+    name: "马鞍山学院"
+    initial: "M"
+    resource_folder: "MASU"
+
   - id: "MMPT"
     name: "茂名职业技术学院"
     initial: "M"
