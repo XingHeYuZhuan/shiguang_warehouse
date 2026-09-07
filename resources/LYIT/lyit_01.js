@@ -1,7 +1,7 @@
 // 洛阳理工学院教务（乘方教务）适配器
-// 流程：选择学期 → 导入课表与教务作息
+// 流程：获取学期列表 → 选择学期 → 导入课表与教务作息
 // 接口：
-//   GET  /new/student/xsgrkb/week.page            课表页（学期下拉 + 作息表）
+//   GET  /new/student/xsgrkb/week.page            课表页数据（学期下拉 + 作息表，直接请求获取，无需进入课表页面）
 //   POST /new/student/xsgrkb/getCalendarWeekDatas  整学期课程数据
 
 // 周次字符串
@@ -159,42 +159,11 @@ async function selectSemester(semesterOptions) {
     };
 }
 
-// 获取课表页 HTML（含学期列表与作息表）
-function findSchedulePageUrl(doc) {
-    const visited = [];
-
-    function visit(currentDoc) {
-        if (!currentDoc || visited.indexOf(currentDoc) !== -1) return null;
-        visited.push(currentDoc);
-
-        for (const frame of Array.from(currentDoc.querySelectorAll("iframe"))) {
-            const src = String(frame.getAttribute("src") || "").trim();
-            if (/\/new\/student\/xsgrkb\/week\.page(?:[?#]|$)/.test(src)) return src;
-            try {
-                const nested = visit(frame.contentDocument);
-                if (nested) return nested;
-            } catch (_) {
-                // Ignore cross-origin frames and keep looking for the school iframe.
-            }
-        }
-        return null;
-    }
-
-    return visit(doc);
-}
-
+// 直接获取课表页数据（学期下拉与作息表）。乘方教务系统的学期列表由服务端渲染，
+// 不提供返回学期列表的 JSON 接口，因此直接请求 week.page 即可，无需用户进入课表页面。
 async function fetchSchedulePage() {
-    let scheduleUrl = findSchedulePageUrl(document);
-    if (!scheduleUrl) {
-        const mainResponse = await fetch("/new/student/xsgrkb/main.page", { method: "GET", credentials: "include" });
-        if (!mainResponse.ok) throw new Error(`无法打开课表入口（HTTP ${mainResponse.status}）`);
-        const mainHtml = await mainResponse.text();
-        scheduleUrl = findSchedulePageUrl(new DOMParser().parseFromString(mainHtml, "text/html"));
-    }
-    if (!scheduleUrl) throw new Error("未找到课表页面，请先打开个人课表后重试");
-
-    const response = await fetch(new URL(scheduleUrl, location.href).toString(), { method: "GET", credentials: "include" });
-    if (!response.ok) throw new Error(`无法打开课表页面（HTTP ${response.status}）`);
+    const response = await fetch("/new/student/xsgrkb/week.page", { method: "GET", credentials: "include" });
+    if (!response.ok) throw new Error(`无法获取课表数据（HTTP ${response.status}）`);
     return response.text();
 }
 
