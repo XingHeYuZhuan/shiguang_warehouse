@@ -566,7 +566,10 @@ async function importPresetTimeSlots() {
 }
 
 // 通过隐藏表单 + 隐藏 iframe 提交（等价于页面内真实表单导航，
-// Sec-Fetch-Dest: iframe / Referer 语义与浏览器一致，规避 XHR 差异处理）
+// Sec-Fetch-Dest: iframe / Referer 语义与浏览器一致）。
+// 实测：WebVPN 环境下深澜 wengine 会 hook window.fetch 并破坏 POST 请求，
+// 而真实表单导航四个学期全部成功 —— 故此方法为主策略。
+// 超时可经 window.__BTBU_FORM_TIMEOUT_MS__ 覆盖（默认 8000ms，移动网络经 WebVPN 较慢）。
 function submitViaHiddenForm(action, body) {
     return new Promise(function (resolve) {
         try {
@@ -587,6 +590,7 @@ function submitViaHiddenForm(action, body) {
             document.body.appendChild(frame);
             document.body.appendChild(form);
 
+            const timeoutMs = (window.__BTBU_FORM_TIMEOUT_MS__ | 0) || 8000;
             let settled = false;
             const finish = function (doc) {
                 if (settled) return;
@@ -604,7 +608,7 @@ function submitViaHiddenForm(action, body) {
             });
             setTimeout(function () {
                 try { finish(frame.contentDocument); } catch (e) { finish(null); }
-            }, 3000);
+            }, timeoutMs);
             form.submit();
         } catch (e) { resolve(null); }
     });
@@ -656,25 +660,33 @@ async function runImportFlow() {
         const kbjcmsid = parseKbjcmsid(listDoc);
 
         // 3. 请求所选学期的课表（请求体与浏览器抓包一致）
-        //    三级策略：POST 表单体 → GET 查询串 → 隐藏表单+iframe 提交（模拟真实导航）
+        //    三级策略：隐藏表单+iframe（主策略，WebVPN 实测四学期全部成功）
+        //              → POST fetch → GET fetch
         toast('正在获取 ' + semester.label + ' 课表...');
         const body = 'cj0701id=&zc=&demo=&xnxq01id=' + encodeURIComponent(semester.value) +
             '&sfFD=1&wkbkc=1&kbjcmsid=' + encodeURIComponent(kbjcmsid);
         let tableDoc = null;
         let via = '';
         let lastPage = null; // 最后一次响应（供诊断，避免重复请求）
-        try {
-            const postPage = await fetchPage(listUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-                body: body
-            });
-            lastPage = postPage;
-            const postDoc = new DOMParser().parseFromString(postPage.text, 'text/html');
-            via = 'POST ' + postPage.text.length + '字节' + (postPage.url && postPage.url !== listUrl ? '，重定向至 ' + postPage.url : '');
-            if (postDoc.getElementById('timetable')) tableDoc = postDoc;
-        } catch (e) {
-            via = 'POST 异常: ' + (e && e.message ? e.message : e);
+
+        // 主策略：隐藏表单 + iframe（与浏览器真实导航同语义；WebVPN 下深澜会破坏 fetch POST）
+        const frameDoc = await submitViaHiddenForm(listUrl, body);
+        if (frameDoc) { tableDoc = frameDoc; via = '表单+iframe'; }
+
+        if (!tableDoc) {
+            try {
+                const postPage = await fetchPage(listUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                    body: body
+                });
+                lastPage = postPage;
+                const postDoc = new DOMParser().parseFromString(postPage.text, 'text/html');
+                via = 'POST ' + postPage.text.length + '字节' + (postPage.url && postPage.url !== listUrl ? '，重定向至 ' + postPage.url : '');
+                if (postDoc.getElementById('timetable')) tableDoc = postDoc;
+            } catch (e) {
+                via = 'POST 异常: ' + (e && e.message ? e.message : e);
+            }
         }
         if (!tableDoc) {
             try {
@@ -685,11 +697,7 @@ async function runImportFlow() {
                     tableDoc = getDoc;
                     via = 'GET回退 ' + getPage.text.length + '字节';
                 }
-            } catch (e) { /* 回退失败则走下一级 */ }
-        }
-        if (!tableDoc) {
-            const frameDoc = await submitViaHiddenForm(listUrl, body);
-            if (frameDoc) { tableDoc = frameDoc; via = '表单+iframe'; }
+            } catch (e) { /* 回退失败则走下方诊断 */ }
         }
         if (!tableDoc) {
             // 兜底诊断：展示最后一次响应的关键特征，便于远程定位
@@ -706,7 +714,7 @@ async function runImportFlow() {
                 '；含课程格子：' + (hasKb ? '是' : '否') +
                 '；疑似登录页：' + (loginLike ? '是' : '否') +
                 '；正文摘录：' + (excerpt || '(空)') +
-                '。请将此弹窗截图反馈给维护者；也可尝试切换桌面模式后重试。'
+                '。请将此弹窗截图反馈给维护者。'
             );
             return;
         }
