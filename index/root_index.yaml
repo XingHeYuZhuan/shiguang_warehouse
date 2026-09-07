@@ -967,3 +967,8 @@ schools:
     name: "重庆航天职业技术学院"
     initial: "C"
     resource_folder: "CQEPC"
+
+  - id: "NEUYJS"
+    name: "东北大学研究生"
+    initial: "N"
+    resource_folder: "NEUYJS"
