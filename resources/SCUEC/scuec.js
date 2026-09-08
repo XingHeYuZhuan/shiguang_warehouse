@@ -22,33 +22,44 @@ function parseWeeks(weekStr) {
     const weeks = [];
     if (!weekStr) return weeks;
 
-    weekStr = weekStr.trim();
-    const isSingleWeek = weekStr.includes('(单)');
-    const match = weekStr.match(/(\d+)\s*[-~]\s*(\d+)|(\d+)\s*周/);
-    
-    if (match) {
-        let start, end;
-        if (match[1] && match[2]) {
-            start = parseInt(match[1]);
-            end = parseInt(match[2]);
-        } else if (match[3]) {
-            start = end = parseInt(match[3]);
-        } else {
-            return weeks;
-        }
-        
-        if (isSingleWeek) {
-            for (let i = start; i <= end; i += 2) {
-                weeks.push(i);
-            }
-        } else {
-            for (let i = start; i <= end; i++) {
-                weeks.push(i);
-            }
+    const normalized = String(weekStr)
+        .replace(/周/g, '')
+        .replace(/\s+/g, '');
+
+    const parts = normalized.split(/[,，、;；]/).filter(Boolean);
+    for (const part of parts) {
+        const match = part.match(/^(\d+)(?:[-~](\d+))?(?:\((单|双)\))?$/);
+        if (!match) continue;
+
+        const start = Number(match[1]);
+        const end = match[2] ? Number(match[2]) : start;
+        const parity = match[3];
+
+        for (let i = start; i <= end; i++) {
+            if (parity === '单' && i % 2 === 0) continue;
+            if (parity === '双' && i % 2 === 1) continue;
+            weeks.push(i);
         }
     }
-    
-    return weeks;
+
+    return Array.from(new Set(weeks)).sort((a, b) => a - b);
+}
+
+/**
+ * 将 HTML 转成纯文本，不依赖被页面覆盖的 document.createElement。
+ */
+function htmlToText(html) {
+    if (!html) return '';
+
+    return String(html)
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/gi, '\u00a0')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(Number('0x' + hex)))
+        .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)));
 }
 
 /**
@@ -57,21 +68,11 @@ function parseWeeks(weekStr) {
  */
 function cleanHTML(html) {
     if (!html) return '';
-    
-    // 创建临时元素
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
-    
-    // 获取纯文本
-    let text = temp.textContent || temp.innerText || '';
-    
-    // 清理多余空格和特殊字符
-    text = text
-        .replace(/&nbsp;/g, ' ')      // 替换 nbsp
-        .replace(/\s+/g, ' ')         // 多个空格合并为一个
+
+    return htmlToText(html)
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
-    
-    return text;
 }
 
 /**
@@ -113,107 +114,67 @@ function parseSingleCourse(courseHTML) {
     if (!courseHTML || courseHTML.trim() === '') {
         return null;
     }
-    
+
     try {
-        // 用 <br> 分割成行
-        const lines = smartSplitLines(courseHTML, '<br');
-        
+        const lines = htmlToText(courseHTML)
+            .replace(/\u00a0/g, ' ')
+            .split(/\n+/)
+            .map((line) => line.replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+
         if (lines.length === 0) {
             return null;
         }
-        
-        console.log(`[DEBUG] 课程块行数: ${lines.length}`, lines);
-        
-        // ========== 第一行：课程名 + 周次 + 节次 ==========
+
         const firstLine = lines[0];
-        
-        // 提取课程名
-        let courseName = '';
-        const courseNameMatch = firstLine.match(/^(.+?)(?:\s*\[|\s+\d+-|\s*$)/);
-        if (courseNameMatch) {
-            courseName = courseNameMatch[1].trim();
-        }
-        
-        if (!courseName) {
-            console.warn('[WARN] 无法提取课程名:', firstLine);
-            return null;
-        }
-        
-        // 提取周次
-        const weekMatch = firstLine.match(/(\d+[-~]\d+周(?:\(单\))?|\d+周)/);
-        let weeks = [];
-        if (weekMatch) {
-            weeks = parseWeeks(weekMatch[1]);
-        }
-        
+        const weekMatch = firstLine.match(/\d+(?:\s*[-~]\s*\d+)?周(?:\((?:单|双)\))?/);
+        const sectionMatch = firstLine.match(/[（(]第(\d+)(?:\s*[-~]\s*(\d+))?节[）)]/);
+        const weekToken = weekMatch ? weekMatch[0] : '';
+        const weeks = parseWeeks(weekToken);
+
         if (weeks.length === 0) {
-            console.warn('[WARN] 无法提取周次:', firstLine);
             return null;
         }
-        
-        // 提取节次
-        let startSection = 0;
-        let endSection = 0;
-        const sectionRangeMatch = firstLine.match(/[（(]第(\d+)[-~](\d+)节[）)]/);
-        if (sectionRangeMatch) {
-            startSection = parseInt(sectionRangeMatch[1]);
-            endSection = parseInt(sectionRangeMatch[2]);
-        } else {
-            const singleSectionMatch = firstLine.match(/[（(]第(\d+)节[）)]/);
-            if (singleSectionMatch) {
-                startSection = endSection = parseInt(singleSectionMatch[1]);
-            }
+
+        const weekIndex = weekMatch ? weekMatch.index : firstLine.length;
+        const sectionIndex = sectionMatch ? sectionMatch.index : firstLine.length;
+        const nameEnd = Math.min(weekIndex, sectionIndex);
+
+        let name = firstLine
+            .slice(0, nameEnd)
+            .replace(/\[\d+\]\s*$/, '')
+            .trim();
+
+        if (!name) {
+            return null;
         }
-        
-        // ========== 后续行：教师和地点 ==========
-        let teacher = '';
-        let position = '';
-        
-        // 简单逻辑：第二行是教师，第三行是地点
-        if (lines.length > 1) {
-            const secondLine = lines[1];
-            // 检查是否是教师名（通常是汉字，且不包含"楼"等地点关键词）
-            if (secondLine && /[\u4e00-\u9fa5]/.test(secondLine) && !/[楼号室厅]/.test(secondLine)) {
-                teacher = secondLine;
-            } else if (secondLine && /[楼号室厅]/.test(secondLine)) {
-                // 第二行看起来是地点
-                position = secondLine;
-            } else {
-                // 其他情况作为教师
-                teacher = secondLine;
-            }
-        }
-        
-        if (lines.length > 2) {
-            const thirdLine = lines[2];
-            // 如果第三行看起来是地点，就作为地点
-            if (thirdLine && /[楼号室厅]/.test(thirdLine)) {
-                position = thirdLine;
-            } else if (thirdLine && !teacher) {
-                // 如果还没有教师，就作为教师
-                teacher = thirdLine;
-            } else if (thirdLine && !position) {
-                // 否则作为地点
-                position = thirdLine;
-            }
-        }
-        
-        // 如果还有第四行，作为地点
-        if (lines.length > 3 && !position) {
-            position = lines[3];
-        }
-        
-        console.log(`[DEBUG] 解析: 名="${courseName}", 师="${teacher}", 地="${position}", 周=${weeks.join(',')}, 节=${startSection}-${endSection}`);
-        
-        return {
-            name: courseName,
-            teacher: teacher || '',
-            position: position || '未指定',
+
+        let startSection = sectionMatch ? Number(sectionMatch[1]) : 0;
+        let endSection = sectionMatch && sectionMatch[2]
+            ? Number(sectionMatch[2])
+            : startSection;
+
+        const customTimeMatch = firstLine.match(/[（(](\d{1,2}:\d{2})\s*[-~]\s*(\d{1,2}:\d{2})[）)]/);
+        const rest = lines.slice(1);
+        const positionLine = rest.find((line) => /[楼馆场室厅]/.test(line));
+        const teacherLine = rest.find((line) => line !== positionLine);
+
+        const result = {
+            name: name,
+            teacher: teacherLine || rest.filter((line) => line !== positionLine).join(' '),
+            position: positionLine || '待定',
             startSection: startSection,
             endSection: endSection,
             weeks: weeks
         };
-        
+
+        if (customTimeMatch) {
+            result.isCustomTime = true;
+            result.customStartTime = customTimeMatch[1];
+            result.customEndTime = customTimeMatch[2];
+        }
+
+        return result;
     } catch (error) {
         console.error('[ERROR] 解析课程出错:', error);
         return null;
@@ -230,7 +191,7 @@ function extractCoursesFromCell(cellElement, dayIndex) {
         const cellHTML = cellElement.innerHTML || '';
         const cellText = cellElement.textContent || '';
         
-        if (!cellText || cellText.trim() === '' || cellText === '&nbsp;') {
+        if (!cellText || cellText.replace(/\u00a0/g, '').trim() === '') {
             return [];
         }
         
@@ -311,7 +272,7 @@ function extractCoursesFromTable() {
                 const sectionText = sectionCell.textContent.trim();
                 const sectionMatch = sectionText.match(/第(\d+)节/);
                 if (sectionMatch) {
-                    dayStartSection = parseInt(sectionMatch[1]);
+                    dayStartSection = Number(sectionMatch[1]);
                 }
             }
             
@@ -349,8 +310,8 @@ function extractCoursesFromTable() {
                     }
                 });
 
-                const rowspan = Math.max(parseInt(courseCell.getAttribute('rowspan') || '1', 10), 1);
-                const colspan = Math.max(parseInt(courseCell.getAttribute('colspan') || '1', 10), 1);
+                const rowspan = Math.max(Number(courseCell.getAttribute('rowspan') || '1'), 1);
+                const colspan = Math.max(Number(courseCell.getAttribute('colspan') || '1'), 1);
 
                 if (rowspan > 1) {
                     for (let offset = 0; offset < colspan && dayIndex + offset < dayColumns.length; offset++) {
@@ -433,7 +394,7 @@ function extractUnscheduledCourses(element) {
  * 生成时间段配置
  */
 function generateTimeSlots() {
-    return [
+    const fallback = [
         { "number": 1, "startTime": "08:00", "endTime": "08:45" },
         { "number": 2, "startTime": "08:55", "endTime": "09:40" },
         { "number": 3, "startTime": "10:00", "endTime": "10:45" },
@@ -446,6 +407,31 @@ function generateTimeSlots() {
         { "number": 10, "startTime": "19:30", "endTime": "20:15" },
         { "number": 11, "startTime": "20:20", "endTime": "21:05" }
     ];
+
+    const table = document.querySelector('table.CourseFormTable');
+    if (!table) return fallback;
+
+    const slots = [];
+    const rows = Array.from(table.rows);
+
+    for (const row of rows) {
+        const sectionCell = row.cells[1];
+        if (!sectionCell) continue;
+
+        const text = sectionCell.textContent.trim();
+        const numberMatch = text.match(/第(\d+)节/);
+        const timeMatch = text.match(/(\d{1,2}:\d{2})\s*~\s*(\d{1,2}:\d{2})/);
+
+        if (!numberMatch || !timeMatch) continue;
+
+        slots.push({
+            number: Number(numberMatch[1]),
+            startTime: timeMatch[1],
+            endTime: timeMatch[2]
+        });
+    }
+
+    return slots.length > 0 ? slots.sort((a, b) => a.number - b.number) : fallback;
 }
 
 // ========== 第二部分：业务函数 ==========
