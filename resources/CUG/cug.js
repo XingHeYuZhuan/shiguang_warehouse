@@ -1,13 +1,17 @@
 // ============================================================================
-// 中国地质大学（武汉）正方教务系统 拾光课程表适配脚本
+// 中国地质大学 正方教务系统 拾光课程表适配脚本
 // ----------------------------------------------------------------------------
-// 适用学校：中国地质大学（武汉）南望山校区 / 未来城校区
-// 系统类型：正方教务系统（jwglxt）—— 学生课表查询
-// 解析策略：优先使用列表视图（#kblist_table）解析，回退使用网格视图（#kbgrid_table_0）
-// 作息支持：
-//   1. 南望山校区 · 秋冬季作息（上午 08:00，下午 14:00，共 10 节）
-//   2. 南望山校区 · 春夏季作息（5月1日后，上午 08:00，下午 14:30，共 10 节）
-//   3. 未来城校区 · 标准作息（上午 08:30，下午 14:00，晚上 18:30，共 12 节）
+// 适用学校：中国地质大学（南望山校区 / 未来城校区）
+// 系统类型：正方教务管理系统（jwglxt）
+// 获取策略：优先通过正方标准 API 请求结构化数据，失败时自动回退 DOM 页面解析
+// 特性支持：
+//   1. 只要登录教务系统任意页面即可触发导入，无需手动定位课表页
+//   2. 弹窗选择目标学年与学期（支持跨学年/往期课表导入）
+//   3. 自动识别校区并弹窗提供三套作息方案：
+//      - 南望山校区 · 秋冬季（12节，下午 14:00 上课）
+//      - 南望山校区 · 春夏季（12节，5月1日后下午 14:30 上课）
+//      - 未来城校区 · 标准作息（12节，上午 08:30 上课）
+//   4. 自动调用周次接口获取准确开学日期
 // ============================================================================
 
 /** 南望山校区 · 秋冬季作息（共12节） */
@@ -42,7 +46,7 @@ const CUG_NANWANGSHAN_SUMMER = [
   { number: 12, startTime: "22:00", endTime: "22:45" }
 ];
 
-/** 未来城校区 · 标准作息（全年统一，12节） */
+/** 未来城校区 · 标准作息（全年统一，共12节） */
 const CUG_FUTURE_CITY = [
   { number: 1,  startTime: "08:30", endTime: "09:15" },
   { number: 2,  startTime: "09:20", endTime: "10:05" },
@@ -65,25 +69,9 @@ const SCHEDULE_OPTIONS = [
   { name: "未来城校区 · 标准作息（上午 08:30 上课，全天12节）", slots: CUG_FUTURE_CITY }
 ];
 
-/** 列表视图信息块里出现的字段标签 */
-const LABELS = ["周数", "校区", "上课地点", "教师", "教学班"];
-
 /**
- * 从纯文本中抽取指定标签的值，直到下一个已知标签或文本结束
- */
-function labeled(text, label) {
-  if (!text) return "";
-  const others = LABELS.filter(l => l !== label).join("|");
-  const re = new RegExp(
-    label + "\\s*[：:]\\s*(.+?)(?=(?:\\s*(?:" + others + ")\\s*[：:])|$)",
-    "s"
-  );
-  const m = text.match(re);
-  return m ? (m[1] || "").trim() : "";
-}
-
-/**
- * 解析周次字符串："7-13周" / "7-8周,10-12周" / "7-10周,16周" / "1-16周(单)"
+ * 解析周次字符串，处理单双周和多周次区间
+ * 示例："1-2周,4-5周,7-11周" / "1-16周(单)" / "7周"
  */
 function parseWeeks(weekStr) {
   if (!weekStr) return [];
@@ -114,119 +102,8 @@ function parseWeeks(weekStr) {
 }
 
 /**
- * 从文本中收集所有周次标记并解析（避免把“周学时”等非周次词误判）
+ * 课程合并与去重：同名同师同地同天同节次合并周次
  */
-function weeksFromText(text) {
-  if (!text) return [];
-  const tokens = text.match(/\d+\s*[-–]\s*\d+\s*周(?:\((单|双)\))?(?![\u4e00-\u9fa5])|\d+\s*周(?:\((单|双)\))?(?![\u4e00-\u9fa5])/g) || [];
-  const weeks = [];
-  tokens.forEach(t => weeks.push(...parseWeeks(t)));
-  return [...new Set(weeks)].sort((a, b) => a - b);
-}
-
-/** 基础课程对象构造 */
-function commonBlock(name, text, day, startSection, endSection) {
-  const weeks = weeksFromText(text);
-  if (!weeks.length || !name) return null;
-  return {
-    name: name,
-    teacher: "",
-    position: "",
-    day: day,
-    startSection: startSection,
-    endSection: endSection,
-    weeks: weeks,
-    isCustomTime: false
-  };
-}
-
-/**
- * 解析列表视图信息块（带“校区：/教师：/上课地点：”标签）
- */
-function parseCourseBlockList(info, day, startSection, endSection) {
-  const titleEl = info.querySelector(".title");
-  const name = titleEl ? (titleEl.textContent || "").trim() : "";
-  const text = info.textContent || "";
-  const base = commonBlock(name, text, day, startSection, endSection);
-  if (!base) return null;
-
-  base.teacher = labeled(text, "教师");
-  const pos = labeled(text, "上课地点");
-  const campus = labeled(text, "校区");
-  base.position = campus ? (campus + " " + pos).trim() : pos;
-  return base;
-}
-
-/**
- * 解析网格视图信息块（字段来自 tooltip 的 title 属性）
- */
-function parseCourseBlockGrid(info, day, startSection, endSection) {
-  const titleEl = info.querySelector(".title");
-  const name = titleEl ? (titleEl.textContent || "").trim() : "";
-  const text = info.textContent || "";
-  const base = commonBlock(name, text, day, startSection, endSection);
-  if (!base) return null;
-
-  let teacher = "", position = "", campus = "";
-  info.querySelectorAll("p").forEach(p => {
-    const span = p.querySelector("span[data-toggle='tooltip']");
-    if (!span) return;
-    const t = (span.getAttribute("title") || "").trim();
-    const val = (p.textContent || "").replace(span.textContent || "", "").trim();
-    if (t.indexOf("教师") === 0) teacher = val;
-    else if (t.indexOf("上课地点") === 0) position = val;
-    else if (t.indexOf("校区") === 0) campus = val;
-  });
-
-  base.teacher = teacher;
-  base.position = campus ? (campus + " " + position).trim() : position;
-  return base;
-}
-
-/** 解析列表视图（#kblist_table） */
-function parseFromListTable() {
-  const list = document.querySelector("#kblist_table");
-  if (!list) return null;
-  const courses = [];
-  list.querySelectorAll("tbody[id^='xq_']").forEach(tb => {
-    const day = parseInt((tb.id || "").replace("xq_", ""), 10);
-    if (isNaN(day) || day < 1 || day > 7) return;
-    tb.querySelectorAll("tr").forEach(tr => {
-      const jc = tr.querySelector("[id^='jc_']");
-      const info = tr.querySelector(".timetable_con");
-      if (!jc || !info) return;
-      const m = (jc.id || "").match(/jc_(\d+)-(\d+)-(\d+)$/);
-      if (!m) return;
-      const c = parseCourseBlockList(info, day, +m[2], +m[3]);
-      if (c) courses.push(c);
-    });
-  });
-  return courses.length ? courses : null;
-}
-
-/** 解析网格视图（#kbgrid_table_0） */
-function parseFromGridTable() {
-  const grid = document.querySelector("#kbgrid_table_0");
-  if (!grid) return null;
-  const courses = [];
-  grid.querySelectorAll("td.td_wrap[id]").forEach(td => {
-    const m = (td.id || "").match(/(\d+)-(\d+)$/);
-    if (!m) return;
-    const day = +m[1];
-    const rowspan = parseInt(td.getAttribute("rowspan") || "1", 10);
-    td.querySelectorAll(".timetable_con").forEach(info => {
-      const text = info.textContent || "";
-      const sec = text.match(/\((\d+)-(\d+)节\)/);
-      const start = sec ? +sec[1] : +m[2];
-      const end = sec ? +sec[2] : (+m[2] + rowspan - 1);
-      const c = parseCourseBlockGrid(info, day, start, end);
-      if (c) courses.push(c);
-    });
-  });
-  return courses.length ? courses : null;
-}
-
-/** 合并去重：同名同师同地同天同节次合并周次 */
 function mergeAndDistinctCourses(courses) {
   if (!Array.isArray(courses) || courses.length <= 1) return courses;
   const out = [];
@@ -245,27 +122,157 @@ function mergeAndDistinctCourses(courses) {
   return out;
 }
 
-/** 读取当前页面的学年学期 */
-function readCurrentTerm() {
-  const xnm = document.querySelector("#xnm");
-  const xqm = document.querySelector("#xqm");
-  let academicYear = xnm && xnm.value && xnm.value.trim() ? xnm.value.trim() : null;
-  let semesterCode = xqm && xqm.value && xqm.value.trim() ? xqm.value.trim() : null;
-
-  const titleEl = document.querySelector(".timetable_title h6, .timetable_title");
-  const title = titleEl ? (titleEl.textContent || "") : "";
-  const ym = title.match(/(\d{4})\s*-\s*(\d{4})\s*学年/);
-  const sem = title.match(/第(\d)学期/);
-  if (!academicYear && ym) academicYear = ym[1];
-  if (!semesterCode && sem) {
-    const map = { 1: "3", 2: "12", 3: "16" };
-    semesterCode = map[+sem[1]] || null;
+/**
+ * 解析正方 API 返回的 JSON (kbList)
+ */
+function parseJsonData(jsonData) {
+  if (!jsonData || !Array.isArray(jsonData.kbList)) {
+    return [];
   }
-  const label = title.trim() || "当前学期";
-  return { academicYear, semesterCode, label };
+
+  const courses = [];
+  for (const item of jsonData.kbList) {
+    if (!item.kcmc || !item.jcs || !item.xqj || !item.zcd) continue;
+
+    const weeks = parseWeeks(item.zcd);
+    if (!weeks.length) continue;
+
+    const jcParts = String(item.jcs).split("-");
+    const startSection = parseInt(jcParts[0], 10);
+    const endSection = parseInt(jcParts[jcParts.length - 1], 10);
+    const day = parseInt(item.xqj, 10);
+
+    if (isNaN(startSection) || isNaN(endSection) || isNaN(day) || day < 1 || day > 7) {
+      continue;
+    }
+
+    const campus = (item.xqmc || "").trim();
+    const classroom = (item.cdmc || "").trim();
+    let position = "";
+    if (campus && classroom) {
+      position = classroom.includes(campus) ? classroom : `${campus} ${classroom}`;
+    } else {
+      position = classroom || campus;
+    }
+
+    courses.push({
+      name: (item.kcmc || "").trim(),
+      teacher: (item.xm || "").trim(),
+      position: position.trim(),
+      day: day,
+      startSection: startSection,
+      endSection: endSection,
+      weeks: weeks,
+      isCustomTime: false
+    });
+  }
+
+  return mergeAndDistinctCourses(courses);
 }
 
-/** 调用正方接口获取开学第1周日期作为 semesterStartDate */
+/**
+ * 从教务系统读取学年和学期选项
+ */
+async function fetchAcademicOptions() {
+  const url = window.location.origin + "/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151";
+  try {
+    const resp = await fetch(url, { method: "GET", credentials: "include" });
+    if (!resp.ok) return null;
+
+    const html = await resp.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    const yearOptions = Array.from(doc.querySelectorAll("#xnm option"))
+      .filter(opt => opt.value !== "")
+      .map(opt => ({
+        value: opt.value.trim(),
+        text: opt.textContent.trim(),
+        selected: opt.selected
+      }));
+
+    const semesterOptions = Array.from(doc.querySelectorAll("#xqm option"))
+      .filter(opt => opt.value !== "")
+      .map(opt => {
+        const text = opt.textContent.trim();
+        const semName = text === "3" || text === "1" ? "第1学期" :
+                        text === "12" || text === "2" ? "第2学期" :
+                        text === "16" || text === "3" ? "第3学期(小学期)" : `第${text}学期`;
+        return {
+          value: opt.value.trim(),
+          text: semName,
+          selected: opt.selected
+        };
+      });
+
+    if (!yearOptions.length || !semesterOptions.length) return null;
+
+    let defYearIdx = yearOptions.findIndex(o => o.selected);
+    if (defYearIdx === -1) defYearIdx = 0;
+
+    let defSemIdx = semesterOptions.findIndex(o => o.selected);
+    if (defSemIdx === -1) defSemIdx = 0;
+
+    return {
+      yearOptions,
+      semesterOptions,
+      defaultYearIndex: defYearIdx,
+      defaultSemesterIndex: defSemIdx
+    };
+  } catch (e) {
+    console.warn("读取学年学期选项失败:", e);
+    return null;
+  }
+}
+
+/**
+ * 提示用户选择学年和学期
+ */
+async function selectAcademicYearAndSemester() {
+  const options = await fetchAcademicOptions();
+
+  // 若无法通过后台请求获取选项，尝试从当前页面已有元素提取
+  if (!options) {
+    const xnmEl = document.querySelector("#xnm");
+    const xqmEl = document.querySelector("#xqm");
+    if (xnmEl && xqmEl && xnmEl.value && xqmEl.value) {
+      return { academicYear: xnmEl.value.trim(), semesterCode: xqmEl.value.trim(), label: "当前选中学期" };
+    }
+    return null;
+  }
+
+  const { yearOptions, semesterOptions, defaultYearIndex, defaultSemesterIndex } = options;
+
+  // 1. 选择学年
+  const yearTexts = yearOptions.map(o => o.text);
+  const selectedYearIdx = await window.shiguangBridgePromise.showSingleSelection(
+    "请选择导入学年",
+    JSON.stringify(yearTexts),
+    defaultYearIndex
+  );
+  if (selectedYearIdx === null || selectedYearIdx === undefined || selectedYearIdx < 0) return null;
+  const chosenYear = yearOptions[selectedYearIdx];
+
+  // 2. 选择学期
+  const semTexts = semesterOptions.map(o => o.text);
+  const selectedSemIdx = await window.shiguangBridgePromise.showSingleSelection(
+    `学年：${chosenYear.text}\n请选择导入学期`,
+    JSON.stringify(semTexts),
+    defaultSemesterIndex
+  );
+  if (selectedSemIdx === null || selectedSemIdx === undefined || selectedSemIdx < 0) return null;
+  const chosenSem = semesterOptions[selectedSemIdx];
+
+  return {
+    academicYear: chosenYear.value,
+    semesterCode: chosenSem.value,
+    label: `${chosenYear.text}学年 ${chosenSem.text}`
+  };
+}
+
+/**
+ * 调用正方开学周次接口获取第1周周一日期
+ */
 async function fetchSemesterStartDate(academicYear, semesterCode) {
   if (!academicYear || !semesterCode) return null;
   const url = window.location.origin + "/jwglxt/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
@@ -276,7 +283,7 @@ async function fetchSemesterStartDate(academicYear, semesterCode) {
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
         "x-requested-with": "XMLHttpRequest"
       },
-      body: "xnm=" + encodeURIComponent(academicYear) + "&xqm=" + encodeURIComponent(semesterCode),
+      body: `xnm=${encodeURIComponent(academicYear)}&xqm=${encodeURIComponent(semesterCode)}`,
       credentials: "include"
     });
     if (resp.ok) {
@@ -289,9 +296,31 @@ async function fetchSemesterStartDate(academicYear, semesterCode) {
       }
     }
   } catch (e) {
-    console.warn("获取学期开学日期失败:", e);
+    console.warn("获取开学日期失败:", e);
   }
   return null;
+}
+
+/**
+ * 调用正方 API 获取课程数据
+ */
+async function fetchCoursesByApi(academicYear, semesterCode) {
+  const url = window.location.origin + "/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151";
+  const body = `xnm=${encodeURIComponent(academicYear)}&xqm=${encodeURIComponent(semesterCode)}&kzlx=ck&xsdm=&kclbdm=`;
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      "x-requested-with": "XMLHttpRequest"
+    },
+    body: body,
+    credentials: "include"
+  });
+
+  if (!resp.ok) return null;
+  const jsonData = await resp.json();
+  return parseJsonData(jsonData);
 }
 
 /** 智能推测默认作息索引 */
@@ -312,87 +341,103 @@ function inferDefaultScheduleIndex(courses) {
   return 0; // 南望山秋冬季
 }
 
-/** 主导入流程 */
+/**
+ * 主导入流程
+ */
 async function runImportFlow() {
-  console.log("正在启动中国地质大学（武汉）课表导入流程...");
-  window.shiguangBridge.showToast("正在检测教务课表页面...");
+  console.log("正在启动中国地质大学课表导入流程...");
 
-  // 1. 检查是否在课表页面
-  const hasList = !!document.querySelector("#kblist_table");
-  const hasGrid = !!document.querySelector("#kbgrid_table_0");
-
-  if (!hasList && !hasGrid) {
+  // 1. 登录与域名检测
+  const host = window.location.host;
+  if (!host.includes("cug.edu.cn")) {
     await window.shiguangBridgePromise.showAlert(
-      "未检测到课表页面",
-      "您当前尚未打开课表查询页面。\n\n请在系统中依次完成：\n1. 统一身份认证登录\n2. 从信息门户进入教务系统\n3. 打开「学生课表查询」并选中目标学期点击「查询」\n\n课表显示后，再次点击导入。",
-      "我知道了"
-    );
-    return;
-  }
-
-  const term = readCurrentTerm();
-
-  // 2. 解析课程
-  const rawCourses = parseFromListTable() || parseFromGridTable();
-  if (!rawCourses || rawCourses.length === 0) {
-    window.shiguangBridge.showToast("未解析到任何课程，请确认课表已加载完毕。");
-    await window.shiguangBridgePromise.showAlert(
-      "课表为空或未加载",
-      "未能从当前页面解析出有效课程数据。请确认页面已显示课表格子，或尝试重新点击「查询」按钮。",
+      "请先登录教务系统",
+      "您当前未在学校教务系统域名下。\n\n请在统一身份认证登录并进入教务系统后，再次点击导入。",
       "好的"
     );
     return;
   }
 
-  const courses = mergeAndDistinctCourses(rawCourses);
-  console.log(`成功解析到 ${courses.length} 条课程条目。`, courses);
+  window.shiguangBridge.showToast("正在读取学年学期数据...");
 
-  // 3. 用户确认学期并选择作息
+  // 2. 交互选择学年与学期
+  const termSelection = await selectAcademicYearAndSemester();
+  if (!termSelection) {
+    window.shiguangBridge.showToast("未完成学年学期选择，导入流程已取消。");
+    return;
+  }
+
+  const { academicYear, semesterCode, label } = termSelection;
+  window.shiguangBridge.showToast(`正在获取 ${label} 课程数据...`);
+
+  // 3. 并行获取课程数据与开学日期
+  let courses = null;
+  let startDate = null;
+
+  try {
+    const [fetchedCourses, fetchedStartDate] = await Promise.all([
+      fetchCoursesByApi(academicYear, semesterCode),
+      fetchSemesterStartDate(academicYear, semesterCode)
+    ]);
+    courses = fetchedCourses;
+    startDate = fetchedStartDate;
+  } catch (err) {
+    console.error("API请求异常:", err);
+  }
+
+  // 4. 若 API 未返回数据，提示用户
+  if (!courses || courses.length === 0) {
+    await window.shiguangBridgePromise.showAlert(
+      "未获取到课程数据",
+      `在 [${label}] 中未查询到任何课程记录。\n\n可能原因：\n1. 该学期尚未排课或您在该学期无选课记录；\n2. 登录状态可能已失效，请尝试刷新页面重新登录。`,
+      "我知道了"
+    );
+    return;
+  }
+
+  console.log(`成功解析到 ${courses.length} 条有效课程。`, courses);
+
+  // 5. 用户确认学期并选择校区作息
   const defaultIdx = inferDefaultScheduleIndex(courses);
   const optionsLabels = SCHEDULE_OPTIONS.map(opt => opt.name);
 
   let selectedIdx = await window.shiguangBridgePromise.showSingleSelection(
-    `识别到 ${courses.length} 门课程 (${term.label})\n请选择您的校区与作息时间：`,
+    `识别到 ${courses.length} 门课程 (${label})\n请选择您的校区与作息时间：`,
     JSON.stringify(optionsLabels),
     defaultIdx
   );
 
   if (selectedIdx === null || selectedIdx === undefined || selectedIdx < 0) {
-    // 若取消，回退为智能推测选项
     selectedIdx = defaultIdx;
-    window.shiguangBridge.showToast("未选择作息，已采用推荐方案: " + SCHEDULE_OPTIONS[selectedIdx].name);
+    window.shiguangBridge.showToast("已使用推荐作息: " + SCHEDULE_OPTIONS[selectedIdx].name);
   }
 
   const chosenSchedule = SCHEDULE_OPTIONS[selectedIdx];
 
-  // 4. 保存课程
+  // 6. 保存课程
   try {
     await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
   } catch (error) {
     console.error("保存课程失败:", error);
-    window.shiguangBridge.showToast("课程数据保存失败: " + error.message);
+    window.shiguangBridge.showToast("课程保存失败: " + error.message);
     return;
   }
 
-  // 5. 保存时间段
+  // 7. 保存作息时间段
   try {
     await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(chosenSchedule.slots));
   } catch (error) {
     console.error("保存作息时间段失败:", error);
-    window.shiguangBridge.showToast("作息时间保存失败: " + error.message);
   }
 
-  // 6. 保存课表配置（含开学日期）
-  const startDate = await fetchSemesterStartDate(term.academicYear, term.semesterCode);
+  // 8. 保存课表配置
   const courseConfig = {
     semesterTotalWeeks: 20,
     firstDayOfWeek: 1
   };
   if (startDate) {
     courseConfig.semesterStartDate = startDate;
-    console.log("成功获取到开学日期:", startDate);
-  } else {
-    console.log("未获取到开学日期，将由用户手动在App设置。");
+    console.log("开学日期设定为:", startDate);
   }
 
   try {
@@ -401,11 +446,11 @@ async function runImportFlow() {
     console.error("保存课表配置失败:", error);
   }
 
-  // 7. 提示完成
-  const dateTip = startDate ? `\n开学日期已自动设定为: ${startDate}` : "\n开学日期未自动获取，请在App「课表设置」中核对。";
+  // 9. 完成提示
+  const dateTip = startDate ? `\n开学日期已自动设定为: ${startDate}` : "\n未自动识别到开学日期，可在App「课表设置」中核对。";
   await window.shiguangBridgePromise.showAlert(
     "导入成功",
-    `已成功导入 ${courses.length} 门课程！\n作息已设为：${chosenSchedule.name}${dateTip}`,
+    `已成功导入 ${courses.length} 门课程！ (${label})\n作息已设为：${chosenSchedule.name}${dateTip}`,
     "完成"
   );
 
@@ -413,5 +458,5 @@ async function runImportFlow() {
   window.shiguangBridge.notifyTaskCompletion();
 }
 
-// 运行导入
+// 启动导入流程
 runImportFlow();
