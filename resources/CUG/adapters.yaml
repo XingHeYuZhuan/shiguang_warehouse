@@ -1,0 +1,12 @@
+# resources/CUG/adapters.yaml
+# 中国地质大学（武汉）正方教务系统 适配声明
+# 说明：本文件需放在 shiguang_warehouse 仓库的 resources/CUG/ 目录下，
+#       并在 index/root_index.yaml 中登记该学校条目，之后由 CI 编译索引生效。
+adapters:
+- adapter_id: "CUG_01"
+  adapter_name: "中国地质大学（武汉）正方教务"
+  category: "BACHELOR_AND_ASSOCIATE"
+  asset_js_path: "cug.js"
+  import_url: "https://sfrz.cug.edu.cn/authserver/login"
+  maintainer: "kncatl"
+  description: "中国地质大学（武汉）正方教务系统，基于学生课表查询页列表视图解析。支持南望山校区（秋冬季/春夏季）与未来城校区多套作息弹窗选择，并自动合并校区地点信息。"
