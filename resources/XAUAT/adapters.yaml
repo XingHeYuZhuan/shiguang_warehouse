@@ -1,6 +1,6 @@
 adapters:
   - adapter_id: "XAUAT_01"
-    adapter_name: "西安建筑科技大学(本科)"
+    adapter_name: "西安建筑科技大学"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "xauat.js"
     import_url: "https://swjw.xauat.edu.cn/student/login/"
