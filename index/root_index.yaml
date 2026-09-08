@@ -1012,3 +1012,8 @@ schools:
     name: "南方科技大学"
     initial: "N"
     resource_folder: "SUSTECH"
+
+  - id: "CUG"
+    name: "中国地质大学"
+    initial: "Z"
+    resource_folder: "CUG"

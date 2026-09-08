@@ -1,7 +1,8 @@
 // 德州学院（dzu.edu.cn）拾光课程表适配脚本
 // 基于正方教务 jwglxt 接口适配，已于 2026-09-04 在德州学院教务系统实测通过
 // 2026-09-06 按 review 意见修订：采用官方 Wiki《课程合并与去重函数》替换简单去重
-// 作息时间来源：德州学院官方作息时间表（sjc.dzu.edu.cn/index/zxsj.htm）
+// 2026-09-08 修正作息：按德院助手《德院校历|作息表》对齐为 13 节制（下午从第 6 节起）
+// 作息时间来源：德院助手《德院校历|作息表》 https://www.yuque.com/deyuanzhushou/enoc41/pgw3sfnopsf6avpy
 //
 // 使用方式：进入教务系统登录后，在任意页面点击"执行导入"，
 // 自动读取学年学期供选择，自动获取开学日期与总周数，自动写入德州学院作息时间。
@@ -10,22 +11,23 @@ const COURSE_API_URL = "/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151";
 const WEEK_API_URL = "/jwglxt/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
 const INDEX_API_URL = "/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151";
 
-// 德州学院作息时间表（冬季 / 标准版，10月1日起执行：下午 14:00 上课）
-// 若需夏季作息（5月1日—9月30日，下午 14:30 上课），
-// 将第 5—8 节改为：14:30-15:15 / 15:20-16:05 / 16:25-17:10 / 17:15-18:00
+// 德州学院作息时间表（全年统一，不分夏季冬季）
+// 第 5 节仅出现在上午实验连排（第 3-5 节 10:00-12:15，三小节无课间连续），
+// 故取实验连排第三小节 11:30-12:15，使 3-5 节连排结束时间与作息表 12:15 精确对应。
 const TIME_SLOTS = [
     { number: 1, startTime: "08:00", endTime: "08:45" },
     { number: 2, startTime: "08:55", endTime: "09:40" },
     { number: 3, startTime: "10:00", endTime: "10:45" },
     { number: 4, startTime: "10:55", endTime: "11:40" },
-    { number: 5, startTime: "14:00", endTime: "14:45" },
-    { number: 6, startTime: "14:50", endTime: "15:35" },
-    { number: 7, startTime: "15:55", endTime: "16:40" },
-    { number: 8, startTime: "16:45", endTime: "17:30" },
-    { number: 9, startTime: "18:20", endTime: "19:05" },
-    { number: 10, startTime: "19:10", endTime: "19:55" },
-    { number: 11, startTime: "20:05", endTime: "20:50" },
-    { number: 12, startTime: "20:55", endTime: "21:40" }
+    { number: 5, startTime: "11:30", endTime: "12:15" },
+    { number: 6, startTime: "14:00", endTime: "14:45" },
+    { number: 7, startTime: "14:50", endTime: "15:35" },
+    { number: 8, startTime: "15:55", endTime: "16:40" },
+    { number: 9, startTime: "16:45", endTime: "17:30" },
+    { number: 10, startTime: "18:20", endTime: "19:05" },
+    { number: 11, startTime: "19:10", endTime: "19:55" },
+    { number: 12, startTime: "20:05", endTime: "20:50" },
+    { number: 13, startTime: "20:55", endTime: "21:40" }
 ];
 
 function parseSections(rawText) {
