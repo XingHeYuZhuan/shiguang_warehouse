@@ -11,7 +11,8 @@
 //
 // 使用方式：通过统一认证(https://jw.hualixy.edu.cn/sso/ddlogin)或正方直登
 // (https://jw.hualixy.edu.cn/jwglxt/xtgl/login_slogin.html)登录后，
-// 进入教务系统(jw.hualixy.edu.cn/jwglxt)课表查询页面，再执行导入。
+// 在教务系统(jw.hualixy.edu.cn/jwglxt)任意页面（如首页）直接执行导入即可，
+// 无需进入课表查询页面。脚本通过接口自动读取学年学期并获取课表与节次作息。
 
 // 正方新一代教务部分学校接口模块号可能不同，依次尝试常见模块号
 const GNMKDMS = ["N2151", "N253508"];
@@ -153,7 +154,7 @@ function parseJsonData(jsonData) {
 async function promptUserToStart() {
     return await window.shiguangBridgePromise.showAlert(
         "广州华立学院课表导入",
-        "导入前请确保您已通过统一认证(jw.hualixy.edu.cn/sso/ddlogin)或正方直登登录，并已进入教务系统课表查询页面。",
+        "导入前请确保您已通过统一认证(jw.hualixy.edu.cn/sso/ddlogin)或正方直登登录教务系统；在任意页面直接执行导入即可，无需进入课表查询页面。",
         "好的，开始导入"
     );
 }
@@ -433,7 +434,7 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
 
             const courses = parseJsonData(jsonData);
             if (courses.length === 0) {
-                window.shiguangBridge.showToast("未找到任何课程数据，请确认已进入教务系统课表查询页面（而非停留在登录页或门户页），且登录状态有效、所选学年学期正确。");
+                window.shiguangBridge.showToast("未找到任何课程数据，请确认登录状态有效（非停留在登录页）、所选学年学期正确，或本学期无课。");
                 return null;
             }
 

@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "hualixy.js"
     import_url: "https://jw.hualixy.edu.cn/sso/ddlogin"
     maintainer: "小漫君"
-    description: "广州华立学院正方新一代教务系统适配。请先通过统一认证(jw.hualixy.edu.cn/sso/ddlogin)或正方直登(jwglxt/xtgl/login_slogin.html)登录，进入教务系统课表查询页面后执行导入；脚本自动读取学年学期并获取真实节次作息。"
+    description: "广州华立学院正方新一代教务系统适配。请先通过统一认证(jw.hualixy.edu.cn/sso/ddlogin)或正方直登(jwglxt/xtgl/login_slogin.html)登录，在教务系统任意页面直接执行导入即可（无需进入课表查询页面）；脚本自动读取学年学期并获取课表与真实节次作息。"
