@@ -1,3 +1,4 @@
+
 async function runImportFlow() {
     // 兼容电脑端测试
     if (typeof window.shiguangBridgePromise === 'undefined') {
