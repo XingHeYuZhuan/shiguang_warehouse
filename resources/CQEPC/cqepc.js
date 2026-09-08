@@ -1,17 +1,12 @@
-// 齐齐哈尔工程学院(qqhrit.com) 拾光课程表适配脚本
-// 基于正方教务系统接口适配
-// 非该大学开发者适配,开发者无法及时发现问题
-// 出现问题请提issues或者提交pr更改,这更加快速
+// 重庆航天职业技术学院(cqepc.cn) 拾光课程表适配脚本
+// 基于正方教务系统接口适配 (API 方案)
 
 /**
  * 节次与周次合并去重函数
- * @param {Array<Object>} courses 原始解析课程数组
- * @returns {Array<Object>} 合并去重后的课程数组
  */
 function mergeAndDistinctCourses(courses) {
     if (!Array.isArray(courses) || courses.length <= 1) return courses;
 
-    // 1. 深拷贝并规范周次数据，过滤无效项
     const list = courses.map(c => ({
         ...c,
         name: c.name || '',
@@ -20,7 +15,6 @@ function mergeAndDistinctCourses(courses) {
         weeks: Array.isArray(c.weeks) ? [...c.weeks].sort((a, b) => a - b) : []
     }));
 
-    // 阶段 1：合并连续节次与完全重复记录（前提：名称、教师、地点、星期、周次一致）
     list.sort((a, b) => {
         return a.name.localeCompare(b.name) ||
                a.teacher.localeCompare(b.teacher) ||
@@ -35,7 +29,6 @@ function mergeAndDistinctCourses(courses) {
 
     for (let i = 1; i < list.length; i++) {
         const next = list[i];
-
         const isSameCourseAndWeeks =
             current.name === next.name &&
             current.teacher === next.teacher &&
@@ -47,10 +40,8 @@ function mergeAndDistinctCourses(courses) {
         const isDuplicate = current.startSection === next.startSection && current.endSection === next.endSection;
 
         if (isSameCourseAndWeeks && isContinuous) {
-            // 节次连续：延长结束节次 (如 1-2 节 + 3-4 节 -> 1-4 节)
             current.endSection = next.endSection;
         } else if (isSameCourseAndWeeks && isDuplicate) {
-            // 完全重复：跳过
             continue;
         } else {
             step1Merged.push(current);
@@ -59,7 +50,6 @@ function mergeAndDistinctCourses(courses) {
     }
     step1Merged.push(current);
 
-    // 阶段 2：合并同节次的周次（前提：名称、教师、地点、星期、开始/结束节次一致）
     step1Merged.sort((a, b) => {
         return a.name.localeCompare(b.name) ||
                a.teacher.localeCompare(b.teacher) ||
@@ -74,7 +64,6 @@ function mergeAndDistinctCourses(courses) {
 
     for (let i = 1; i < step1Merged.length; i++) {
         const nxt = step1Merged[i];
-
         const isSameCourseAndSection =
             cur.name === nxt.name &&
             cur.teacher === nxt.teacher &&
@@ -84,7 +73,6 @@ function mergeAndDistinctCourses(courses) {
             cur.endSection === nxt.endSection;
 
         if (isSameCourseAndSection) {
-            // 周次合并去重 (如 1-8 周 + 9-16 周 -> 1-16 周)
             cur.weeks = Array.from(new Set([...cur.weeks, ...nxt.weeks])).sort((a, b) => a - b);
         } else {
             step2Merged.push(cur);
@@ -107,7 +95,6 @@ function parseWeeks(weekStr) {
 
     for (const set of weekSets) {
         const trimmedSet = set.trim();
-
         const rangeMatch = trimmedSet.match(/(\d+)-(\d+)周/);
         const singleMatch = trimmedSet.match(/^(\d+)周/);
 
@@ -137,81 +124,6 @@ function parseWeeks(weekStr) {
     }
 
     return [...new Set(weeks)].sort((a, b) => a - b);
-}
-
-/**
- * 独立处理课程时间逻辑的函数
- */
-function applyCustomTimeLogic(courses) {
-    // 方案1：周末全天
-    const TIME_SCHEME_1 = [
-        { number: 1, startTime: "08:20", endTime: "09:05" },
-        { number: 2, startTime: "09:05", endTime: "09:50" },
-        { number: 3, startTime: "10:00", endTime: "10:45" },
-        { number: 4, startTime: "10:45", endTime: "11:30" },
-        { number: 5, startTime: "13:30", endTime: "14:15" },
-        { number: 6, startTime: "14:15", endTime: "15:00" },
-        { number: 7, startTime: "15:20", endTime: "16:05" },
-        { number: 8, startTime: "16:05", endTime: "16:50" },
-        { number: 9, startTime: "18:00", endTime: "18:45" },
-        { number: 10, startTime: "18:45", endTime: "19:30" },
-        { number: 11, startTime: "19:30", endTime: "20:15" }
-    ];
-
-    // 方案2：2#/3# 专用（3-4节）
-    const TIME_SCHEME_2 = [
-        { number: 3, startTime: "09:55", endTime: "10:40" },
-        { number: 4, startTime: "10:50", endTime: "11:35" }
-    ];
-
-    // 方案3：图/馆/齐三机床 专用（3-4节）
-    const TIME_SCHEME_3 = [
-        { number: 3, startTime: "10:05", endTime: "10:50" },
-        { number: 4, startTime: "11:00", endTime: "11:45" },
-    ];
-
-    return courses.map(course => {
-        const is23Sharp = /(2#|3#)/.test(course.position);
-        const isLibMachine = /(图|馆|齐三机床)/.test(course.position);
-        const isWeekend = (course.day === 6 || course.day === 7);
-        const isSpecialPos = (is23Sharp || isLibMachine);
-        const isEndpoint3or4 = (course.startSection === 3 || course.startSection === 4 || 
-                                course.endSection === 3 || course.endSection === 4);
-        const shouldApplyCustom = isWeekend || (isSpecialPos && isEndpoint3or4);
-
-        if (shouldApplyCustom) {
-            let startSlot, endSlot;
-
-            if (isWeekend) {
-                startSlot = TIME_SCHEME_1.find(s => s.number === course.startSection);
-                endSlot = TIME_SCHEME_1.find(s => s.number === course.endSection);
-            } else {
-                // 工作日特殊教室逻辑
-                const scheme = is23Sharp ? TIME_SCHEME_2 : TIME_SCHEME_3;
-                
-                const getSectionTime = (sec) => {
-                    if (sec === 3 || sec === 4) {
-                        return scheme.find(s => s.number === sec);
-                    }
-                    return TimeSlots.find(s => s.number === sec);
-                };
-
-                startSlot = getSectionTime(course.startSection);
-                endSlot = getSectionTime(course.endSection);
-            }
-
-            if (startSlot && endSlot) {
-                return {
-                    ...course,
-                    isCustomTime: true,
-                    customStartTime: startSlot.startTime,
-                    customEndTime: endSlot.endTime
-                };
-            }
-        }
-        
-        return course;
-    });
 }
 
 /**
@@ -257,24 +169,22 @@ function parseJsonData(jsonData) {
         });
     }
 
-    const mergedCourses = mergeAndDistinctCourses(initialCourseList);
-    return applyCustomTimeLogic(mergedCourses);
+    return mergeAndDistinctCourses(initialCourseList);
 }
 
 async function promptUserToStart() {
     return await window.shiguangBridgePromise.showAlert(
         "教务系统课表导入",
-        "导入前请确保您已在浏览器中成功登录教务系统",
+        "导入前请确保您已在浏览器中成功登录重庆航天职业技术学院教务系统",
         "好的，开始导入"
     );
 }
 
 /**
  * 从教务系统获取学年学期选项
- * 学年：以选中项为中心，取前2年+后2年，共5个选项
  */
 async function fetchAcademicOptions() {
-    const url = "http://jwxt.qqhrit.com:20266/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151";
+    const url = "http://jw.cqepc.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151";
     
     try {
         const response = await fetch(url, {
@@ -382,7 +292,7 @@ async function selectAcademicYearAndSemester() {
  * 获取学期开学日期
  */
 async function fetchSemesterStartDate(academicYear, semesterCode) {
-    const url = "http://jwxt.qqhrit.com:20266/jwglxt/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
+    const url = "http://jw.cqepc.cn/jwglxt/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
     const requestBody = `xnm=${academicYear}&xqm=${semesterCode}`;
 
     try {
@@ -400,7 +310,6 @@ async function fetchSemesterStartDate(academicYear, semesterCode) {
         if (response.ok) {
             const json = await response.json();
             if (Array.isArray(json) && json.length > 0) {
-                // 优先找第1周，否则取第一项
                 const firstWeekObj = json.find(item => String(item.zs) === "1" || String(item.zsmc) === "1") || json[0];
                 
                 if (firstWeekObj.rq) {
@@ -413,7 +322,6 @@ async function fetchSemesterStartDate(academicYear, semesterCode) {
                     const match = firstWeekObj.zcrq.match(/(\d{4}-\d{2}-\d{2})/);
                     if (match) return match[1];
                 }
-                // 某些系统用 ksrq 字段
                 if (firstWeekObj.ksrq) {
                     const match = firstWeekObj.ksrq.match(/(\d{4}-\d{2}-\d{2})/);
                     if (match) return match[1];
@@ -431,9 +339,8 @@ async function fetchSemesterStartDate(academicYear, semesterCode) {
  */
 async function fetchAndParseCourses(academicYear, semesterCode) {
     const requestBody = `xnm=${academicYear}&xqm=${semesterCode}&kzlx=ck&xsdm=&kclbdm=`;
-    const targetUrl = "http://jwxt.qqhrit.com:20266/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151";
+    const targetUrl = "http://jw.cqepc.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151";
 
-    // 并行获取课程数据和开学日期
     const [courseResponse, semesterStartDate] = await Promise.all([
         fetch(targetUrl, {
             method: "POST",
@@ -481,18 +388,24 @@ async function saveCourses(parsedCourses) {
     }
 }
 
+/**
+ * 重庆航天职业技术学院独家定制作息时间（包含 5、6 节午休占位）
+ */
 const TimeSlots = [
-    { number: 1, startTime: "08:00", endTime: "08:45" },
-    { number: 2, startTime: "08:55", endTime: "09:40" },
-    { number: 3, startTime: "10:20", endTime: "11:05" },
-    { number: 4, startTime: "11:15", endTime: "12:00" },
-    { number: 5, startTime: "13:30", endTime: "14:15" },
-    { number: 6, startTime: "14:25", endTime: "15:10" },
-    { number: 7, startTime: "15:20", endTime: "16:05" },
-    { number: 8, startTime: "16:05", endTime: "16:50" },
-    { number: 9, startTime: "18:00", endTime: "18:45" },
-    { number: 10, startTime: "18:45", endTime: "19:30" },
-    { number: 11, startTime: "19:30", endTime: "20:15" }
+    { number: 1, startTime: "09:00", endTime: "09:40" },
+    { number: 2, startTime: "09:50", endTime: "10:30" },
+    { number: 3, startTime: "10:50", endTime: "11:30" },
+    { number: 4, startTime: "11:40", endTime: "12:20" },
+    { number: 5, startTime: "13:00", endTime: "13:40" }, // 午休占位
+    { number: 6, startTime: "13:40", endTime: "13:50" }, // 午休占位
+    { number: 7, startTime: "14:00", endTime: "14:40" }, // 下午正课精准落在此处
+    { number: 8, startTime: "14:50", endTime: "15:30" },
+    { number: 9, startTime: "15:50", endTime: "16:30" },
+    { number: 10, startTime: "16:40", endTime: "17:20" },
+    { number: 11, startTime: "18:30", endTime: "19:10" },
+    { number: 12, startTime: "19:20", endTime: "20:00" },
+    { number: 13, startTime: "20:10", endTime: "20:50" },
+    { number: 14, startTime: "21:00", endTime: "21:40" }
 ];
 
 async function importPresetTimeSlots(timeSlots) {

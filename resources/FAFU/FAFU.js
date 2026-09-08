@@ -226,6 +226,31 @@ async function saveCourses(courses) {
     }
 }
 
+// 预设时间段
+const presetTimeSlots = [
+    { number: 1, startTime: "08:00", endTime: "08:45" },
+    { number: 2, startTime: "08:50", endTime: "09:35" },
+    { number: 3, startTime: "09:55", endTime: "10:40" },
+    { number: 4, startTime: "10:45", endTime: "11:30" },
+    { number: 5, startTime: "11:35", endTime: "12:20" },
+    { number: 6, startTime: "14:00", endTime: "14:45" },
+    { number: 7, startTime: "14:50", endTime: "15:35" },
+    { number: 8, startTime: "15:50", endTime: "16:35" },
+    { number: 9, startTime: "16:40", endTime: "17:25" },
+    { number: 10, startTime: "18:25", endTime: "19:10" },
+    { number: 11, startTime: "19:15", endTime: "20:00" },
+    { number: 12, startTime: "20:05", endTime: "20:50" }
+];
+
+async function importPresetTimeSlots() {
+    try {
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(presetTimeSlots));
+        window.shiguangBridge.showToast("预设时间段导入成功！");
+    } catch (error) {
+        window.shiguangBridge.showToast("导入时间段失败: " + error.message);
+    }
+}
+
 async function runImportFlow() {
     const confirmed = await window.shiguangBridgePromise.showAlert(
         "福建农林大学课表导入",
@@ -240,6 +265,7 @@ async function runImportFlow() {
     if (!result) return;
     const ok = await saveCourses(result.courses);
     if (!ok) return;
+    await importPresetTimeSlots();
     window.shiguangBridge.showToast(`课程导入成功，共 ${result.courses.length} 门！`);
     window.shiguangBridge.notifyTaskCompletion();
 }

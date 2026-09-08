@@ -146,28 +146,11 @@ async function saveAppConfig() {
 }
 
 /**
- * 自动适配双季作息
- * @param {number} semesterIndex 0 代表第一学期, 1 代表第二学期
+ * 全年统一作息（不再分学期）
  */
-async function saveAppTimeSlots(semesterIndex) {
-    // 第一学期作息
-    const timeSlots_1 = [
-        { "number": 1, "startTime": "08:00", "endTime": "08:45" },
-        { "number": 2, "startTime": "08:55", "endTime": "09:40" },
-        { "number": 3, "startTime": "09:50", "endTime": "10:35" },
-        { "number": 4, "startTime": "10:45", "endTime": "11:30" },
-        { "number": 5, "startTime": "11:40", "endTime": "12:25" },
-        { "number": 6, "startTime": "14:30", "endTime": "15:15" },
-        { "number": 7, "startTime": "15:25", "endTime": "16:10" },
-        { "number": 8, "startTime": "16:20", "endTime": "17:05" },
-        { "number": 9, "startTime": "17:15", "endTime": "18:00" },
-        { "number": 10, "startTime": "19:00", "endTime": "19:45" },
-        { "number": 11, "startTime": "19:55", "endTime": "20:40" },
-        { "number": 12, "startTime": "20:50", "endTime": "21:35" }
-    ];
-
-    // 第二学期作息
-    const timeSlots_2 = [
+async function saveAppTimeSlots() {
+    // 重庆人文科技学院全年统一作息
+    const timeSlots = [
         { "number": 1, "startTime": "08:30", "endTime": "09:15" },
         { "number": 2, "startTime": "09:20", "endTime": "10:05" },
         { "number": 3, "startTime": "10:20", "endTime": "11:05" },
@@ -182,8 +165,7 @@ async function saveAppTimeSlots(semesterIndex) {
         { "number": 12, "startTime": "20:40", "endTime": "21:25" }
     ];
 
-    const selectedSlots = (semesterIndex === 0) ? timeSlots_1 : timeSlots_2;
-    return await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(selectedSlots));
+    return await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
 }
 
 async function runImportFlow() {
@@ -219,7 +201,7 @@ async function runImportFlow() {
         }
 
         await saveAppConfig();
-        await saveAppTimeSlots(semesterIndex);
+        await saveAppTimeSlots();
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
         
         window.shiguangBridge.showToast(`成功导入 ${finalCourses.length} 门课程`);

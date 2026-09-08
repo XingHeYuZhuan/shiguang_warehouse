@@ -1,4 +1,4 @@
-// 辽宁大学程表适配脚本
+// 辽宁大学课表适配脚本
 // 基于 URP 教务系统 JSON 接口适配
 
 // 解析 classWeek 二进制串，如 "111111111111111100000000" -> [1..16]
@@ -188,18 +188,6 @@ function guessCampus(data) {
     return null;
 }
 
-function computeTotalWeeks(courses) {
-    let max = 0;
-    for (const course of courses) {
-        for (const week of course.weeks) {
-            if (week > max) {
-                max = week;
-            }
-        }
-    }
-    return max > 0 ? max : 20;
-}
-
 function readSemesterOptions() {
     const select = document.getElementById('planCode');
     if (!select || !select.options || select.options.length === 0) {
@@ -216,6 +204,32 @@ function readSemesterOptions() {
         values: values,
         defaultIndex: select.selectedIndex >= 0 ? select.selectedIndex : 0
     };
+}
+
+async function fetchCourseConfig() {
+    try {
+        const res = await fetch("/indexCalendar");
+        if (!res.ok) return null;
+        const html = await res.text();
+        
+        const config = {};
+        const rqMatch = html.match(/var\s+rq\s*=\s*["'](\d{8})["']/);
+        if (rqMatch && rqMatch[1]) {
+            const dateStr = rqMatch[1];
+            // 转换为 YYYY-MM-DD
+            config.semesterStartDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
+        }
+        
+        const skzcMatch = html.match(/var\s+skzc\s*=\s*["'](\d+)["']/);
+        if (skzcMatch && skzcMatch[1]) {
+            config.semesterTotalWeeks = parseInt(skzcMatch[1], 10);
+        }
+        
+        return Object.keys(config).length > 0 ? config : null;
+    } catch (e) {
+        window.shiguangBridge.showToast("获取课程配置失败: " + e.message);
+        return null;
+    }
 }
 
 async function runImportFlow() {
@@ -277,7 +291,6 @@ async function runImportFlow() {
             window.shiguangBridge.showToast("导入失败: 未解析到课程数据，请确认所选学期有课");
             return;
         }
-        const totalWeeks = computeTotalWeeks(courses);
 
         const campus = guessCampus(data);
         let defaultIndex = TIME_SLOT_OPTION_EXTRACT;
@@ -307,6 +320,8 @@ async function runImportFlow() {
         } else {
             timeSlots = parseTimeSlots(data);
         }
+        
+        const configData = await fetchCourseConfig();
 
         const saved = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (!saved) {
@@ -315,7 +330,9 @@ async function runImportFlow() {
         }
         try {
             await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-            await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({ semesterTotalWeeks: totalWeeks }));
+            if (configData) {
+                await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(configData));
+            }
         } catch (error) {
             window.shiguangBridge.showToast("作息时间或配置保存失败: " + error.message);
         }

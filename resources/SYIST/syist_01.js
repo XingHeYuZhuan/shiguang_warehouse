@@ -137,8 +137,15 @@ function mergeAndDistinctCourses(courses) {
  * 将教务系统的课程数据转换成 CourseJsonModel 结构
  */
 function parseSingleCourse(rawCourse) {
-    const courseName = rawCourse.KCM;
-    const teacherName = rawCourse.SKJS ? rawCourse.SKJS.split('/')[0] : '';
+    // 判断是否为实验课程（存在 SYXMMC 字段）
+    const isExperiment = rawCourse.SYXMMC !== undefined && rawCourse.SYXMMC !== null;
+    
+    // 课程名称：实验课程使用 "KCM - SYXMMC" 格式
+    const courseName = isExperiment 
+        ? `${rawCourse.KCM} - ${rawCourse.SYXMMC}`
+        : rawCourse.KCM;
+    
+    const teacherName = rawCourse.SKJS ? rawCourse.SKJS.split('/')[0] : (rawCourse.JSM || '');
     const position = rawCourse.JASMC;
     const day = rawCourse.SKXQ;
     const startSection = rawCourse.KSJC;
@@ -262,6 +269,7 @@ async function selectSemester() {
         "x-requested-with": "XMLHttpRequest"
     };
 
+    // 获取学期列表
     let semesterList = [];
     try {
         const response = await fetch("http://jwxt.syist.edu.cn:30334/jwapp/sys/wdkb/modules/jshkcb/xnxqcx.do", {
@@ -282,13 +290,36 @@ async function selectSemester() {
         return null;
     }
 
+    // 获取当前学期作为默认值
+    let defaultDM = null;
+    try {
+        const dqResponse = await fetch("http://jwxt.syist.edu.cn:30334/jwapp/sys/wdkb/modules/jshkcb/dqxnxq.do", {
+            headers,
+            method: "POST",
+            credentials: "include"
+        });
+        const dqData = await dqResponse.json();
+        const currentSemester = dqData?.datas?.dqxnxq?.rows?.[0];
+        if (currentSemester) {
+            defaultDM = currentSemester.DM;
+        }
+    } catch (e) {
+        console.warn("获取当前学期失败，将不使用默认值:", e);
+    }
+
     const topSemesters = semesterList.slice(0, 10);
     const displayNames = topSemesters.map(item => item.MC || item.DM);
+
+    // 查找默认学期的索引
+    let defaultIndex = -1;
+    if (defaultDM) {
+        defaultIndex = topSemesters.findIndex(item => item.DM === defaultDM);
+    }
 
     const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "请选择学期",
         JSON.stringify(displayNames),
-        -1
+        defaultIndex
     );
 
     if (selectedIndex === null || selectedIndex === -1) {
@@ -393,6 +424,7 @@ async function fetchAndParseCourses(semesterObj) {
         "x-requested-with": "XMLHttpRequest"
     };
 
+    // 获取理论课程
     const courseUrl = "http://jwxt.syist.edu.cn:30334/jwapp/sys/wdkb/modules/xskcb/cxxszhxqkb.do";
     const courseBody = `XNXQDM=${XNXQDM}`;
     let rawCourseData;
@@ -406,13 +438,31 @@ async function fetchAndParseCourses(semesterObj) {
     }
 
     const rawCourses = rawCourseData?.datas?.cxxszhxqkb?.rows || [];
-    if (rawCourses.length === 0) {
+
+    // 获取实验课程
+    let rawExperimentCourses = [];
+    try {
+        const expUrl = "http://jwxt.syist.edu.cn:30334/jwapp/sys/wdkb/modules/syjxkcb/cxsyjxxskb.do";
+        const expBody = `XNXQDM=${XNXQDM}`;
+        const expResponse = await fetch(expUrl, { headers, body: expBody, method: "POST", credentials: "include" });
+        const expData = await expResponse.json();
+        rawExperimentCourses = expData?.datas?.cxsyjxxskb?.rows || [];
+    } catch (e) {
+        console.warn("获取实验课程失败，将仅使用理论课程:", e);
+    }
+
+    // 合并理论课程和实验课程
+    const allRawCourses = [...rawCourses, ...rawExperimentCourses];
+
+    if (allRawCourses.length === 0) {
         window.shiguangBridge.showToast("该学期未查询到您的课程数据。");
         return null;
     }
 
-    let parsedCourses = rawCourses.map(c => parseSingleCourse(c)).filter(c => c !== null);
+    // 解析所有课程
+    let parsedCourses = allRawCourses.map(c => parseSingleCourse(c)).filter(c => c !== null);
 
+    // 获取调课数据
     const changeUrl = "http://jwxt.syist.edu.cn:30334/jwapp/sys/wdkb/modules/xskcb/xsdkkc.do";
     const changeBody = `XNXQDM=${XNXQDM}&*order=-SQSJ`;
     let rawChangeData;
@@ -430,12 +480,17 @@ async function fetchAndParseCourses(semesterObj) {
         parsedCourses = applyCourseChanges(parsedCourses, rawChanges);
     }
 
-    // 1. 清理临时字段
+    // 清理临时字段
     const cleanList = cleanCourses(parsedCourses);
-    // 2. 执行两阶段合并（节次合并 + 周次合并）
+    // 执行两阶段合并（节次合并 + 周次合并）
     const finalCourses = mergeAndDistinctCourses(cleanList);
 
     const courseConfig = await fetchSemesterConfig(semesterObj.XNDM, semesterObj.XQDM);
+
+    // 显示实验课程数量提示
+    if (rawExperimentCourses.length > 0) {
+        window.shiguangBridge.showToast(`共获取到 ${rawCourses.length} 门理论课程和 ${rawExperimentCourses.length} 门实验课程。`);
+    }
 
     return {
         courses: finalCourses,
