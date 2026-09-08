@@ -1017,3 +1017,8 @@ schools:
     name: "中国地质大学（武汉）"
     initial: "Z"
     resource_folder: "CUG"
+    
+  - id: "XAUAT"
+    name: "西安建筑科技大学"
+    initial: "X"
+    resource_folder: "XAUAT"
