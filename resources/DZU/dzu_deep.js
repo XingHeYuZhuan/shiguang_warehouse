@@ -12,14 +12,14 @@ const WEEK_API_URL = "/jwglxt/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
 const INDEX_API_URL = "/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151";
 
 // 德州学院作息时间表（全年统一，不分夏季冬季）
-// 第 5 节仅出现在上午实验连排（第 3-5 节 10:00-12:15，三小节无课间连续），
-// 故取实验连排第三小节 11:30-12:15，使 3-5 节连排结束时间与作息表 12:15 精确对应。
+// 第 5 节为 25 分钟短节（11:50-12:15），上午（含实验连排）统一 12:15 结束：
+// 实验 3 小节（第 3-5 节）10:00-12:15 = 第3节45分 + 课间10 + 第4节45分 + 课间10 + 第5节25分。
 const TIME_SLOTS = [
     { number: 1, startTime: "08:00", endTime: "08:45" },
     { number: 2, startTime: "08:55", endTime: "09:40" },
     { number: 3, startTime: "10:00", endTime: "10:45" },
     { number: 4, startTime: "10:55", endTime: "11:40" },
-    { number: 5, startTime: "11:30", endTime: "12:15" },
+    { number: 5, startTime: "11:50", endTime: "12:15" },
     { number: 6, startTime: "14:00", endTime: "14:45" },
     { number: 7, startTime: "14:50", endTime: "15:35" },
     { number: 8, startTime: "15:55", endTime: "16:40" },
