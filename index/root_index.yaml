@@ -118,6 +118,11 @@ schools:
     initial: "M"
     resource_folder: "MMPT"
 
+  - id: "MYSY"
+    name: "绵阳师范学院"
+    initial: "M"
+    resource_folder: "MYSY"
+    
   - id: "MKU"
     name: "闽南科技学院"
     initial: "M"
