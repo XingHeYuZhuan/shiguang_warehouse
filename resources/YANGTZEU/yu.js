@@ -193,7 +193,7 @@
         let match;
         while ((match = activityRe.exec(text)) !== null) {
             const call = readTaskActivityArgs(text, activityRe.lastIndex);
-            if (!call) break;
+            if (!call) continue;
             activities.push({ ...call, start: match.index });
             activityRe.lastIndex = call.end;
         }
