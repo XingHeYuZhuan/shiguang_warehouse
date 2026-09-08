@@ -1022,3 +1022,8 @@ schools:
     name: "广州华立学院"
     initial: "G"
     resource_folder: "HUALIXY"
+
+  - id: "XAUAT"
+    name: "西安建筑科技大学"
+    initial: "X"
+    resource_folder: "XAUAT"
