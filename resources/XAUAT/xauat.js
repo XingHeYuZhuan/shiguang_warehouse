@@ -237,7 +237,6 @@
     } catch (e) {
       log.error("导入异常: " + (e.stack || e.message));
       await ui.alert("导入失败", e.message || "未知错误，请重试", "确定");
-      ui.done();
     }
   }
 
