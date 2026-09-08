@@ -122,6 +122,11 @@ schools:
     name: "绵阳师范学院"
     initial: "M"
     resource_folder: "MYSY"
+    
+  - id: "MKU"
+    name: "闽南科技学院"
+    initial: "M"
+    resource_folder: "MKU"
 
   - id: "SWJTU"
     name: "西南交通大学"
@@ -997,7 +1002,7 @@ schools:
     name: "安徽电气工程职业技术学院"
     initial: "A"
     resource_folder: "AEPU"
-    
+
   - id: "SUSTECH"
     name: "南方科技大学"
     initial: "N"
