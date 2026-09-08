@@ -73,25 +73,6 @@ function parseWeeks(weekStr) {
 }
 
 /**
- * 拼装课程备注。
- * 以下信息只存在于原始字段里，放进备注方便用户核对：重修标记、选课备注（体育项目、微专业等）、周次原文。
- */
-function buildCourseRemark(rawCourse) {
-    const parts = [];
-
-    const retakeFlag = String(rawCourse.cxbjmc || "").trim();
-    if (retakeFlag) parts.push(retakeFlag);
-
-    const selectionNote = String(rawCourse.xkbz || "").trim();
-    if (selectionNote) parts.push(selectionNote);
-
-    const weekDesc = String(rawCourse.zcd || "").trim();
-    if (weekDesc) parts.push(weekDesc);
-
-    return parts.join(" | ");
-}
-
-/**
  * 解析 API 返回的 JSON 数据。
  */
 function parseJsonData(jsonData) {
@@ -124,8 +105,6 @@ function parseJsonData(jsonData) {
             continue;
         }
 
-        const remark = buildCourseRemark(rawCourse);
-
         const course = {
             name: String(rawCourse.kcmc).trim(),
             teacher: String(rawCourse.xm || "").trim(),
@@ -135,8 +114,6 @@ function parseJsonData(jsonData) {
             endSection: endSection,
             weeks: weeksArray
         };
-
-        if (remark) course.remark = remark;
 
         finalCourseList.push(course);
     }
