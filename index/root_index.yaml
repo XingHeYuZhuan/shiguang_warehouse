@@ -1014,6 +1014,6 @@ schools:
     resource_folder: "SUSTECH"
 
   - id: "CUG"
-    name: "中国地质大学"
+    name: "中国地质大学（武汉）"
     initial: "Z"
     resource_folder: "CUG"
