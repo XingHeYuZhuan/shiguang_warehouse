@@ -7,6 +7,6 @@ adapters:
   adapter_name: "中国地质大学（武汉）正方教务"
   category: "BACHELOR_AND_ASSOCIATE"
   asset_js_path: "cug.js"
-  import_url: "https://sfrz.cug.edu.cn/authserver/login"
+  import_url: "https://sfrz.cug.edu.cn/authserver/login?service=https%3A%2F%2Fi.cug.edu.cn%2Fweb%2F%3FCASLOGIN%3DCASLOGIN"
   maintainer: "kncatl"
   description: "中国地质大学（武汉）正方教务系统，基于学生课表查询页列表视图解析。支持南望山校区（秋冬季/春夏季）与未来城校区多套作息弹窗选择，并自动合并校区地点信息。"
