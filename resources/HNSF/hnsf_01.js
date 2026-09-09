@@ -222,6 +222,29 @@ const SummerTimeSlots = [
     { number: 9, startTime: "20:00", "endTime": "20:45" },
     { number: 10, startTime: "20:55", "endTime": "21:40" }
 ];
+const NewCampusTimeSlots = [
+     { number: 1, startTime: "08:30", endTime: "09:15" },
+    { number: 2, startTime: "09:25", endTime: "10:10" },
+    { number: 3, startTime: "10:30", endTime: "11:15" },
+    { number: 4, startTime: "11:25", endTime: "12:10" },
+    { number: 5, startTime: "14:00", endTime: "14:45" },
+    { number: 6, startTime: "14:55", endTime: "15:40" },
+    { number: 7, startTime: "16:00", endTime: "16:45" },
+    { number: 8, startTime: "16:55", "endTime": "17:40" },
+    { number: 9, startTime: "18:40", "endTime": "19:25" },
+    { number: 10, startTime: "19:35", "endTime": "20:20" }
+]
+
+async function selectCampus() {
+    const campusOptions = ["建设东路校区/平原湖校区", "创新港校区"]
+    console.log("JS: 提示用户选择校区。");
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择校区",
+        JSON.stringify(campusOptions),
+        0
+    );
+    return selectedIndex;
+}
 
 async function selectTimeSlotsType() {
     const timeSlotsOptions = ["非夏季作息", "夏季作息"];
@@ -302,21 +325,28 @@ async function runImportFlow() {
     }
 
     // 4. 作息时间选择与导入
-    const timeSlotsIndex = await selectTimeSlotsType();
-    let selectedTimeSlots = [];
-
-    if (timeSlotsIndex === 0) {
-        // 0: 非夏季作息
-        selectedTimeSlots = Non_summerTimeSlots;
-        console.log("JS: 已选择非夏季作息。");
-    } else if (timeSlotsIndex === 1) {
-        // 1: 夏季作息
-        selectedTimeSlots = SummerTimeSlots;
-        console.log("JS: 已选择夏季作息。");
-    } else {
-        selectedTimeSlots = Non_summerTimeSlots;
-        console.warn("JS: 作息时间选择失败/取消，使用非夏季作息作为默认值。");
-    }
+    const campusIndex = await selectCampus();
+    let selectedTimeSlots = [];
+    if (campusIndex === 0) {
+        // 0: 建设东路校区/平原湖校区
+        const timeSlotsIndex = await selectTimeSlotsType();
+        if (timeSlotsIndex === 0) {
+            // 0: 非夏季作息
+            selectedTimeSlots = Non_summerTimeSlots;
+            console.log("JS: 已选择非夏季作息。");
+        } else if (timeSlotsIndex === 1) {
+            // 1: 夏季作息
+            selectedTimeSlots = SummerTimeSlots;
+            console.log("JS: 已选择夏季作息。");
+        } else {
+            selectedTimeSlots = Non_summerTimeSlots;
+            console.warn("JS: 作息时间选择失败/取消，使用非夏季作息作为默认值。");
+        }
+    } else if (campusIndex === 1) {
+        // 1: 创新港校区
+        selectedTimeSlots = NewCampusTimeSlots;
+        console.log("JS: 已选择创新港校区作息。");
+    }
     await importPresetTimeSlots(selectedTimeSlots);
 
 
