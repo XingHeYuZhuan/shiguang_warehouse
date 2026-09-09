@@ -95,6 +95,13 @@ function buildGrid(table) {
     return grid;
 }
 
+// 去掉地点中重复的楼栋名，如 "树人楼(树人楼北508)" -> "树人楼(北508)"
+function dedupePosition(pos) {
+    if (!pos) return pos;
+    var m = pos.match(/^(.+?)\s*[（(]\s*\1\s*(.+?)[）)]\s*$/);
+    return m ? m[1] + '(' + m[2] + ')' : pos;
+}
+
 function textOf(el, selector) {
     var t = el.querySelector(selector);
     return t ? trimText(t.textContent) : '';
@@ -153,7 +160,7 @@ function parseSchedule(doc) {
             var teacher = (abbr.match(/老师[:：]\s*([^;；]*)/) || [])[1] || '';
             var position = (abbr.match(/地点[:：]\s*([^;；]*)/) || [])[1] || '';
             if (teacher) teacher = trimText(teacher);
-            if (position) position = trimText(position);
+            if (position) position = trimText(dedupePosition(position));
 
             var weeks = [], start = 0, end = 0;
             var times = abbr.match(/时间[:：]\s*([^;；]*)/g) || [];
