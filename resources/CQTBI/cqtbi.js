@@ -108,14 +108,18 @@ function readCampusSjms(doc) {
 }
 
 // 从课表页读取当前学年学期（如 2026-2027-1），优先取选中项
+// 注意：该校下拉的 option 文本为 "2026-2027-1"，value 为空，故需读文本内容
 function readSemesterId(doc) {
     for (const sel of doc.querySelectorAll("select")) {
-        const val = (sel.value || (sel.selectedOptions[0] && sel.selectedOptions[0].value) || "").trim();
-        if (/^\d{4}-\d{4}-\d$/.test(val)) return val;
+        const selOpt = sel.selectedOptions[0] || sel.options[sel.selectedIndex];
+        if (selOpt) {
+            const text = (selOpt.textContent || selOpt.value || "").trim();
+            if (/^\d{4}-\d{4}-\d$/.test(text)) return text;
+        }
     }
     for (const opt of doc.querySelectorAll("select option")) {
-        const v = opt.value.trim();
-        if (/^\d{4}-\d{4}-\d$/.test(v)) return v;
+        const text = (opt.textContent || opt.value || "").trim();
+        if (/^\d{4}-\d{4}-\d$/.test(text)) return text;
     }
     return null;
 }
