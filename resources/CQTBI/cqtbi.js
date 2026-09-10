@@ -1,12 +1,5 @@
 // 重庆工商职业学院（重庆开放大学）教务系统课表导入适配脚本
 // 教务系统：强智 jsxsd（jwgl.cqtbi.edu.cn:81），导入页面 xsMainV.htmlx
-// 通过 API 请求课表：
-//   /jsxsd/framework/mainV_index_loadkb.htmlx?rq=all&sjmsValue=<校区作息ID>&xnxqid=<学年学期>&xswk=false
-// 参数从当前课表页读取：校区取 #kbjcmsid_ul 激活 tab 的 data-value，学期取学年学期下拉选中值
-// 返回 HTML 中每格 td 内多个 .item-box，每门课结构：
-//   <p>课程名</p>
-//   <div class="tch-name"><span>教师：X</span><span>学分：N</span><span>01~02~03节</span></div>
-//   <div><span><img item1.png>教室</span><span><img item3.png>第2-5,7-10周(全部) 星期一</span></div>
 
 // 该校作息时间（12 节）
 const CQTBI_TIME_SLOTS = [
