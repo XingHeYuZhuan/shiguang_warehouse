@@ -151,7 +151,6 @@ async function fetchCoursesByApi() {
     const base = findJwglBase();
     const url = `${base}/jsxsd/framework/mainV_index_loadkb.htmlx` +
         `?rq=all&sjmsValue=${encodeURIComponent(sjms)}&xnxqid=${encodeURIComponent(xnxqid)}&xswk=false`;
-    console.log(`JS: 请求课表接口 ${url}`);
 
     const response = await fetch(url, { credentials: "include" });
     if (!response.ok) throw new Error(`课表接口请求失败（HTTP ${response.status}）`);
@@ -242,7 +241,6 @@ async function saveTimeSlots(timeSlots) {
     if (!timeSlots || timeSlots.length === 0) return;
     try {
         await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
-        console.log("JS: 作息时间保存成功");
     } catch (error) {
         console.error("JS: 作息时间保存失败", error);
     }
@@ -274,7 +272,6 @@ async function runImportFlow() {
             if (config.startDate) break;
         }
         const { startDate, totalWeeks } = config;
-        console.log(`JS: 解析到 ${merged.length} 门课程，开学 ${startDate || "未知"}，共 ${totalWeeks || "?"} 周`);
 
         window.shiguangBridge.showToast(`正在保存 ${merged.length} 门课程...`);
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(merged, null, 2));
