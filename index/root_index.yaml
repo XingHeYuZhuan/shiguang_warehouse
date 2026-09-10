@@ -58,6 +58,11 @@ schools:
     initial: "C"
     resource_folder: "CQUT"
 
+  - id: "CQTBI"
+    name: "重庆工商职业学院"
+    initial: "C"
+    resource_folder: "CQTBI"
+
   - id: "CUST"
     name: "长春理工大学"
     initial: "C"
