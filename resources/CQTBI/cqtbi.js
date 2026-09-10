@@ -1,7 +1,12 @@
-// 重庆工商职业学院（重庆开放大学）教务系统捔表导入适配脚本
+// 重庆工商职业学院（重庆开放大学）教务系统课表导入适配脚本
 // 教务系统：强智 jsxsd（jwgl.cqtbi.edu.cn:81），导入页面 xsMainV.htmlx
-// 课表表格 #timetable 可能位于页面内 iframe，故遍历当前页 + 同域 iframe 查找
-// 每格 td 内多个 .item-box，每门课结构：
+// 通过 API 请求课表：
+//   /jsxsd/framework/mainV_index_loadkb.htmlx?rq=all&sjmsValue=<校区作息ID>&xnxqid=<学年学期>&xswk=false
+// 参数从当前课表页读取：校区取 #kbjcmsid_ul 激活 tab 的 data-value，学期取学年学期下拉选中值
+// 返回 HTML 中每格 td 内多个 .item-box，每门课结构：
+//   <p>课程名</p>
+//   <div class="tch-name"><span>教师：X</span><span>学分：N</span><span>01~02~03节</span></div>
+//   <div><span><img item1.png>教室</span><span><img item3.png>第2-5,7-10周(全部) 星期一</span></div>
 
 // 该校作息时间（12 节）
 const CQTBI_TIME_SLOTS = [
@@ -78,7 +83,44 @@ function collectDocs() {
     return docs;
 }
 
-// 从主页面 #week 下拉读取学期配置：第一个日期为开学日，下拉项数即总周数
+// 查找可访问的 jwgl 教务页面，取其 origin 作为接口基址
+function findJwglBase() {
+    const candidates = collectDocs().map(d => {
+        try { return d.location.href; } catch (_) { return ""; }
+    });
+    const jwgl = candidates.find(u => /jwgl\.cqtbi\.edu\.cn/i.test(u));
+    if (jwgl) {
+        try {
+            return new URL(jwgl).origin;
+        } catch (_) {
+            // Fall through to window origin.
+        }
+    }
+    return window.location.origin;
+}
+
+// 从课表页读取当前校区作息 ID（#kbjcmsid_ul 激活 tab 的 data-value）
+function readCampusSjms(doc) {
+    const active = doc.querySelector("#kbjcmsid_ul li.layui-this[data-value]");
+    if (active) return active.getAttribute("data-value");
+    const any = doc.querySelector("#kbjcmsid_ul li[data-value]");
+    return any ? any.getAttribute("data-value") : null;
+}
+
+// 从课表页读取当前学年学期（如 2026-2027-1），优先取选中项
+function readSemesterId(doc) {
+    for (const sel of doc.querySelectorAll("select")) {
+        const val = (sel.value || (sel.selectedOptions[0] && sel.selectedOptions[0].value) || "").trim();
+        if (/^\d{4}-\d{4}-\d$/.test(val)) return val;
+    }
+    for (const opt of doc.querySelectorAll("select option")) {
+        const v = opt.value.trim();
+        if (/^\d{4}-\d{4}-\d$/.test(v)) return v;
+    }
+    return null;
+}
+
+// 从 #week 下拉读取学期配置：第一个日期为开学日，下拉项数即总周数
 function readSemesterConfig(doc) {
     const sel = doc.getElementById("week");
     if (!sel) return { startDate: null, totalWeeks: null };
@@ -88,10 +130,37 @@ function readSemesterConfig(doc) {
     return { startDate: dates[0] || null, totalWeeks: dates.length || null };
 }
 
-// 解析渲染后的课表表格（在找到的 document 中）
+// 请求课表 API 并解析返回的 HTML（返回课程数组）
+async function fetchCoursesByApi() {
+    const docs = collectDocs();
+    // 参数优先从能读到校区 tab 的 document 读取
+    let sjms = null;
+    let xnxqid = null;
+    for (const doc of docs) {
+        if (!sjms) sjms = readCampusSjms(doc);
+        if (!xnxqid) xnxqid = readSemesterId(doc);
+        if (sjms && xnxqid) break;
+    }
+    if (!sjms) throw new Error("未能从页面读取校区信息（#kbjcmsid_ul），请确认在课表页面。");
+    if (!xnxqid) throw new Error("未能从页面读取当前学年学期，请确认在课表页面。");
+
+    const base = findJwglBase();
+    const url = `${base}/jsxsd/framework/mainV_index_loadkb.htmlx` +
+        `?rq=all&sjmsValue=${encodeURIComponent(sjms)}&xnxqid=${encodeURIComponent(xnxqid)}&xswk=false`;
+    console.log(`JS: 请求课表接口 ${url}`);
+
+    const response = await fetch(url, { credentials: "include" });
+    if (!response.ok) throw new Error(`课表接口请求失败（HTTP ${response.status}）`);
+    const html = await response.text();
+
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    return parseCourseTableFromDom(parsed);
+}
+
+// 解析渲染后的课表表格
 function parseCourseTableFromDom(doc) {
     const table = doc.getElementById("timetable");
-    if (!table) return null;
+    if (!table) return [];
 
     const courses = [];
     table.querySelectorAll("tbody > tr").forEach(row => {
@@ -186,41 +255,23 @@ async function runImportFlow() {
         return;
     }
 
-    window.shiguangBridge.showToast("正在解析课表...");
+    window.shiguangBridge.showToast("正在请求课表数据...");
     try {
-        // 在 当前页 + 所有 iframe 中定位课表，记录课表所在 document
-        let courses = null;
-        let tableDoc = null;
-        for (const doc of collectDocs()) {
-            courses = parseCourseTableFromDom(doc);
-            if (courses && courses.length > 0) {
-                tableDoc = doc;
-                break;
-            }
-        }
+        const courses = await fetchCoursesByApi();
         if (!courses || courses.length === 0) {
-            throw new Error("未在当前页面或内嵌框架中检测到课表，请确认已进入课表页面并加载完成。");
+            throw new Error("接口返回的课表中未解析到课程，请确认当前学期有课且已选择全部周。");
         }
 
         const merged = mergeCourses(courses);
         // 学期配置（#week 下拉）可能在任意一个 iframe 中，遍历所有可访问 document 查找
-        let config = readSemesterConfig(tableDoc);
-        if (!config.startDate) config = readSemesterConfig(document);
-        if (!config.startDate) {
-            for (const doc of collectDocs()) {
-                config = readSemesterConfig(doc);
-                if (config.startDate) break;
-            }
+        let config = { startDate: null, totalWeeks: null };
+        for (const doc of collectDocs()) {
+            config = readSemesterConfig(doc);
+            if (config.startDate) break;
         }
         const { startDate, totalWeeks } = config;
         console.log(`JS: 解析到 ${merged.length} 门课程，开学 ${startDate || "未知"}，共 ${totalWeeks || "?"} 周`);
-        // 若仍未找到，打印各 document 的 #week 情况便于排查
-        if (!startDate) {
-            collectDocs().forEach((doc, i) => {
-                const sel = doc.getElementById("week");
-                console.log(`JS: doc[${i}] #week =`, sel ? sel.outerHTML.slice(0, 300) : "未找到");
-            });
-        }
+
         window.shiguangBridge.showToast(`正在保存 ${merged.length} 门课程...`);
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(merged, null, 2));
 
