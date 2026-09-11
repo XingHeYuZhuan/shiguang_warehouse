@@ -20,57 +20,57 @@
 
 /** 南望山校区 · 秋冬季作息（共12节） */
 const CUG_NANWANGSHAN_AUTUMN = [
-  { number: 1,  startTime: "08:00", endTime: "08:45" },
-  { number: 2,  startTime: "08:50", endTime: "09:35" },
-  { number: 3,  startTime: "10:05", endTime: "10:50" },
-  { number: 4,  startTime: "10:55", endTime: "11:40" },
-  { number: 5,  startTime: "14:00", endTime: "14:45" },
-  { number: 6,  startTime: "14:50", endTime: "15:35" },
-  { number: 7,  startTime: "16:00", endTime: "16:45" },
-  { number: 8,  startTime: "16:50", endTime: "17:35" },
-  { number: 9,  startTime: "19:00", endTime: "19:45" },
-  { number: 10, startTime: "19:50", endTime: "20:35" },
-  { number: 11, startTime: "20:40", endTime: "21:25" },
-  { number: 12, startTime: "21:30", endTime: "22:15" }
+    { number: 1, startTime: "08:00", endTime: "08:45" },
+    { number: 2, startTime: "08:50", endTime: "09:35" },
+    { number: 3, startTime: "10:05", endTime: "10:50" },
+    { number: 4, startTime: "10:55", endTime: "11:40" },
+    { number: 5, startTime: "14:00", endTime: "14:45" },
+    { number: 6, startTime: "14:50", endTime: "15:35" },
+    { number: 7, startTime: "16:00", endTime: "16:45" },
+    { number: 8, startTime: "16:50", endTime: "17:35" },
+    { number: 9, startTime: "19:00", endTime: "19:45" },
+    { number: 10, startTime: "19:50", endTime: "20:35" },
+    { number: 11, startTime: "20:40", endTime: "21:25" },
+    { number: 12, startTime: "21:30", endTime: "22:15" }
 ];
 
 /** 南望山校区 · 春夏季作息（5月1日后执行，下午推迟30分钟，共12节） */
 const CUG_NANGSHAN_SUMMER = [
-  { number: 1,  startTime: "08:00", endTime: "08:45" },
-  { number: 2,  startTime: "08:50", endTime: "09:35" },
-  { number: 3,  startTime: "10:05", endTime: "10:50" },
-  { number: 4,  startTime: "10:55", endTime: "11:40" },
-  { number: 5,  startTime: "14:30", endTime: "15:15" },
-  { number: 6,  startTime: "15:20", endTime: "16:05" },
-  { number: 7,  startTime: "16:35", endTime: "17:20" },
-  { number: 8,  startTime: "17:25", endTime: "18:10" },
-  { number: 9,  startTime: "19:30", endTime: "20:15" },
-  { number: 10, startTime: "20:20", endTime: "21:05" },
-  { number: 11, startTime: "21:10", endTime: "21:55" },
-  { number: 12, startTime: "22:00", endTime: "22:45" }
+    { number: 1, startTime: "08:00", endTime: "08:45" },
+    { number: 2, startTime: "08:50", endTime: "09:35" },
+    { number: 3, startTime: "10:05", endTime: "10:50" },
+    { number: 4, startTime: "10:55", endTime: "11:40" },
+    { number: 5, startTime: "14:30", endTime: "15:15" },
+    { number: 6, startTime: "15:20", endTime: "16:05" },
+    { number: 7, startTime: "16:35", endTime: "17:20" },
+    { number: 8, startTime: "17:25", endTime: "18:10" },
+    { number: 9, startTime: "19:30", endTime: "20:15" },
+    { number: 10, startTime: "20:20", endTime: "21:05" },
+    { number: 11, startTime: "21:10", endTime: "21:55" },
+    { number: 12, startTime: "22:00", endTime: "22:45" }
 ];
 
 /** 未来城校区 · 标准作息（全年统一，共12节） */
 const CUG_FUTURE_CITY = [
-  { number: 1,  startTime: "08:30", endTime: "09:15" },
-  { number: 2,  startTime: "09:20", endTime: "10:05" },
-  { number: 3,  startTime: "10:15", endTime: "11:00" },
-  { number: 4,  startTime: "11:05", endTime: "11:50" },
-  { number: 5,  startTime: "14:00", endTime: "14:45" },
-  { number: 6,  startTime: "14:50", endTime: "15:35" },
-  { number: 7,  startTime: "15:45", endTime: "16:30" },
-  { number: 8,  startTime: "16:35", endTime: "17:20" },
-  { number: 9,  startTime: "18:30", endTime: "19:15" },
-  { number: 10, startTime: "19:20", endTime: "20:05" },
-  { number: 11, startTime: "20:15", endTime: "21:00" },
-  { number: 12, startTime: "21:05", endTime: "21:50" }
+    { number: 1, startTime: "08:30", endTime: "09:15" },
+    { number: 2, startTime: "09:20", endTime: "10:05" },
+    { number: 3, startTime: "10:15", endTime: "11:00" },
+    { number: 4, startTime: "11:05", endTime: "11:50" },
+    { number: 5, startTime: "14:00", endTime: "14:45" },
+    { number: 6, startTime: "14:50", endTime: "15:35" },
+    { number: 7, startTime: "15:45", endTime: "16:30" },
+    { number: 8, startTime: "16:35", endTime: "17:20" },
+    { number: 9, startTime: "18:30", endTime: "19:15" },
+    { number: 10, startTime: "19:20", endTime: "20:05" },
+    { number: 11, startTime: "20:15", endTime: "21:00" },
+    { number: 12, startTime: "21:05", endTime: "21:50" }
 ];
 
 /** 作息方案选项 */
 const SCHEDULE_OPTIONS = [
-  { name: "南望山校区 · 秋冬季作息（下午 14:00 上课）", slots: CUG_NANWANGSHAN_AUTUMN },
-  { name: "南望山校区 · 春夏季作息（5月1日后，下午 14:30 上课）", slots: CUG_NANGSHAN_SUMMER },
-  { name: "未来城校区 · 标准作息（上午 08:30 上课，全天12节）", slots: CUG_FUTURE_CITY }
+    { name: "南望山校区 · 秋冬季作息（下午 14:00 上课）", slots: CUG_NANWANGSHAN_AUTUMN },
+    { name: "南望山校区 · 春夏季作息（5月1日后，下午 14:30 上课）", slots: CUG_NANGSHAN_SUMMER },
+    { name: "未来城校区 · 标准作息（上午 08:30 上课，全天12节）", slots: CUG_FUTURE_CITY }
 ];
 
 // ============================================================================
@@ -116,7 +116,7 @@ function parseCourseText(text) {
     const posMatch = meta.match(/地点[:：]\s*([^,\]，；;。]+)/);
     if (posMatch) position = posMatch[1].trim();
 
-    return { className: name, teacher, position, weeks };
+    return { name, className: name, teacher, position, weeks };
 }
 
 /** 解析一个日程格（可能含多个课程，用分号分隔），返回课程对象数组，day 为 1-7（周一~周日） */
@@ -211,28 +211,32 @@ function parseAllDocuments() {
             }
         }
     });
+    if (docs.length > 0) {
+        const all = [];
+        docs.forEach(doc => {
+            const table =
+                doc.querySelector("#ctl00_contentParent_dgData") ||
+                doc.querySelector("table.Grid_Line") ||
+                doc.querySelector("table[id*=dgData]");
+            if (!table) return;
+            all.push(...buildCourses(table));
+        });
+        console.log("获取到课程：" + all);
 
-    const all = [];
-    docs.forEach(doc => {
-        const table =
-            doc.querySelector("#ctl00_contentParent_dgData") ||
-            doc.querySelector("table.Grid_Line") ||
-            doc.querySelector("table[id*=dgData]");
-        if (!table) return;
-        all.push(...buildCourses(table));
-    });
+        // 去重
+        const key = c =>
+            [c.className, c.teacher, c.position, c.day, c.startSection, c.endSection, c.weeks.join(",")].join("|");
+        const seen = new Set(), uniq = [];
+        all.forEach(c => {
+            const k = key(c);
+            if (!seen.has(k)) { seen.add(k); uniq.push(c); }
+        });
 
-    // 去重
-    const key = c =>
-        [c.className, c.teacher, c.position, c.day, c.startSection, c.endSection, c.weeks.join(",")].join("|");
-    const seen = new Set(), uniq = [];
-    all.forEach(c => {
-        const k = key(c);
-        if (!seen.has(k)) { seen.add(k); uniq.push(c); }
-    });
-
-    uniq.sort((a, b) => a.day - b.day || a.startSection - b.startSection);
-    return uniq;
+        uniq.sort((a, b) => a.day - b.day || a.startSection - b.startSection);
+        return uniq;
+    } else {
+        console.log("docs为空");
+    }
 }
 
 /** 智能推测默认作息索引（按教室是否含校区关键字；否则按季节） */
