@@ -12,7 +12,7 @@ adapters:
     description: "中国地质大学（武汉）正方教务系统API适配。登录教务系统任意页面即可一键导入，支持学年学期选择、南望山（秋冬/春夏季）与未来城校区作息选择，自动配置开学日期。"
 
   - adapter_id: "CUG_02"
-    adapter_name: "中国地质大学（武汉）正方教务"
+    adapter_name: "中国地质大学（武汉）研究生教务"
     category: "POSTGRADUATE"
     asset_js_path: "cug_postgraduate.js"
     import_url: "https://epo.cug.edu.cn"
