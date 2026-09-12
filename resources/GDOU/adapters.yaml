@@ -16,3 +16,10 @@ adapters:
     maintainer: "Yihe-ng"
     description: "广东海洋大学阳江校区教务适配，使用阳江校区教学楼错峰作息时间，如有误请提交issues"
 
+  - adapter_id: "GDOUYJ_02"
+    adapter_name: "广东海洋大学阳江校区教务（校外免VPN）"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "gdouyj2.js"
+    import_url: "https://jxpj.gdou.edu.cn/wx/?universitycode=10566"
+    maintainer: "Yihe-ng"
+    description: "广东海洋大学阳江校区教务适配，使用阳江校区教学楼错峰作息时间。本通道经教学评价系统取数，校外无需VPN或校园网，部分课程可能缺失，可手动补录"
