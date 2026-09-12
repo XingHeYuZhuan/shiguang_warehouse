@@ -1019,7 +1019,7 @@ schools:
     resource_folder: "SUSTECH"
 
   - id: "CUG"
-    name: "中国地质大学（武汉）"
+    name: "中国地质大学(武汉)"
     initial: "Z"
     resource_folder: "CUG"
 
@@ -1032,3 +1032,8 @@ schools:
     name: "西安建筑科技大学"
     initial: "X"
     resource_folder: "XAUAT"
+
+  - id: "XZHMU"
+    name: "徐州医科大学"
+    initial: "X"
+    resource_folder: "XZHMU"
