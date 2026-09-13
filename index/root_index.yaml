@@ -483,6 +483,11 @@ schools:
     initial: "H"
     resource_folder: "HBMU"
 
+  - id: "HBMZU"
+    name: "湖北民族大学"
+    initial: "H"
+    resource_folder: "HBMZU"
+
   - id: "TONGJI"
     name: "同济大学"
     initial: "T"
