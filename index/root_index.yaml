@@ -998,7 +998,7 @@ schools:
     initial: "C"
     resource_folder: "CQEPC"
 
-  - id: "HEBEI_SHIYOU"
+  - id: "HEBPU"
     name: "河北石油职业技术大学"
     initial: "H"
-    resource_folder: "HEBEI_SHIYOU"
+    resource_folder: "HEBPU"
