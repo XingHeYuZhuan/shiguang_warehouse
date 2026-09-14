@@ -33,6 +33,22 @@ const WINTER_TIME_SLOTS = [
     { number: 11, startTime: "21:10", endTime: "22:00" }
 ];
 
+// 周参数
+const FIRST_DAY_OF_WEEK = 1; // 每周第一天是 1
+const WEEK_DAYS = 7; // 一周有 7 天
+
+// 教学或总周数参数
+const DEFAULT_NUM_OF_WEEKS = 16;
+const MAX_NUM_OF_WEEKS = 32;
+
+// 课程参数
+const TOTAL_SECTION = SUMMER_TIME_SLOTS.length; // 根据作息表推断每天课程数
+const CLASS_DURATION = 50; // 每节课50分钟
+const BREAK_DURATION = 10; // 课间休息10分钟
+// 课程参数自检断言
+if (SUMMER_TIME_SLOTS.length !== WINTER_TIME_SLOTS.length) {
+    throw new Error(":( 配置错误: 夏/冬作息表节数不一致, 请联系开发者"); // 开发用断言, 裸错误
+}
 // -------- 用户交互 --------
 
 /**
@@ -139,7 +155,6 @@ async function promptUserToStart() {
         window.shiguangBridge.showToast("'_? 用户取消了导入");
         return false;
     }
-    window.shiguangBridge.showToast(">>> 开始流程");
     return true;
 }
 
@@ -210,7 +225,13 @@ async function getTermInfo() {
             semesterStartDate = dateMatch[0];
         }
         // ZJXZC: 教学周数(首选); ZZC: 学期总周数(含考试周, 次选)
-        termWeeks = parseInt(row?.ZJXZC, 10) || parseInt(row?.ZZC, 10) || null;
+        const parseWeeksField = (v) => {
+            const s = String(v ?? "");
+            if (!/^\d+$/.test(s)) return null;
+            const n = parseInt(s, 10);
+            return (n >= 1 && n <= MAX_NUM_OF_WEEKS) ? n : null;
+        };
+        termWeeks = parseWeeksField(row?.ZJXZC) || parseWeeksField(row?.ZZC) || null;
     } catch (e) {
         console.warn("获取学期开始日期失败(不影响导入):", e.message);
     }
@@ -231,6 +252,7 @@ async function getCourseRows(term) {
     const rows = res?.datas?.xskcb?.rows;
     console.log(`获取到 ${Array.isArray(rows) ? rows.length : 0} 条课表原始数据`);
     if (!Array.isArray(rows) || rows.length === 0) {
+        // 已保证 `rows.length > 0`
         throw new Error(":( 该学期暂无课程数据(可能尚未排课)");
     }
     return rows;
@@ -253,6 +275,22 @@ function parseWeekBitmap(name, bitmap) {
         }
     }
     return weeks;
+}
+
+/**
+ * 检查上课日期(星期几), 开始/结束节次是否为整数, 若教务修改接口返回非纯`Int`字段, 应当panic
+ * 格式校验: 仅允许数字传入
+ */
+function parseStrictUnsizedInt(name, field, value) {
+    const s = String(value ?? "");
+    if (!/^\d+$/.test(s)) {
+        throw new Error(`:( 课程 ${name} 数据异常: ${field}非法 (${value})`);
+    }
+    const result = parseInt(s, 10);
+    if (result < 1) {
+        throw new Error(`:( 课程 ${name} 数据异常: ${field} 中 ${value} 不能小于 1`);
+    }
+    return result;
 }
 
 /**
@@ -283,16 +321,16 @@ function parseCourseRow(row) {
         throw new Error(":( 课表数据异常: 某条课程缺少课程名");
     }
 
-    const day = parseInt(row.SKXQ, 10);
-    if (!Number.isInteger(day) || day < 1 || day > 7) {
+    const day = parseStrictUnsizedInt(name, "SKXQ", row.SKXQ);
+    // `parseStrictUnsizedInt`解析, 确保 day >= 1
+    if (day > WEEK_DAYS) {
         throw new Error(`:( 课程 ${name} 数据异常: 星期值非法 (${row.SKXQ})`);
     }
 
-    const startSection = parseInt(row.KSJC, 10);
-    const endSection = parseInt(row.JSJC, 10);
-    const validInt = (n) => Number.isInteger(n) && n >= 1;
-    // 出现第12节或基础值非法: 教务格式不可信, panic
-    if (!validInt(startSection) || !validInt(endSection) || startSection > endSection || endSection > 11) {
+    const startSection = parseStrictUnsizedInt(name, "KSJC", row.KSJC);
+    const endSection = parseStrictUnsizedInt(name, "JSJC", row.JSJC);
+    // 出现第12节或开始节次大于结束节次: 教务格式不可信, panic
+    if (startSection > endSection || endSection > TOTAL_SECTION) {
         throw new Error(`:( 课程 ${name} 数据异常: 节次非法 (${row.KSJC}-${row.JSJC})`);
     }
 
@@ -366,7 +404,7 @@ function parseAllCourses(rows, termWeeks) {
             if (week > maxCourseWeek) maxCourseWeek = week;
         }
     }
-    const totalWeeks = Math.max(termWeeks || 0, maxCourseWeek) || 16;
+    const totalWeeks = Math.max(termWeeks || 0, maxCourseWeek) || DEFAULT_NUM_OF_WEEKS;
     console.log(`学期总周数: ${totalWeeks} (接口值: ${termWeeks}, 课程最大周: ${maxCourseWeek})`);
 
     // 作息时间: 按当前日期选择（5月-9月为夏季作息）
@@ -391,10 +429,10 @@ function parseAllCourses(rows, termWeeks) {
 async function saveConfig(semesterStartDate, totalWeeks) {
     const configData = {
         semesterStartDate: semesterStartDate,
-        semesterTotalWeeks: totalWeeks || 16,
-        defaultClassDuration: 50,
-        defaultBreakDuration: 10,
-        firstDayOfWeek: 1
+        semesterTotalWeeks: totalWeeks || DEFAULT_NUM_OF_WEEKS,
+        defaultClassDuration: CLASS_DURATION,
+        defaultBreakDuration: BREAK_DURATION,
+        firstDayOfWeek: FIRST_DAY_OF_WEEK
     };
     const success = await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(configData));
     if (!success) {
@@ -430,20 +468,13 @@ async function saveCourses(courses) {
  */
 async function importOnce() {
     try {
-        window.shiguangBridge.showToast(">>> 正在获取学期信息");
         const termInfo = await getTermInfo();
         // 用户在学期选择弹窗取消: 静默退出, 不走 catch 的失败提示
         if (!termInfo) return "cancel";
 
-        window.shiguangBridge.showToast(">>> 正在获取课表数据");
         const rows = await getCourseRows(termInfo.term);
 
         const { courses, timeSlots, totalWeeks, seasonTip } = parseAllCourses(rows, termInfo.termWeeks);
-
-        if (courses.length === 0) {
-            window.shiguangBridge.showToast("'_? 未解析出可导入的课程, 教务数据格式可能已变更");
-            return "cancel";
-        }
 
         // saveCourseConfig 为整体覆盖语义: 无开学日期时跳过写入, 避免清空用户已有配置
         // (开学日期是周次推算的起点, 不应错误, 由用户在App中手动设置)
@@ -486,8 +517,14 @@ async function importOnce() {
 }
 
 async function runImportFlow() {
+    let isReady;
+    try {
+        isReady = await promptUserToStart();
+    } catch (err) {
+        console.error(":( 确认弹窗异常:", err);
+        return; // bridge 不通, 放弃
+    }
     // 开始确认仅询问一次, 重试时跳过
-    const isReady = await promptUserToStart();
     if (!isReady) return;
 
     while (true) {
