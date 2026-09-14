@@ -1042,3 +1042,8 @@ schools:
     name: "徐州医科大学"
     initial: "X"
     resource_folder: "XZHMU"
+    
+  - id: "HEBPU"
+    name: "河北石油职业技术大学"
+    initial: "H"
+    resource_folder: "HEBPU"
