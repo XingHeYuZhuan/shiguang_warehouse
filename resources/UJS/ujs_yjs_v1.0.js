@@ -585,7 +585,7 @@ async function deriveSemesterStartDate(courses, studentId) {
     }
 
     const observed = new Map();
-    const batchSize = 8;
+    const batchSize = 2;
     let hitBatchIndex = -1;
 
     for (let index = 0; index < offsets.length; index += batchSize) {
@@ -608,6 +608,10 @@ async function deriveSemesterStartDate(courses, studentId) {
         if (hitBatchIndex !== -1 && index / batchSize > hitBatchIndex) {
             break;
         }
+
+        // 稍作等待防止风控
+        const delay = 300 + Math.floor(Math.random() * 200);
+        await new Promise(resolve => setTimeout(resolve, delay));
     }
 
     const hitOffsets = Array.from(observed.keys())
