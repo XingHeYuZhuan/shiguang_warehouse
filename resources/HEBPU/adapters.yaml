@@ -1,9 +1,0 @@
-# resources/HEBPU/adapters.yaml
-adapters:
-  - adapter_id: "HEBPU_01"
-    adapter_name: "河北石油职业技术大学教务系统"
-    category: "BACHELOR_AND_ASSOCIATE"
-    asset_js_path: "hebpu.js"
-    import_url: "http://jwc.jw.hebpu.edu.cn/jwglxt/xtgl/login_slogin.html"
-    maintainer: "community"
-    description: "河北石油职业技术大学正方教务系统适配，需要校园网环境访问"
