@@ -998,52 +998,7 @@ schools:
     initial: "C"
     resource_folder: "CQEPC"
 
-  - id: "BTBU"
-    name: "北京工商大学"
-    initial: "B"
-    resource_folder: "BTBU"
-
-  - id: "SCNU"
-    name: "华南师范大学"
-    initial: "H"
-    resource_folder: "SCNU"
-
-  - id: "LIT"
-    name: "洛阳理工学院"
-    initial: "L"
-    resource_folder: "LIT"
-
-  - id: "AEPU"
-    name: "安徽电气工程职业技术学院"
-    initial: "A"
-    resource_folder: "AEPU"
-
-  - id: "SUSTECH"
-    name: "南方科技大学"
-    initial: "N"
-    resource_folder: "SUSTECH"
-
-  - id: "CUG"
-    name: "中国地质大学(武汉)"
-    initial: "Z"
-    resource_folder: "CUG"
-
-  - id: "HUALIXY"
-    name: "广州华立学院"
-    initial: "G"
-    resource_folder: "HUALIXY"
-
-  - id: "XAUAT"
-    name: "西安建筑科技大学"
-    initial: "X"
-    resource_folder: "XAUAT"
-
-  - id: "XZHMU"
-    name: "徐州医科大学"
-    initial: "X"
-    resource_folder: "XZHMU"
-    
-  - id: "HEBPU"
+  - id: "HEBEI_SHIYOU"
     name: "河北石油职业技术大学"
     initial: "H"
-    resource_folder: "HEBPU"
+    resource_folder: "HEBEI_SHIYOU"
