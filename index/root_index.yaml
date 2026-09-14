@@ -788,6 +788,11 @@ schools:
     initial: "H"
     resource_folder: "HHTC"
 
+  - id: "HHVTC"
+    name: "怀化职业技术学院"
+    initial: "H"
+    resource_folder: "HHVTC"
+
   - id: "CWXU"
     name: "无锡学院"
     initial: "W"
