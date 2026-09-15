@@ -160,8 +160,8 @@ function parseJsonData(jsonData) {
 }
 
 function getNjuptApiBasePath() {
-    const isTeachingSystemPage = ["/kbcx/", "/xtgl/"]
-        .some(marker => window.location.pathname.includes(marker));
+    // 直接匹配路径，避免依赖教务页面可能改写的数组和字符串方法。
+    const isTeachingSystemPage = /\/(?:kbcx|xtgl)\//.test(window.location.pathname);
     if (!isTeachingSystemPage) return null;
 
     // 南邮 WebVPN 会拦截并改写根相对请求。若传入已经带 WebVPN
@@ -315,11 +315,7 @@ async function runImportFlow() {
     if (appBasePath === null) {
         await window.shiguangBridgePromise.showAlert(
             "无法识别当前页面",
-            "请先从智慧校园进入教务系统，并打开课表页面后重试。\n\n" +
-            "诊断版本：NJUPT-20260915-01\n" +
-            `URL：${window.location.href}\n` +
-            `pathname：${JSON.stringify(window.location.pathname)}\n` +
-            `是否顶层窗口：${window === window.top}`,
+            "请先从智慧校园进入教务系统，并打开课表页面后重试。",
             "确定"
         );
         return;
