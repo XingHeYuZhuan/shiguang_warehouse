@@ -195,20 +195,17 @@ async function fetchAcademicOptions(appBasePath) {
 
         const html = await response.text();
         const document = new DOMParser().parseFromString(html, "text/html");
+        const normalizeOption = option => ({
+            value: String(option.value || "").trim(),
+            text: String(option.textContent || "").trim(),
+            selected: option.selected
+        });
         const allYearOptions = Array.from(document.querySelectorAll("#xnm option"))
-            .filter(option => option.value !== "")
-            .map(option => ({
-                value: option.value,
-                text: option.textContent.trim(),
-                selected: option.selected
-            }));
+            .map(normalizeOption)
+            .filter(option => option.value !== "" && option.text !== "");
         const semesterOptions = Array.from(document.querySelectorAll("#xqm option"))
-            .filter(option => option.value !== "")
-            .map(option => ({
-                value: option.value,
-                text: option.textContent.trim(),
-                selected: option.selected
-            }));
+            .map(normalizeOption)
+            .filter(option => option.value !== "" && option.text !== "");
 
         if (allYearOptions.length === 0 || semesterOptions.length === 0) return null;
 
@@ -318,7 +315,11 @@ async function runImportFlow() {
     if (appBasePath === null) {
         await window.shiguangBridgePromise.showAlert(
             "无法识别当前页面",
-            "请先从智慧校园进入教务系统，并打开课表页面后重试。",
+            "请先从智慧校园进入教务系统，并打开课表页面后重试。\n\n" +
+            "诊断版本：NJUPT-20260915-01\n" +
+            `URL：${window.location.href}\n` +
+            `pathname：${JSON.stringify(window.location.pathname)}\n` +
+            `是否顶层窗口：${window === window.top}`,
             "确定"
         );
         return;
