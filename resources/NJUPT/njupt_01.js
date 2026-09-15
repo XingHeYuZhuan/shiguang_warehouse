@@ -195,17 +195,20 @@ async function fetchAcademicOptions(appBasePath) {
 
         const html = await response.text();
         const document = new DOMParser().parseFromString(html, "text/html");
-        const normalizeOption = option => ({
-            value: String(option.value || "").trim(),
-            text: String(option.textContent || "").trim(),
-            selected: option.selected
-        });
-        const allYearOptions = Array.from(document.querySelectorAll("#xnm option"))
-            .map(normalizeOption)
-            .filter(option => option.value !== "" && option.text !== "");
-        const semesterOptions = Array.from(document.querySelectorAll("#xqm option"))
-            .map(normalizeOption)
-            .filter(option => option.value !== "" && option.text !== "");
+        const readOptions = selector => {
+            const nodes = document.querySelectorAll(selector);
+            const options = [];
+            for (let index = 0; index < nodes.length; index++) {
+                const option = nodes[index];
+                const value = String(option.value || "").trim();
+                const text = String(option.textContent || "").trim();
+                if (value === "" || text === "") continue;
+                options.push({ value, text, selected: option.selected });
+            }
+            return options;
+        };
+        const allYearOptions = readOptions("#xnm option");
+        const semesterOptions = readOptions("#xqm option");
 
         if (allYearOptions.length === 0 || semesterOptions.length === 0) return null;
 
