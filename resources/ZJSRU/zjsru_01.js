@@ -1,30 +1,20 @@
 // 浙江树人学院（浙江树人大学）拾光课程表适配脚本
 // 学校: 浙江树人学院 / 浙江树人大学 (zjsru.edu.cn, ZJSRU)
-// 教务系统: xk.jwc.zjsru.edu.cn —— 正方教务 ASP.NET WebForms 版（xskbcx.aspx 学生个人课表）
-// 登录方式: 统一身份认证 CAS (rz.zjsru.edu.cn)，教务首页 http://xk.jwc.zjsru.edu.cn/ 会自动跳转
+// 教务: xk.jwc.zjsru.edu.cn —— 正方教务 ASP.NET WebForms 版（xskbcx.aspx 学生个人课表）
+// 登录: 统一身份认证 CAS (rz.zjsru.edu.cn)，教务首页会自动跳转
 //
-// 适配要点:
-//   1. 这是正方的 WebForms 版：课表由服务端渲染成 HTML 表格（table#Table1.schedule），
-//      不是 SHUFEZJ / UJS 用的 JSON 接口（kbcx/xskbcx_cxXsKb.html -> kbList）。
-//      单元格内用 <br> 分行：课程名 / 周X第N节{周次} / 教师 / 教室，
-//      且同一个格子里可能并排多门课（如周三第6节同时排了多门实验课），需要按
-//      「周X第N节」这一行作锚点切分。
-//   2. 课表页的学年/学期是服务端控件（select#xnd / select#xqd），切换要 __doPostBack 回发，
-//      所以这里读取下拉项后用 __EVENTTARGET=xnd 回发拿到目标学期的 HTML。
-//   3. 软件是在用户点击「执行导入」时把脚本注入到 WebView 当前页面执行一次，
-//      而 CAS 登录后一般停在教务首页(xs_main.aspx)，因此脚本会自己在同域内拉取课表页。
-//   4. 作息时间取自学校官方校历底部印的《上课时间表》：
-//        https://www.zjsru.edu.cn/info/1411/54428.htm
-//      两个校区节次时刻不同，导入时由用户选择（见 CAMPUS_TIME_SLOTS）：
-//        · 拱宸桥校区：第一节 08:10 起，共 12 节
-//        · 杨汛桥校区：第一节 08:30 起，且不设第五节
-//   5. 本适配器同时适用于校内直连与校外 WebVPN 通道：
-//      WebVPN 下页面地址形如 /https/webvpn<hash>/xskbcx.aspx?...
-//      （<hash> 由服务端按资源分配，无法推导），脚本的取数基址是从
-//      location.pathname 推出来的，因此无需知道 hash 也能正确请求。
+// 与 SHUFEZJ / UJS 的正方适配不同：这里是 WebForms 版，课表为服务端渲染的 HTML 表格
+// (table#Table1.schedule)，单元格以 <br> 分行、且一格可能并排多门课，故按「周X第N节」
+// 锚点切分；学年/学期是服务端控件，切换需要 __EVENTTARGET 回发。
+// 软件是在点击「执行导入」时把脚本注入当前页执行一次，CAS 登录后一般停在教务首页，
+// 因此脚本会在同域内自行拉取课表页取数。
 //
-// 参考: 仓库内 SUDA（苏州大学）适配器 —— 同为 table#Table1.schedule 结构；
-//       多校区作息参照 GDPU / HNSF 的写法
+// 作息时间取自学校官方校历底部《上课时间表》
+// (https://www.zjsru.edu.cn/info/1411/54428.htm)，拱宸桥 / 杨汛桥两校区不同，
+// 导入时由用户选择，见 ZJSRU_CAMPUS_TIME_SLOTS。
+// 校内直连与校外 WebVPN 通道通用：取数基址由 location.pathname 推导。
+//
+// 参考: SUDA（同为 table#Table1.schedule 结构）；多校区作息参照 GDPU / HNSF
 // Author: CagierAsh123
 
 // ========================== 常量 ==========================
@@ -79,7 +69,7 @@ const ZJSRU_CAMPUS_TIME_SLOTS = {
     }
 };
 
-// ========================== 解析函数 ==========================
+// ========================== 表格解析 ==========================
 
 /**
  * 取出单元格的文本行。正方的课程信息用 <br> 分行，需要先把 <br> 还原成换行。
@@ -97,17 +87,14 @@ function zjsruCellLines(cell) {
 
 /**
  * 解析花括号里的周次，兼容：
- *   "第2-18周" / "第9-9周" / "第3-17周|单周" / "第2-18周|双周"
- *   "第1-5,7-9周"（多段）
+ *   "第2-18周" / "第9-9周" / "第3-17周|单周" / "第2-18周|双周" / "第1-5,7-9周"
  * 返回升序去重后的周次数组。
  */
 function zjsruParseWeeks(brace) {
     if (!brace) return [];
     const weeks = new Set();
-    // 单双周标记对整个花括号生效
     const odd = /\|?\s*单周/.test(brace);
     const even = /\|?\s*双周/.test(brace);
-    // 只取「周」之前的部分，去掉 "单周/双周" 这类尾巴
     const body = brace.split("|")[0].replace(/第/g, "").replace(/周/g, "");
     for (const seg of body.split(",")) {
         const part = seg.trim();
@@ -183,53 +170,94 @@ function zjsruParseTable(table) {
     for (const cell of table.querySelectorAll("td")) {
         for (const c of zjsruParseCell(cell)) courses.push(c);
     }
-    return zjsruMergeAdjacent(zjsruDedupe(courses));
+    return mergeAndDistinctCourses(courses);
 }
 
 /**
- * 去重：同名、同教师、同地点、同星期、同节次、同周次视为同一条
- * （rowspan 或页面重复渲染可能产生重复条目）
+ * 节次与周次合并去重。
+ * 直接取自 wiki《课程合并与去重函数》提供的参考实现，未做改动：
+ * https://github.com/XingHeYuZhuan/shiguangschedule/wiki/课程合并与去重函数
  */
-function zjsruDedupe(list) {
-    const seen = new Set();
-    return list.filter(c => {
-        const key = [c.name, c.teacher, c.position, c.day, c.startSection, c.endSection,
-            c.weeks.join(",")].join("|");
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
+function mergeAndDistinctCourses(courses) {
+    if (!Array.isArray(courses) || courses.length <= 1) return courses;
+
+    const list = courses.map(c => ({
+        ...c,
+        name: c.name || '',
+        teacher: c.teacher || '',
+        position: c.position || '',
+        weeks: Array.isArray(c.weeks) ? [...c.weeks].sort((a, b) => a - b) : []
+    }));
+
+    list.sort((a, b) => {
+        return a.name.localeCompare(b.name) ||
+            a.teacher.localeCompare(b.teacher) ||
+            a.position.localeCompare(b.position) ||
+            (a.day || 0) - (b.day || 0) ||
+            a.weeks.join(',').localeCompare(b.weeks.join(',')) ||
+            (a.startSection || 0) - (b.startSection || 0);
     });
-}
 
-/**
- * 合并同一门课在相邻节次上的分段（不同周次/地点不合并，单双周保持独立）
- */
-function zjsruMergeAdjacent(list) {
-    const groups = new Map();
-    for (const c of list) {
-        const key = [c.name, c.teacher, c.position, c.day, c.weeks.join(",")].join("|");
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(c);
-    }
-    const merged = [];
-    for (const entries of groups.values()) {
-        entries.sort((a, b) => a.startSection - b.startSection);
-        let cur = Object.assign({}, entries[0]);
-        for (let i = 1; i < entries.length; i++) {
-            const next = entries[i];
-            if (next.startSection <= cur.endSection + 1) {
-                cur.endSection = Math.max(cur.endSection, next.endSection);
-            } else {
-                merged.push(cur);
-                cur = Object.assign({}, next);
-            }
+    const step1Merged = [];
+    let current = list[0];
+
+    for (let i = 1; i < list.length; i++) {
+        const next = list[i];
+        const isSameCourseAndWeeks =
+            current.name === next.name &&
+            current.teacher === next.teacher &&
+            current.position === next.position &&
+            current.day === next.day &&
+            current.weeks.join(',') === next.weeks.join(',');
+        const isContinuous = current.endSection + 1 === next.startSection;
+        const isDuplicate = current.startSection === next.startSection && current.endSection === next.endSection;
+
+        if (isSameCourseAndWeeks && isContinuous) {
+            current.endSection = next.endSection;
+        } else if (isSameCourseAndWeeks && isDuplicate) {
+            continue;
+        } else {
+            step1Merged.push(current);
+            current = next;
         }
-        merged.push(cur);
     }
-    return merged;
+    step1Merged.push(current);
+
+    step1Merged.sort((a, b) => {
+        return a.name.localeCompare(b.name) ||
+            a.teacher.localeCompare(b.teacher) ||
+            a.position.localeCompare(b.position) ||
+            (a.day || 0) - (b.day || 0) ||
+            (a.startSection || 0) - (b.startSection || 0) ||
+            (a.endSection || 0) - (b.endSection || 0);
+    });
+
+    const step2Merged = [];
+    let cur = step1Merged[0];
+
+    for (let i = 1; i < step1Merged.length; i++) {
+        const nxt = step1Merged[i];
+        const isSameCourseAndSection =
+            cur.name === nxt.name &&
+            cur.teacher === nxt.teacher &&
+            cur.position === nxt.position &&
+            cur.day === nxt.day &&
+            cur.startSection === nxt.startSection &&
+            cur.endSection === nxt.endSection;
+
+        if (isSameCourseAndSection) {
+            cur.weeks = Array.from(new Set([...cur.weeks, ...nxt.weeks])).sort((a, b) => a - b);
+        } else {
+            step2Merged.push(cur);
+            cur = nxt;
+        }
+    }
+    step2Merged.push(cur);
+
+    return step2Merged;
 }
 
-// ========================== 页面定位 ==========================
+// ========================== 页面定位与取数 ==========================
 
 /**
  * 查找课表表格，兼容直接打开课表页与同源 iframe 嵌套
@@ -251,7 +279,6 @@ function zjsruFindTable(doc) {
 
 /**
  * 识别学号：优先取当前 URL 的 xh 参数，其次找教务首页菜单里的 xh=xxxx 链接。
- * 正方课表页需要 xh 参数，拿不到时兜底用不带 xh 的地址再试一次。
  */
 function zjsruDetectStudentId(doc) {
     doc = doc || document;
@@ -267,6 +294,9 @@ function zjsruDetectStudentId(doc) {
     return m2 ? m2[1] : "";
 }
 
+/**
+ * 课表页地址。基址取自当前路径，因此校内直连与 WebVPN 代理路径都适用。
+ */
 function zjsruScheduleUrl(studentId) {
     const base = location.origin + location.pathname.replace(/[^/]*$/, "");
     const qs = studentId ? ("?xh=" + encodeURIComponent(studentId) + "&type=1") : "?type=1";
@@ -281,7 +311,7 @@ async function zjsruFetchDoc(url) {
 }
 
 /**
- * 读取课表页上的学年/学期下拉项，供用户选择要导入的学期
+ * 读取课表页上的学年/学期下拉项
  */
 function zjsruReadTermOptions(doc) {
     const yearSel = doc.querySelector("select#xnd");
@@ -325,10 +355,88 @@ async function zjsruFetchTermDoc(url, doc, year, term) {
     return new DOMParser().parseFromString(html, "text/html");
 }
 
-// ========================== 主流程 ==========================
+// ========================== 业务步骤 ==========================
 
 /**
- * 让用户选择所在校区（决定导入哪一套作息时间）
+ * 公告与前置确认
+ */
+async function zjsruPromptUserToStart() {
+    return await window.shiguangBridgePromise.showAlert(
+        "浙江树人学院 · 教务导入",
+        "请先在本页面完成统一身份认证（CAS）登录。\n\n"
+        + "导入时会自动拉取「学生个人课表」，并识别可选的学年/学期供你选择，"
+        + "不需要手动打开课表页。",
+        "我已登录，开始导入"
+    );
+}
+
+/**
+ * 定位课表：当前页就是课表页则直接用，否则在同域内自行拉取
+ * @returns {Promise<{doc: Document, table: Element, url: string}|null>}
+ */
+async function zjsruLocateSchedule() {
+    const table = zjsruFindTable(document);
+    if (table) return { doc: document, table: table, url: "" };
+
+    if (!/(^|\.)zjsru\.edu\.cn$/.test(location.hostname)) {
+        window.shiguangBridge.showToast("当前不在浙江树人学院教务系统页面，请先登录教务系统。");
+        return null;
+    }
+
+    window.shiguangBridge.showToast("正在获取课表页面...");
+    const url = zjsruScheduleUrl(zjsruDetectStudentId(document));
+    const doc = await zjsruFetchDoc(url);
+    if (!doc) {
+        window.shiguangBridge.showToast("课表页请求失败，请检查登录状态或网络环境。");
+        return null;
+    }
+    const fetchedTable = zjsruFindTable(doc);
+    if (!fetchedTable) {
+        window.shiguangBridge.showToast("未获取到课表，请确认已登录统一身份认证（CAS）。");
+        return null;
+    }
+    return { doc: doc, table: fetchedTable, url: url };
+}
+
+/**
+ * 选择并切换到目标学年/学期（默认当前学期）
+ * @returns {Promise<{doc: Document, table: Element, url: string}|null>}
+ */
+async function zjsruChooseTerm(schedule) {
+    const termInfo = zjsruReadTermOptions(schedule.doc);
+    if (!termInfo || termInfo.combos.length <= 1) return schedule;
+
+    const labels = termInfo.combos.map(c =>
+        c.year + " 学年 " + (ZJSRU_TERM_NAMES[c.term] || ("第" + c.term + "学期")));
+    const picked = await window.shiguangBridgePromise.showSingleSelection(
+        "选择要导入的学期",
+        JSON.stringify(labels),
+        termInfo.currentIndex
+    );
+    if (picked === null || picked === undefined || picked < 0) {
+        window.shiguangBridge.showToast("导入已取消。");
+        return null;
+    }
+
+    const target = termInfo.combos[picked];
+    const shownYear = (schedule.doc.querySelector("select#xnd") || {}).value;
+    const shownTerm = (schedule.doc.querySelector("select#xqd") || {}).value;
+    if (target.year === shownYear && target.term === shownTerm) return schedule;
+
+    window.shiguangBridge.showToast("正在切换到 " + labels[picked] + "...");
+    const pageUrl = schedule.url || (location.origin + location.pathname + location.search);
+    const switched = await zjsruFetchTermDoc(pageUrl, schedule.doc, target.year, target.term);
+    const switchedTable = switched ? zjsruFindTable(switched) : null;
+    if (!switchedTable) {
+        window.shiguangBridge.showToast("切换学期失败，请稍后重试。");
+        return null;
+    }
+    return { doc: switched, table: switchedTable, url: schedule.url };
+}
+
+/**
+ * 选择所在校区（决定导入哪一套作息时间）
+ * @returns {Promise<string|null>} 校区 key
  */
 async function zjsruSelectCampus() {
     const keys = Object.keys(ZJSRU_CAMPUS_TIME_SLOTS);
@@ -338,12 +446,46 @@ async function zjsruSelectCampus() {
         JSON.stringify(labels),
         0
     );
-    if (idx === null || idx === undefined || idx < 0 || idx >= keys.length) return null;
+    if (idx === null || idx === undefined || idx < 0 || idx >= keys.length) {
+        window.shiguangBridge.showToast("导入已取消，未选择校区。");
+        return null;
+    }
     return keys[idx];
 }
 
 /**
- * 导入所选校区的作息时间
+ * 提交课程数据
+ */
+async function zjsruSaveCourses(courses) {
+    window.shiguangBridge.showToast("正在保存 " + courses.length + " 条课程...");
+    try {
+        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        return true;
+    } catch (error) {
+        window.shiguangBridge.showToast("课程保存失败: " + error.message);
+        return false;
+    }
+}
+
+/**
+ * 提交课表配置。学期开始日期留空：各学期开学日不是固定公式，
+ * 写死会导致整张课表周次偏移，交由用户在软件内设置。
+ */
+async function zjsruSaveConfig(courses) {
+    const maxWeek = courses.reduce((mx, c) => Math.max(mx, ...c.weeks), 0);
+    const config = {
+        semesterStartDate: null,
+        semesterTotalWeeks: Math.max(ZJSRU_MIN_TOTAL_WEEKS, maxWeek)
+    };
+    try {
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+    } catch (error) {
+        console.error("JS: 保存课表配置失败:", error);
+    }
+}
+
+/**
+ * 提交所选校区的作息时间
  */
 async function zjsruImportTimeSlots(campusKey) {
     const campus = ZJSRU_CAMPUS_TIME_SLOTS[campusKey];
@@ -353,124 +495,51 @@ async function zjsruImportTimeSlots(campusKey) {
         await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(campus.slots));
         console.log("JS: 已导入 " + campus.label + " 作息 " + campus.slots.length + " 节");
     } catch (error) {
-        console.error("JS: 导入作息时间失败:", error);
         window.shiguangBridge.showToast("作息时间导入失败: " + error.message);
     }
 }
 
+// ========================== 主流程 ==========================
+
 async function runImportFlow() {
-    const confirmed = await window.shiguangBridgePromise.showAlert(
-        "浙江树人学院 · 教务导入",
-        "请先在本页面完成统一身份认证（CAS）登录。\n\n"
-        + "导入时会自动拉取「学生个人课表」，并识别可选的学年/学期供你选择，"
-        + "不需要手动打开课表页。",
-        "我已登录，开始导入"
-    );
+    // 1. 公告与前置确认
+    const confirmed = await zjsruPromptUserToStart();
     if (!confirmed) {
         window.shiguangBridge.showToast("用户取消了导入。");
         return;
     }
 
-    // 1. 定位课表页：当前页就是课表页则直接用，否则在同域内拉取
-    window.shiguangBridge.showToast("正在获取课表页面...");
-    let doc = document;
-    let url = "";
-    let table = zjsruFindTable(doc);
+    // 2. 定位课表页
+    const schedule = await zjsruLocateSchedule();
+    if (!schedule) return;
 
-    if (!table) {
-        if (!/(^|\.)zjsru\.edu\.cn$/.test(location.hostname)) {
-            window.shiguangBridge.showToast("当前不在浙江树人学院教务系统页面，请先登录教务系统。");
-            return;
-        }
-        const studentId = zjsruDetectStudentId(document);
-        url = zjsruScheduleUrl(studentId);
-        doc = await zjsruFetchDoc(url);
-        if (!doc) {
-            window.shiguangBridge.showToast("课表页请求失败，请检查登录状态或网络环境。");
-            return;
-        }
-        table = zjsruFindTable(doc);
-        if (!table) {
-            window.shiguangBridge.showToast("未获取到课表，请确认已登录统一身份认证（CAS）。");
-            return;
-        }
-    }
+    // 3. 选择学期
+    const chosen = await zjsruChooseTerm(schedule);
+    if (!chosen) return;
 
-    // 2. 让用户选择学年/学期（默认当前学期）
-    const termInfo = zjsruReadTermOptions(doc);
-    if (termInfo && termInfo.combos.length > 1) {
-        const labels = termInfo.combos.map(c =>
-            c.year + " 学年 " + (ZJSRU_TERM_NAMES[c.term] || ("第" + c.term + "学期")));
-        const picked = await window.shiguangBridgePromise.showSingleSelection(
-            "选择要导入的学期",
-            JSON.stringify(labels),
-            termInfo.currentIndex
-        );
-        if (picked === null || picked === undefined || picked < 0) {
-            window.shiguangBridge.showToast("导入已取消。");
-            return;
-        }
-        const target = termInfo.combos[picked];
-        const shownYear = (doc.querySelector("select#xnd") || {}).value;
-        const shownTerm = (doc.querySelector("select#xqd") || {}).value;
-        if (target.year !== shownYear || target.term !== shownTerm) {
-            window.shiguangBridge.showToast("正在切换到 " + labels[picked] + "...");
-            const pageUrl = url || (location.origin + location.pathname + location.search);
-            const switched = await zjsruFetchTermDoc(pageUrl, doc, target.year, target.term);
-            if (!switched) {
-                window.shiguangBridge.showToast("切换学期失败，请稍后重试。");
-                return;
-            }
-            const switchedTable = zjsruFindTable(switched);
-            if (!switchedTable) {
-                window.shiguangBridge.showToast("切换后的页面未包含课表，请稍后重试。");
-                return;
-            }
-            doc = switched;
-            table = switchedTable;
-        }
-    }
-
-    // 3. 选择校区（决定导入哪一套作息时间；两个校区节次时刻不同）
+    // 4. 选择校区
     const campusKey = await zjsruSelectCampus();
-    if (campusKey === null) {
-        window.shiguangBridge.showToast("导入已取消，未选择校区。");
-        return;
-    }
+    if (!campusKey) return;
 
-    // 4. 解析课程
-    window.shiguangBridge.showToast("正在解析课程数据...");
-    const courses = zjsruParseTable(table);
+    // 5. 解析课程
+    const courses = zjsruParseTable(chosen.table);
     console.log("JS: 解析到 " + courses.length + " 条课程记录");
     if (courses.length === 0) {
         window.shiguangBridge.showToast("未解析到任何课程，该学期可能没有排课。");
         return;
     }
 
-    // 5. 保存课程
-    window.shiguangBridge.showToast("正在保存 " + courses.length + " 条课程...");
-    try {
-        await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
-    } catch (error) {
-        window.shiguangBridge.showToast("课程保存失败: " + error.message);
-        return;
-    }
+    // 6. 保存课程
+    const saved = await zjsruSaveCourses(courses);
+    if (!saved) return;
 
-    // 6. 保存课表配置（学期开始日期留空，由用户在软件内设置，避免周次整体偏移）
-    try {
-        const maxWeek = courses.reduce((mx, c) => Math.max(mx, ...c.weeks), 0);
-        const config = {
-            semesterStartDate: null,
-            semesterTotalWeeks: Math.max(ZJSRU_MIN_TOTAL_WEEKS, maxWeek)
-        };
-        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
-    } catch (error) {
-        console.error("JS: 保存课表配置失败:", error);
-    }
+    // 7. 保存课表配置
+    await zjsruSaveConfig(courses);
 
-    // 7. 导入所选校区的作息时间
+    // 8. 导入作息时间（失败不阻断整体流程）
     await zjsruImportTimeSlots(campusKey);
 
+    // 9. 流程完全成功
     window.shiguangBridge.showToast("课程导入成功，共导入 " + courses.length + " 条课程！");
     window.shiguangBridge.notifyTaskCompletion();
 }
