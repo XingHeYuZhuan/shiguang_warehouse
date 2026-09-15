@@ -13,10 +13,18 @@
 //      所以这里读取下拉项后用 __EVENTTARGET=xnd 回发拿到目标学期的 HTML。
 //   3. 软件是在用户点击「执行导入」时把脚本注入到 WebView 当前页面执行一次，
 //      而 CAS 登录后一般停在教务首页(xs_main.aspx)，因此脚本会自己在同域内拉取课表页。
-//   4. 本适配器未内置作息时间表：学校未公开可核实的节次时刻，写错会让全表时间偏移，
-//      导入后可在软件内按需自行设置「时间表」。
+//   4. 作息时间取自学校官方校历底部印的《上课时间表》：
+//        https://www.zjsru.edu.cn/info/1411/54428.htm
+//      两个校区节次时刻不同，导入时由用户选择（见 CAMPUS_TIME_SLOTS）：
+//        · 拱宸桥校区：第一节 08:10 起，共 12 节
+//        · 杨汛桥校区：第一节 08:30 起，且不设第五节
+//   5. 本适配器同时适用于校内直连与校外 WebVPN 通道：
+//      WebVPN 下页面地址形如 /https/webvpn<hash>/xskbcx.aspx?...
+//      （<hash> 由服务端按资源分配，无法推导），脚本的取数基址是从
+//      location.pathname 推出来的，因此无需知道 hash 也能正确请求。
 //
-// 参考: 仓库内 SUDA（苏州大学）适配器 —— 同为 table#Table1.schedule 结构
+// 参考: 仓库内 SUDA（苏州大学）适配器 —— 同为 table#Table1.schedule 结构；
+//       多校区作息参照 GDPU / HNSF 的写法
 // Author: CagierAsh123
 
 // ========================== 常量 ==========================
@@ -27,6 +35,49 @@ const ZJSRU_DAY_MAP = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六":
 const ZJSRU_TERM_NAMES = { "1": "第1学期", "2": "第2学期", "3": "第3学期(短)" };
 const ZJSRU_TABLE_SELECTOR = "table#Table1.schedule";
 const ZJSRU_MIN_TOTAL_WEEKS = 18; // 学期总周数下限，避免个别短课表把学期截断
+
+// ========================== 作息时间（来源：学校官方校历） ==========================
+// https://www.zjsru.edu.cn/info/1411/54428.htm 底部《上课时间表》
+// 注：杨汛桥校区不设第五节。软件的作息校验要求节次必须从 1 起连续编号
+//     （validateTimeSlotsOrThrow），否则导入会直接报错；而教务系统给杨汛桥
+//     学生排课时仍沿用全校统一的节次号（下午第一节叫「第六节」），
+//     所以这里保留 5 号占位并用 alias 说明，以保证第六节仍然落在 6 号上。
+const ZJSRU_CAMPUS_TIME_SLOTS = {
+    gongchenqiao: {
+        label: "拱宸桥校区",
+        slots: [
+            { number: 1, startTime: "08:10", endTime: "08:50" },
+            { number: 2, startTime: "09:00", endTime: "09:40" },
+            { number: 3, startTime: "09:55", endTime: "10:35" },
+            { number: 4, startTime: "10:45", endTime: "11:25" },
+            { number: 5, startTime: "11:35", endTime: "12:15" },
+            { number: 6, startTime: "13:30", endTime: "14:10" },
+            { number: 7, startTime: "14:20", endTime: "15:00" },
+            { number: 8, startTime: "15:10", endTime: "15:50" },
+            { number: 9, startTime: "16:00", endTime: "16:40" },
+            { number: 10, startTime: "18:10", endTime: "18:50" },
+            { number: 11, startTime: "19:00", endTime: "19:40" },
+            { number: 12, startTime: "19:50", endTime: "20:30" }
+        ]
+    },
+    yangxunqiao: {
+        label: "杨汛桥校区",
+        slots: [
+            { number: 1, startTime: "08:30", endTime: "09:10" },
+            { number: 2, startTime: "09:15", endTime: "09:55" },
+            { number: 3, startTime: "10:10", endTime: "10:50" },
+            { number: 4, startTime: "10:55", endTime: "11:35" },
+            { number: 5, startTime: "11:35", endTime: "12:15", alias: "不设第五节" },
+            { number: 6, startTime: "13:30", endTime: "14:10" },
+            { number: 7, startTime: "14:15", endTime: "14:55" },
+            { number: 8, startTime: "15:05", endTime: "15:45" },
+            { number: 9, startTime: "15:50", endTime: "16:30" },
+            { number: 10, startTime: "18:00", endTime: "18:40" },
+            { number: 11, startTime: "18:45", endTime: "19:25" },
+            { number: 12, startTime: "19:30", endTime: "20:10" }
+        ]
+    }
+};
 
 // ========================== 解析函数 ==========================
 
@@ -276,6 +327,37 @@ async function zjsruFetchTermDoc(url, doc, year, term) {
 
 // ========================== 主流程 ==========================
 
+/**
+ * 让用户选择所在校区（决定导入哪一套作息时间）
+ */
+async function zjsruSelectCampus() {
+    const keys = Object.keys(ZJSRU_CAMPUS_TIME_SLOTS);
+    const labels = keys.map(k => ZJSRU_CAMPUS_TIME_SLOTS[k].label);
+    const idx = await window.shiguangBridgePromise.showSingleSelection(
+        "选择所在校区",
+        JSON.stringify(labels),
+        0
+    );
+    if (idx === null || idx === undefined || idx < 0 || idx >= keys.length) return null;
+    return keys[idx];
+}
+
+/**
+ * 导入所选校区的作息时间
+ */
+async function zjsruImportTimeSlots(campusKey) {
+    const campus = ZJSRU_CAMPUS_TIME_SLOTS[campusKey];
+    if (!campus) return;
+    window.shiguangBridge.showToast("正在导入" + campus.label + "作息时间...");
+    try {
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(campus.slots));
+        console.log("JS: 已导入 " + campus.label + " 作息 " + campus.slots.length + " 节");
+    } catch (error) {
+        console.error("JS: 导入作息时间失败:", error);
+        window.shiguangBridge.showToast("作息时间导入失败: " + error.message);
+    }
+}
+
 async function runImportFlow() {
     const confirmed = await window.shiguangBridgePromise.showAlert(
         "浙江树人学院 · 教务导入",
@@ -349,7 +431,14 @@ async function runImportFlow() {
         }
     }
 
-    // 3. 解析课程
+    // 3. 选择校区（决定导入哪一套作息时间；两个校区节次时刻不同）
+    const campusKey = await zjsruSelectCampus();
+    if (campusKey === null) {
+        window.shiguangBridge.showToast("导入已取消，未选择校区。");
+        return;
+    }
+
+    // 4. 解析课程
     window.shiguangBridge.showToast("正在解析课程数据...");
     const courses = zjsruParseTable(table);
     console.log("JS: 解析到 " + courses.length + " 条课程记录");
@@ -358,7 +447,7 @@ async function runImportFlow() {
         return;
     }
 
-    // 4. 保存课程
+    // 5. 保存课程
     window.shiguangBridge.showToast("正在保存 " + courses.length + " 条课程...");
     try {
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
@@ -367,7 +456,7 @@ async function runImportFlow() {
         return;
     }
 
-    // 5. 保存课表配置（学期开始日期留空，由用户在软件内设置，避免周次整体偏移）
+    // 6. 保存课表配置（学期开始日期留空，由用户在软件内设置，避免周次整体偏移）
     try {
         const maxWeek = courses.reduce((mx, c) => Math.max(mx, ...c.weeks), 0);
         const config = {
@@ -378,6 +467,9 @@ async function runImportFlow() {
     } catch (error) {
         console.error("JS: 保存课表配置失败:", error);
     }
+
+    // 7. 导入所选校区的作息时间
+    await zjsruImportTimeSlots(campusKey);
 
     window.shiguangBridge.showToast("课程导入成功，共导入 " + courses.length + " 条课程！");
     window.shiguangBridge.notifyTaskCompletion();

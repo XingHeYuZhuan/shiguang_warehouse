@@ -6,4 +6,12 @@ adapters:
     asset_js_path: "zjsru_01.js"
     import_url: "http://xk.jwc.zjsru.edu.cn/"
     maintainer: "CagierAsh123"
-    description: "浙江树人学院（浙江树人大学）正方教务系统，登录方式为统一身份认证 CAS，教务首页会自动跳转。导入时自动拉取学生个人课表并可选学年/学期。仅支持学生个人课表；学校未公开可核实的作息时间表，故未内置节次时刻。"
+    description: "浙江树人学院（浙江树人大学）正方教务系统，登录方式为统一身份认证 CAS，教务首页会自动跳转。导入时自动拉取学生个人课表并可选学年/学期；作息时间取自学校官方校历，拱宸桥/杨汛桥两个校区节次时刻不同，导入时需选择所在校区。仅支持学生个人课表，需在校园网内使用（校外请用「校外 WebVPN」通道）。"
+
+  - adapter_id: "ZJSRU_02"
+    adapter_name: "浙江树人学院正方教务（校外 WebVPN）"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "zjsru_01.js"
+    import_url: "https://vpn0.zjsru.edu.cn/"
+    maintainer: "CagierAsh123"
+    description: "浙江树人学院（浙江树人大学）正方教务，校外通道。学校 VPN 说明明确「学生用户仅支持 webvpn 方式登录」，故此入口从 WebVPN 门户进入：先用统一身份认证登录，再从门户打开教务系统并进入「学生个人课表」，然后点击执行导入。与校内通道共用同一适配脚本。"
