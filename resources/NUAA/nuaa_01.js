@@ -185,15 +185,28 @@ async function request(url, options = {}) {
     return await res.text();
 }
 
+function extractDefaultSemesterId(html) {
+    // 教务页当前加载的学期：hidden input 或 semesterCalendar 初始化 value
+    const target = html.match(/id="semesterCalendar_target"[\s\S]*?value="(\d+)"/);
+    if (target) return target[1];
+    const cal = html.match(/semesterCalendar\(\{[^}]*value:"(\d+)"/);
+    if (cal) return cal[1];
+    return "";
+}
+
 async function detectParameters() {
     const html = await request(`${BASE}/courseTableForStd.action?sf_request_type=ajax`);
     const idsMatch = html.match(/bg\.form\.addInput\(form,\s*"ids",\s*"(\d+)"\)/);
     const tagIdMatch = html.match(/id="(semesterBar\d+Semester)"/);
     if (!idsMatch || !tagIdMatch) return null;
-    return { ids: idsMatch[1], tagId: tagIdMatch[1] };
+    return {
+        ids: idsMatch[1],
+        tagId: tagIdMatch[1],
+        defaultSemesterId: extractDefaultSemesterId(html)
+    };
 }
 
-async function getSelectedSemester(tagId) {
+async function getSelectedSemester(tagId, defaultSemesterId) {
     const raw = await request(`${BASE}/dataQuery.action?sf_request_type=ajax`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -202,10 +215,25 @@ async function getSelectedSemester(tagId) {
     const data = Function(`return (${raw});`)();
     const list = [];
     for (let key in data.semesters) {
-        data.semesters[key].forEach(s => list.push({ id: s.id, name: `${s.schoolYear} ${s.name}学期` }));
+        data.semesters[key].forEach(s => list.push({
+            id: String(s.id),
+            name: `${s.schoolYear} ${s.name}学期`
+        }));
     }
     if (list.length === 0) throw new Error("未解析到学期列表，请确认已登录教务系统");
-    const idx = await window.shiguangBridgePromise.showSingleSelection("选择学期", JSON.stringify(list.map(s => s.name)), 0);
+
+    // 默认选中教务页当前加载的学期，而不是列表里的第一条
+    let defaultIndex = 0;
+    if (defaultSemesterId) {
+        const found = list.findIndex(s => s.id === String(defaultSemesterId));
+        if (found >= 0) defaultIndex = found;
+    }
+
+    const idx = await window.shiguangBridgePromise.showSingleSelection(
+        "选择学期",
+        JSON.stringify(list.map(s => s.name)),
+        defaultIndex
+    );
     return idx !== null ? list[idx] : null;
 }
 
@@ -260,7 +288,7 @@ async function runImportFlow() {
             return;
         }
 
-        const semester = await getSelectedSemester(params.tagId);
+        const semester = await getSelectedSemester(params.tagId, params.defaultSemesterId);
         if (!semester) {
             window.shiguangBridge.showToast("导入已取消");
             return;

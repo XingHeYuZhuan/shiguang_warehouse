@@ -4,6 +4,6 @@ adapters:
     adapter_name: "南京航空航天大学树维教务"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "nuaa_01.js"
-    import_url: "https://aao-eas.nuaa.edu.cn/eams/courseTableForStd.action"
+    import_url: "https://aao-eas.nuaa.edu.cn"
     maintainer: "kemi-20"
-    description: "南京航空航天大学旧树维教务适配。请先统一身份认证登录并进入课表页面后再点击导入。脚本通过 API 获取学期与课程，并按课表第一节课所在校区自动选择天目湖或明故宫/将军路作息。"
+    description: "南京航空航天大学旧树维教务适配。请在登录后直接点击导入。脚本通过 API 获取学期与课程，并按课表第一节课所在校区自动选择天目湖或明故宫/将军路作息。"
