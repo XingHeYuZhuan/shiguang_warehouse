@@ -111,11 +111,24 @@ async function fetchAndParseJwData() {
             classDivs.forEach(div => {
                 const pTags = div.querySelectorAll('p');
                 if (pTags.length < 5) return; // 格式不健全的格子直接跳过
+                
+                // 兼容两种结构：
+                // p[1]=教师,p[2]=周次,p[3]=节次,p[4]=地点
+                // p[2]=教师,p[3]=周次,p[4]=节次,p[5]=地点
+                let teacherIdx = 2, weekIdx = 3, sectionIdx = 4, posIdx = 5;
+                const p1Text = pTags[1] ? pTags[1].textContent.trim() : '';
+                if (p1Text && !/\d/.test(p1Text) && !p1Text.includes('周') && p1Text.length < 10) {
+                    teacherIdx = 1;
+                    weekIdx = 2;
+                    sectionIdx = 3;
+                    posIdx = 4;
+                }
+                
                 const name = pTags[0].textContent.trim();
-                const teacher = pTags[2].textContent.replace(/^[\s*]+|[\s*]+$/g, '').replace(/\*/g, ' ').replace(/\s+/g, ' ');
-                const weekStr = pTags[3].textContent.trim();
-                const sectionStr = pTags[4].textContent.trim();
-                const position = pTags[5] ? pTags[5].textContent.trim() : "未知地点";
+                const teacher = pTags[teacherIdx].textContent.replace(/^[\s*]+|[\s*]+$/g, '').replace(/\*/g, ' ').replace(/\s+/g, ' ');
+                const weekStr = pTags[weekIdx].textContent.trim();
+                const sectionStr = pTags[sectionIdx].textContent.trim();
+                const position = pTags[posIdx] ? pTags[posIdx].textContent.trim() : "未知地点";
                 
                 // 解析周次与真实的开始/结束节次
                 const weeks = parseWeekText(weekStr);

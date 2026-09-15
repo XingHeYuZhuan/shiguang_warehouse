@@ -238,15 +238,6 @@ async function selectAcademicYearAndSemester() {
 }
 
 
-/**
- * 检查是否在登录页面。
- */
-function isLoginPage() {
-    const url = window.location.href;
-    return url.includes('login') || url.includes('slogin');
-}
-
-
 async function promptUserToStart() {
     return await window.shiguangBridgePromise.showAlert(
         "教务系统课表导入 (超星)",
@@ -338,11 +329,6 @@ async function importPresetTimeSlots(timeSlots) {
 
 
 async function runImportFlow() {
-    if (isLoginPage()) {
-        window.shiguangBridge.showToast("导入失败：请先登录教务系统！");
-        return;
-    }
-
     const alertConfirmed = await promptUserToStart();
     if (!alertConfirmed) {
         window.shiguangBridge.showToast("用户取消了导入。");

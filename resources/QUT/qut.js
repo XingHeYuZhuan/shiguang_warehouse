@@ -1,5 +1,8 @@
 // 青岛理工大学 - 正方教务系统 课程表适配脚本
 
+// 教务系统基地址：跟随当前登录页协议（http/https 的会话 cookie 是分开的，必须与登录页一致）
+var BASE_URL = window.location.origin;
+
 /**
  * 解析周次字符串，处理单双周和周次范围。
  */
@@ -114,6 +117,10 @@ function parseJsonData(jsonData) {
 
     var rawCourseList = jsonData.kbList;
     var finalCourseList = [];
+
+    for (var dbg = 0; dbg < Math.min(rawCourseList.length, 2); dbg++) {
+        console.log("JS: 原始课程字段示例[" + dbg + "]: " + JSON.stringify(rawCourseList[dbg]));
+    }
 
     for (var i = 0; i < rawCourseList.length; i++) {
         var rawCourse = rawCourseList[i];
@@ -234,7 +241,7 @@ function readCurrentTerm() {
 }
 
 async function fetchTermPage() {
-    var url = window.location.origin + "/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default";
+    var url = BASE_URL + "/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default";
     var response = await fetch(url, { method: "GET", credentials: "include" });
     if (!response.ok) throw new Error("读取课表页面失败：HTTP " + response.status);
     return new DOMParser().parseFromString(await response.text(), "text/html");
@@ -300,7 +307,7 @@ function findSemesterStartDate(value) {
 }
 
 async function fetchSemesterStartDate(academicYear, semesterCode) {
-    var url = window.location.origin + "/jwglxt/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
+    var url = BASE_URL + "/jwglxt/kbcx/xskbcxZccx_cxZcByXnxq.html?gnmkdm=N2154";
     var requestBody = "xnm=" + encodeURIComponent(academicYear) + "&xqm=" + encodeURIComponent(semesterCode);
 
     try {
@@ -345,7 +352,7 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
     var requestBody = "xnm=" + encodeURIComponent(academicYear) +
                       "&xqm=" + encodeURIComponent(semesterCode) +
                       "&kzlx=ck&xsdm=&kclbdm=&kclxdm=";
-    var url = "https://jxgl.qut.edu.cn/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N253508";
+    var url = BASE_URL + "/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N253508";
 
     console.log("JS: 发送请求到 " + url + ", body: " + requestBody);
 
@@ -424,6 +431,102 @@ async function fetchAndParseCourses(academicYear, semesterCode) {
     }
 }
 
+/**
+ * 从正方系统获取该学期真实的节次作息时间。
+ */
+async function fetchAndParseTimeSlots(academicYear, semesterCode) {
+    var baseUrl = BASE_URL + "/jwglxt/kbcx/xskbcx_cxRjc.html";
+    var requestBody = "xnm=" + encodeURIComponent(academicYear) +
+                      "&xqm=" + encodeURIComponent(semesterCode) +
+                      "&kzlx=ck&xsdm=&kclbdm=&kclxdm=";
+    var gnmkdms = ["N2151", "N253508"];
+    var lastError = null;
+
+    for (var i = 0; i < gnmkdms.length; i++) {
+        var url = baseUrl + "?gnmkdm=" + gnmkdms[i];
+        try {
+            var response = await fetch(url, {
+                "headers": {
+                    "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                "body": requestBody,
+                "method": "POST",
+                "credentials": "include"
+            });
+            if (!response.ok) {
+                lastError = "HTTP " + response.status;
+                console.warn("JS: 节次时间接口请求失败(gnmkdm=" + gnmkdms[i] + ")：HTTP " + response.status);
+                continue;
+            }
+
+            var responseText = await response.text();
+            var responsePreview = responseText.replace(/\s+/g, " ").trim().slice(0, 200) || "<空响应>";
+
+            var data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (e) {
+                lastError = "非 JSON：响应=" + responsePreview;
+                console.warn("JS: 节次时间接口未返回 JSON(gnmkdm=" + gnmkdms[i] + ")：", e, "响应摘要=" + responsePreview);
+                continue;
+            }
+
+            if (data && !Array.isArray(data) && Array.isArray(data.data)) {
+                data = data.data;
+            }
+            if (!Array.isArray(data)) {
+                lastError = "格式异常：响应=" + responsePreview;
+                console.warn("JS: 节次时间接口返回格式异常(gnmkdm=" + gnmkdms[i] + ")：响应摘要=" + responsePreview);
+                continue;
+            }
+
+            var timeSlots = [];
+            for (var j = 0; j < data.length; j++) {
+                var item = data[j];
+                if (!item || typeof item !== "object") continue;
+
+                var number = Number(item.jcdm != null ? item.jcdm : item.jcmc);
+                var startTime = "";
+                var endTime = "";
+                if (item.qssj != null && item.jssj != null) {
+                    startTime = String(item.qssj).trim();
+                    endTime = String(item.jssj).trim();
+                } else if (item.sksj) {
+                    var sksjParts = String(item.sksj).split(/[~\-—至到]/);
+                    if (sksjParts.length >= 2) {
+                        startTime = sksjParts[0].trim();
+                        endTime = sksjParts[1].trim();
+                    }
+                }
+                startTime = startTime.slice(0, 5);
+                endTime = endTime.slice(0, 5);
+                if (!(number > 0) || !startTime || !endTime) continue;
+
+                timeSlots.push({ number: number, startTime: startTime, endTime: endTime });
+            }
+
+            timeSlots.sort(function(a, b) { return a.number - b.number; });
+
+            if (timeSlots.length === 0) {
+                lastError = "无有效数据：响应=" + responsePreview;
+                console.warn("JS: 节次时间接口未返回有效作息时间(gnmkdm=" + gnmkdms[i] + ")：响应摘要=" + responsePreview);
+                continue;
+            }
+
+            console.log("JS: 获取到真实节次作息 " + timeSlots.length + " 条(gnmkdm=" + gnmkdms[i] + ")，第1节 " +
+                timeSlots[0].startTime + "-" + timeSlots[0].endTime);
+            return timeSlots;
+        } catch (error) {
+            lastError = error.message || String(error);
+            console.warn("JS: 获取节次作息时间失败(gnmkdm=" + gnmkdms[i] + ")：", error);
+        }
+    }
+
+    console.warn("JS: 所有节次时间接口尝试均失败，最后原因：" + lastError);
+    return null;
+}
+
 async function saveCourses(parsedCourses) {
     window.shiguangBridge.showToast("正在保存 " + parsedCourses.length + " 门课程...");
     console.log("JS: 尝试保存 " + parsedCourses.length + " 门课程...");
@@ -438,7 +541,7 @@ async function saveCourses(parsedCourses) {
     }
 }
 
-// 青岛理工大学统一作息时间
+// 青岛理工大学统一作息时间（兜底，接口获取失败时使用）
 var TimeSlots = [
     { number: 1, startTime: "08:00", endTime: "08:45" },
     { number: 2, startTime: "08:50", endTime: "09:35" },
@@ -503,6 +606,23 @@ async function runImportFlow() {
             return;
         }
 
+        var timeSlots = await fetchAndParseTimeSlots(term.academicYear, term.semesterCode);
+        if (timeSlots === null) {
+            timeSlots = TimeSlots;
+            window.shiguangBridge.showToast("未获取到学校作息时间，已使用内置统一作息作为兜底。");
+        }
+
+        if (timeSlots.length > 0) {
+            var firstSlotDuration = Math.round(
+                (timeSlots[0].endTime.slice(0, 2) * 60 + Number(timeSlots[0].endTime.slice(3, 5))) -
+                (timeSlots[0].startTime.slice(0, 2) * 60 + Number(timeSlots[0].startTime.slice(3, 5)))
+            );
+            if (firstSlotDuration >= 20) {
+                config.defaultClassDuration = Math.round(firstSlotDuration / 5) * 5;
+                config.defaultBreakDuration = 10;
+            }
+        }
+
         try {
             await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
             window.shiguangBridge.showToast("课表配置更新成功！总周数：" + config.semesterTotalWeeks + "周。");
@@ -511,7 +631,7 @@ async function runImportFlow() {
             console.error('JS: Save Config Error:', error);
         }
 
-        await importPresetTimeSlots(TimeSlots);
+        await importPresetTimeSlots(timeSlots);
 
         window.shiguangBridge.showToast("成功导入 " + courses.length + " 门课程！");
         console.log("JS: 整个导入流程执行完毕并成功。");

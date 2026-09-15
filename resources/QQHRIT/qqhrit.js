@@ -160,14 +160,14 @@ function applyCustomTimeLogic(courses) {
 
     // 方案2：2#/3# 专用（3-4节）
     const TIME_SCHEME_2 = [
-        { number: 3, startTime: "10:20", endTime: "11:05" },
-        { number: 4, startTime: "11:15", endTime: "12:00" }
+        { number: 3, startTime: "09:55", endTime: "10:40" },
+        { number: 4, startTime: "10:50", endTime: "11:35" }
     ];
 
     // 方案3：图/馆/齐三机床 专用（3-4节）
     const TIME_SCHEME_3 = [
-        { number: 3, startTime: "09:55", endTime: "10:40" },
-        { number: 4, startTime: "10:50", endTime: "11:35" }
+        { number: 3, startTime: "10:05", endTime: "10:50" },
+        { number: 4, startTime: "11:00", endTime: "11:45" },
     ];
 
     return courses.map(course => {
@@ -484,8 +484,8 @@ async function saveCourses(parsedCourses) {
 const TimeSlots = [
     { number: 1, startTime: "08:00", endTime: "08:45" },
     { number: 2, startTime: "08:55", endTime: "09:40" },
-    { number: 3, startTime: "10:05", endTime: "10:50" },
-    { number: 4, startTime: "11:00", endTime: "11:45" },
+    { number: 3, startTime: "10:20", endTime: "11:05" },
+    { number: 4, startTime: "11:15", endTime: "12:00" },
     { number: 5, startTime: "13:30", endTime: "14:15" },
     { number: 6, startTime: "14:25", endTime: "15:10" },
     { number: 7, startTime: "15:20", endTime: "16:05" },

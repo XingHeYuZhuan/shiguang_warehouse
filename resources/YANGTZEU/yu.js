@@ -158,7 +158,29 @@
         return args;
     }
 
-    // 从脚本文本中的 TaskActivity 还原课程
+    // 读取构造参数，避免教师表达式或课程名中的括号提前结束匹配。
+    function readTaskActivityArgs(text, start) {
+        let depth = 1;
+        let quote = "";
+        let escaped = false;
+        for (let i = start; i < text.length; i++) {
+            const ch = text[i];
+            if (quote) {
+                if (escaped) escaped = false;
+                else if (ch === "\\") escaped = true;
+                else if (ch === quote) quote = "";
+                continue;
+            }
+            if (ch === "\"" || ch === "'") quote = ch;
+            else if (ch === "(") depth++;
+            else if (ch === ")" && --depth === 0) {
+                return { argsText: text.slice(start, i), end: i + 1 };
+            }
+        }
+        return null;
+    }
+
+    // 每个 TaskActivity 可以分配到多个节次，先划分课程声明，再读取其全部 index。
     function parseCoursesFromTaskActivityScript(htmlText) {
         const text = String(htmlText || "");
         if (!text) return [];
@@ -166,69 +188,84 @@
         const unitCount = unitCountMatch ? parseInt(unitCountMatch[1], 10) : 0;
         if (!Number.isInteger(unitCount) || unitCount <= 0) return [];
         const courses = [];
-        const blockRe = /activity\s*=\s*new\s+TaskActivity\(([^]*?)\)\s*;\s*index\s*=\s*(?:(\d+)\s*\*\s*unitCount\s*\+\s*(\d+)|(\d+))\s*;\s*table\d+\.activities\[index\]/g;
+        const activities = [];
+        const activityRe = /\bactivity\s*=\s*new\s+TaskActivity\s*\(/g;
         let match;
-        while ((match = blockRe.exec(text)) !== null) {
-            const argsText = match[1] || "";
-            const args = splitJsArgs(argsText);
+        while ((match = activityRe.exec(text)) !== null) {
+            const call = readTaskActivityArgs(text, activityRe.lastIndex);
+            if (!call) continue;
+            activities.push({ ...call, start: match.index });
+            activityRe.lastIndex = call.end;
+        }
+        for (let i = 0; i < activities.length; i++) {
+            const activity = activities[i];
+            const args = splitJsArgs(activity.argsText);
             if (args.length < 7) continue;
-            const dayPart = match[2];
-            const sectionPart = match[3];
-            const directIndexPart = match[4];
-            let indexValue = -1;
-            if (dayPart != null && sectionPart != null) {
-                indexValue = parseInt(dayPart, 10) * unitCount + parseInt(sectionPart, 10);
-            } else if (directIndexPart != null) {
-                indexValue = parseInt(directIndexPart, 10);
-            }
-            if (!Number.isInteger(indexValue) || indexValue < 0) continue;
-            const day = Math.floor(indexValue / unitCount) + 1;
-            let section = (indexValue % unitCount) + 1;
-            section = mapSectionToTimeSlotNumber(section);
-            if (day < 1 || day > 7 || section < 1 || section > 16) continue;
             let teacher = unquoteJsLiteral(args[1]);
-            if (teacher && !/^['"]/.test(String(args[1]).trim()) && /join\s*\(/.test(String(args[1]))) {
-                const resolved = resolveTeachersForTaskActivityBlock(text, match.index);
-                if (resolved) teacher = resolved;
+            // 教师值为 JS 表达式时，尝试解析或置空以触发兜底
+            if (teacher && /\.join\s*\(/.test(teacher)) {
+                const resolved = resolveTeachersForTaskActivityBlock(text, activity.start, teacher);
+                teacher = resolved || "";
             }
             const name = cleanCourseName(unquoteJsLiteral(args[3]));
             const position = unquoteJsLiteral(args[5]);
             const weekBitmap = unquoteJsLiteral(args[6]);
             const weeks = normalizeWeeks(parseValidWeeksBitmap(weekBitmap));
             if (!name) continue;
-            courses.push({
-                name,
-                teacher,
-                position,
-                day,
-                startSection: section,
-                endSection: section,
-                weeks
-            });
+            const end = i + 1 < activities.length ? activities[i + 1].start : text.length;
+            const assignments = text.slice(activity.end, end);
+            const indexRe = /\bindex\s*=\s*(?:(\d+)\s*\*\s*unitCount\s*\+\s*(\d+)|(\d+))\s*;\s*table\d+\.activities\[index\]/g;
+            let indexMatch;
+            while ((indexMatch = indexRe.exec(assignments)) !== null) {
+                const indexValue = indexMatch[3] != null
+                    ? parseInt(indexMatch[3], 10)
+                    : parseInt(indexMatch[1], 10) * unitCount + parseInt(indexMatch[2], 10);
+                if (!Number.isInteger(indexValue) || indexValue < 0) continue;
+                const day = Math.floor(indexValue / unitCount) + 1;
+                const section = mapSectionToTimeSlotNumber((indexValue % unitCount) + 1);
+                if (day < 1 || day > 7 || section < 1 || section > 16) continue;
+                courses.push({
+                    name,
+                    teacher,
+                    position,
+                    day,
+                    startSection: section,
+                    endSection: section,
+                    weeks
+                });
+            }
         }
         return mergeContiguousSections(courses);
     }
 
     // 当教师名为表达式时，尝试在附近代码中回溯真实教师名
-    function resolveTeachersForTaskActivityBlock(fullText, blockStartIndex) {
+    function resolveTeachersForTaskActivityBlock(fullText, blockStartIndex, teacherExpr) {
         const start = Math.max(0, blockStartIndex - 2200);
         const segment = fullText.slice(start, blockStartIndex);
-        const re = /var\s+actTeachers\s*=\s*\[([^]*?)\]\s*;/g;
-        let m;
-        let last = null;
-        while ((m = re.exec(segment)) !== null) {
-            last = m[1];
+        // 从表达式中提取变量名（如 actTeacherName.join(',') → actTeacherName）
+        let varName = "actTeachers";
+        const varMatch = String(teacherExpr || "").match(/^(\w+)\.join/);
+        if (varMatch) varName = varMatch[1];
+        const varNames = [varName];
+        if (varName !== "actTeachers") varNames.push("actTeachers");
+        for (const vn of varNames) {
+            const re = new RegExp(`var\\s+${vn}\\s*=\\s*\\[([^]*?)\\]\\s*;`, "g");
+            let m;
+            let last = null;
+            while ((m = re.exec(segment)) !== null) {
+                last = m[1];
+            }
+            if (!last) continue;
+            const names = [];
+            const nameRe = /name\s*:\s*(?:"([^"]*)"|'([^']*)')/g;
+            let nm;
+            while ((nm = nameRe.exec(last)) !== null) {
+                const name = (nm[1] || nm[2] || "").trim();
+                if (name) names.push(name);
+            }
+            if (names.length > 0) return Array.from(new Set(names)).join(",");
         }
-        if (!last) return "";
-        const names = [];
-        const nameRe = /name\s*:\s*(?:"([^"]*)"|'([^']*)')/g;
-        let nm;
-        while ((nm = nameRe.exec(last)) !== null) {
-            const name = (nm[1] || nm[2] || "").trim();
-            if (name) names.push(name);
-        }
-        if (names.length === 0) return "";
-        return Array.from(new Set(names)).join(",");
+        return "";
     }
 
     // 合并同一课程的连续节次
