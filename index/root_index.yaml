@@ -1047,3 +1047,8 @@ schools:
     name: "徐州医科大学"
     initial: "X"
     resource_folder: "XZHMU"
+
+  - id: "WZZY"
+    name: "梧州职业学院"
+    initial: "W"
+    resource_folder: "WZZY"
