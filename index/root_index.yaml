@@ -233,6 +233,11 @@ schools:
     initial: "N"
     resource_folder: "NJUPT"
 
+  - id: "NUAA"
+    name: "南京航空航天大学"
+    initial: "N"
+    resource_folder: "NUAA"
+
   - id: "XMCU"
     name: "厦门城市职业学院"
     initial: "X"
@@ -1052,3 +1057,8 @@ schools:
     name: "梧州职业学院"
     initial: "W"
     resource_folder: "WZZY"
+
+  - id: "ZJSRU"
+    name: "浙江树人学院"
+    initial: "Z"
+    resource_folder: "ZJSRU"
