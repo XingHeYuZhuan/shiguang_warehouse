@@ -1052,3 +1052,8 @@ schools:
     name: "梧州职业学院"
     initial: "W"
     resource_folder: "WZZY"
+
+  - id: "ZJSRU"
+    name: "浙江树人学院"
+    initial: "Z"
+    resource_folder: "ZJSRU"
