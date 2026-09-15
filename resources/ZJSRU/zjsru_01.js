@@ -12,7 +12,9 @@
 // 作息时间取自学校官方校历底部《上课时间表》
 // (https://www.zjsru.edu.cn/info/1411/54428.htm)，拱宸桥 / 杨汛桥两校区不同，
 // 导入时由用户选择，见 ZJSRU_CAMPUS_TIME_SLOTS。
-// 校内直连与校外 WebVPN 通道通用：取数基址由 location.pathname 推导。
+//
+// 取数基址由 location.pathname 推导，因此若用户经 WebVPN 打开教务（页面地址形如
+// /https/webvpn<hash>/xskbcx.aspx），脚本同样可以正常工作。
 //
 // 参考: SUDA（同为 table#Table1.schedule 结构）；多校区作息参照 GDPU / HNSF
 // Author: CagierAsh123
@@ -30,8 +32,9 @@ const ZJSRU_MIN_TOTAL_WEEKS = 18; // 学期总周数下限，避免个别短课�
 // https://www.zjsru.edu.cn/info/1411/54428.htm 底部《上课时间表》
 // 注：杨汛桥校区不设第五节。软件的作息校验要求节次必须从 1 起连续编号
 //     （validateTimeSlotsOrThrow），否则导入会直接报错；而教务系统给杨汛桥
-//     学生排课时仍沿用全校统一的节次号（下午第一节叫「第六节」），
-//     所以这里保留 5 号占位并用 alias 说明，以保证第六节仍然落在 6 号上。
+//     学生排课时仍按全校统一节次返回（下午第一节就是「第六节」，并未坍缩为
+//     -1 或重编号），所以这里虚拟一个第 5 节占位以保持节次连续，
+//     使第六节仍然落在 6 号上。
 const ZJSRU_CAMPUS_TIME_SLOTS = {
     gongchenqiao: {
         label: "拱宸桥校区",
@@ -57,7 +60,7 @@ const ZJSRU_CAMPUS_TIME_SLOTS = {
             { number: 2, startTime: "09:15", endTime: "09:55" },
             { number: 3, startTime: "10:10", endTime: "10:50" },
             { number: 4, startTime: "10:55", endTime: "11:35" },
-            { number: 5, startTime: "11:35", endTime: "12:15", alias: "不设第五节" },
+            { number: 5, startTime: "11:35", endTime: "12:15" },
             { number: 6, startTime: "13:30", endTime: "14:10" },
             { number: 7, startTime: "14:15", endTime: "14:55" },
             { number: 8, startTime: "15:05", endTime: "15:45" },
