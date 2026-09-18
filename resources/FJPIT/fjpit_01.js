@@ -1,11 +1,9 @@
 // 福建信息职业技术学院（福信智慧教务）课表导入适配脚本
 // 前端 jw.fjpit.com · 接口 jw-api.fjpit.com/api · 鉴权头 ba-token + server: 1
 // 取数直接请求接口，不解析页面 HTML；教师/教室按原文原样保留（空即空）
-// 注意：App 会给非 GET 请求加 X-WebView-Post-Id，教务 WAF 直接拒绝，须先点「执行导入」再登录
 
 const FJPIT_API = 'https://jw-api.fjpit.com/api';
 const FJPIT_HOST_KEY = 'fjpit.com';
-const FJPIT_ID_HEADER = 'x-webview-post-id';
 const FJPIT_LOGIN_WAIT_MS = 5 * 60 * 1000;
 
 // ---------- 通用工具 ----------
@@ -34,63 +32,9 @@ function fjpitSafeToast(msg) {
     try { window.shiguangBridge.showToast(msg); } catch (e) { console.log('JS[toast]: ' + msg); }
 }
 
-// ---------- 一、干净网络通道（绕开 App 的 JS 补丁） ----------
+// ---------- 一、状态条 ----------
 
-let FJPIT_CLEAN_FETCH = null;
-
-/** 取一个没被 App 补丁污染的 fetch：App 只对主 frame 注入补丁，子 frame 是干净的 */
-function fjpitCleanFetch() {
-    if (FJPIT_CLEAN_FETCH) return FJPIT_CLEAN_FETCH;
-    try {
-        const ifr = document.createElement('iframe');
-        ifr.style.cssText = 'position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none;border:0';
-        (document.body || document.documentElement).appendChild(ifr);
-        const f = ifr.contentWindow && ifr.contentWindow.fetch;
-        if (typeof f === 'function') return (FJPIT_CLEAN_FETCH = f.bind(ifr.contentWindow));
-    } catch (e) { }
-    try {
-        if (typeof window.fetch === 'function') return (FJPIT_CLEAN_FETCH = window.fetch.bind(window));
-    } catch (e) { }
-    return (FJPIT_CLEAN_FETCH = function () {
-        return Promise.reject(new Error('当前环境没有可用的 fetch'));
-    });
-}
-
-function fjpitFetch(url, init) {
-    return fjpitCleanFetch()(url, init);
-}
-
-/** 修好页面请求通道：丢掉 App 补丁加的 X-WebView-Post-Id，否则教务 WAF 会拒掉一切 POST */
-function fjpitRepairPageNetwork() {
-    const report = { fetch: false, xhr: false };
-
-    try {
-        const clean = fjpitCleanFetch();
-        if (clean !== window.fetch) {
-            window.fetch = clean;
-            report.fetch = true;
-        }
-    } catch (e) { console.warn('JS: 替换 fetch 失败', e); }
-
-    try {
-        const proto = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
-        if (proto && !proto.__fjpitHeaderHooked) {
-            const prev = proto.setRequestHeader;
-            proto.setRequestHeader = function (header) {
-                if (String(header || '').toLowerCase() === FJPIT_ID_HEADER) return;
-                return prev.apply(this, arguments);
-            };
-            proto.__fjpitHeaderHooked = true;
-            report.xhr = true;
-        }
-    } catch (e) { console.warn('JS: hook XHR 失败', e); }
-
-    return report;
-}
-
-// ---------- 二、状态条 ----------
-
-/** 底部状态条：显示进度与等待提示；登录引导走 App 原生弹窗 */
+/** 底部状态条：显示进度与等待提示 */
 function fjpitBuildStatusBar() {
     const root = document.createElement('div');
     root.setAttribute('data-fjpit-ui', '1');
@@ -104,24 +48,6 @@ function fjpitBuildStatusBar() {
 
     return {
         /** 弹原生弹窗提示用户登录；点掉弹窗后 resolve */
-        needLogin: function () {
-            root.textContent = '等待登录…';
-            try {
-                return window.shiguangBridgePromise.showAlert(
-                    '第 1 步：登录教务',
-                    '福信教务的防火墙会拦下未加工过的登录请求，'
-                    + '所以需要你先点一下本工具，把请求通道理通。\n\n'
-                    + '点「去登录」关闭本提示后，请在页面中登录你的教务账号；'
-                    + '登录成功会自动开始导入课表，不需要再点任何按钮。\n\n'
-                    + '※ 只有首次使用或登录过期时才需要这一步，'
-                    + '之后直接点「执行导入」即可。',
-                    '去登录'
-                );
-            } catch (e) {
-                console.warn('JS: 弹窗失败', e);
-                return Promise.resolve(true);
-            }
-        },
         setStatus: function (t) { root.textContent = t; },
         destroy: function () {
             try { if (root.parentNode) root.parentNode.removeChild(root); } catch (e) { }
@@ -129,7 +55,7 @@ function fjpitBuildStatusBar() {
     };
 }
 
-// ---------- 三、鉴权 ----------
+// ---------- 二、鉴权 ----------
 
 /** 从 Pinia store 取 accessToken；取不到返回 null，由调用方走「请登录」引导 */
 function fjpitGetAccessToken() {
@@ -162,7 +88,7 @@ function fjpitApiHeaders(token) {
     return h;
 }
 
-// ---------- 四、取数（结构化 API） ----------
+// ---------- 三、取数（结构化 API） ----------
 
 // 教务 WAF 有短时速率限制（连续快速请求会被成片拒绝），故加请求间隔 + 失败退避重试
 // 一旦出现失败就把全局间隔翻倍（上限 800ms）自适应降速，宁可慢也要把数据取全
@@ -195,7 +121,7 @@ async function fjpitApiRequest(method, path, body, token) {
                 mode: 'cors'
             };
             if (body !== undefined) init.body = JSON.stringify(body);
-            const resp = await fjpitFetch(FJPIT_API + path, init);
+            const resp = await fetch(FJPIT_API + path, init);
             if (!resp.ok) throw new Error(path + ' HTTP ' + resp.status);
             const json = await resp.json();
             if (json.code !== 1) throw new Error(path + ' code=' + json.code + ' ' + (json.msg || ''));
@@ -344,7 +270,7 @@ async function fjpitCollectData(token, bar) {
     };
 }
 
-// ---------- 五、聚合（教师/教室原样透传） ----------
+// ---------- 四、聚合（教师/教室原样透传） ----------
 
 function fjpitAggregate(entries) {
     const SEP = '\u0001';
@@ -373,7 +299,7 @@ function fjpitAggregate(entries) {
     return list;
 }
 
-// ---------- 六、保存 ----------
+// ---------- 五、保存 ----------
 
 async function fjpitSaveCourses(courses) {
     await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses, null, 2));
@@ -395,7 +321,7 @@ async function fjpitSaveConfig(semesterStartDate, totalWeeks) {
     await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 }
 
-// ---------- 七、等待登录 ----------
+// ---------- 六、等待登录 ----------
 
 /** 轮询等待用户登录；页面被整页重载则提前返回 null */
 async function fjpitWaitForLogin(bar, deadlineTs) {
@@ -414,38 +340,22 @@ async function fjpitWaitForLogin(bar, deadlineTs) {
     return null;
 }
 
-// ---------- 八、主流程（编排） ----------
+// ---------- 七、主流程（编排） ----------
 // 按官方推荐的编排模式：只做顺序编排；任一步失败立即 return；
 // notifyTaskCompletion() 只在完全成功后调用。
 
-/** 第 1 步：公告式确认 */
-async function fjpitAskStart() {
-    try {
-        return await window.shiguangBridgePromise.showAlert(
-            '福信智慧教务课表导入',
-            '本工具将逐周抓取本学期全部周课表，并自动导入开学日期与作息时间。\n\n'
-            + '数据直接读取教务接口，不解析页面，通常几秒完成。\n'
-            + '请勿中途离开页面。',
-            '开始导入'
-        );
-    } catch (e) {
-        console.warn('JS: 确认弹窗失败', e);
-        return false;
-    }
-}
-
-/** 第 2 步：确保已登录；未登录则弹公告引导用户登录并等待 */
+/** 确保已登录；未登录则只在状态条提示并等待 */
 async function fjpitEnsureLogin(bar) {
     let token = fjpitGetAccessToken();
     if (token) return token;
 
-    bar.needLogin();
+    bar.setStatus('未检测到登录状态，请在页面中登录教务账号…');
     token = await fjpitWaitForLogin(bar, Date.now() + FJPIT_LOGIN_WAIT_MS);
     if (!token) token = fjpitGetAccessToken();   // 兜底：前端可能刚把 token 写进 store
     return token;
 }
 
-/** 第 4 步：聚合 + 保存。课程保存失败会抛出（必须中断）；作息与配置尽力而为 */
+/** 聚合 + 保存。课程保存失败会抛出（必须中断）；作息与配置尽力而为 */
 async function fjpitSaveAll(data) {
     const courses = fjpitAggregate(data.entries);
     console.log('JS: 原始条目 ' + data.entries.length + '，聚合为 ' + courses.length
@@ -468,7 +378,7 @@ async function fjpitSaveAll(data) {
     return { courses: courses, timeSlotSaved: timeSlotSaved };
 }
 
-/** 第 5 步：汇总公告 */
+/** 汇总公告 —— 本脚本唯一的弹窗 */
 async function fjpitReport(data, saved) {
     const courses = saved.courses;
 
@@ -500,38 +410,24 @@ async function runImportFlow() {
         fjpitSafeToast('请先在福信智慧教务页面登录后再执行导入。');
         return;
     }
-    console.log('JS: 页面网络通道修复 ' + JSON.stringify(fjpitRepairPageNetwork()));
     const bar = fjpitBuildStatusBar();
 
-    // 1. 登录（未登录则弹公告引导 + 等待）
+    // 1. 登录（未登录则等待）
     const token = await fjpitEnsureLogin(bar);
     if (!token) {
         bar.destroy();
         fjpitSafeToast('未等到登录状态，请登录后重新点「执行导入」。');
         return;
     }
-    bar.setStatus('已登录，准备导入…');
+    bar.setStatus('已登录，开始导入…');
 
-    // 2. 确认
-    if (!await fjpitAskStart()) {
-        bar.destroy();
-        fjpitSafeToast('已取消导入。');
-        return;
-    }
-
-    // 3. 取数（全部走教务接口，不解析页面 HTML）
+    // 2. 取数（全部走教务接口，不解析页面 HTML）
     let data;
     try {
         data = await fjpitCollectData(token, bar);
     } catch (e) {
         bar.destroy();
-        fjpitSafeToast('取数失败：' + e.message);
-        await window.shiguangBridgePromise.showAlert(
-            '取数失败',
-            '未能取到课表数据：\n' + e.message
-            + '\n\n请确认已登录教务系统后重试。',
-            '知道了'
-        );
+        fjpitSafeToast('取数失败，请确认已登录教务系统后重试：' + e.message);
         return;
     }
     if (!data.entries.length) {
@@ -540,7 +436,7 @@ async function runImportFlow() {
         return;
     }
 
-    // 4. 聚合 + 保存
+    // 3. 聚合 + 保存
     bar.setStatus('保存课程…');
     let saved;
     try {
@@ -551,11 +447,11 @@ async function runImportFlow() {
         return;
     }
 
-    // 5. 汇总
+    // 4. 汇总
     bar.destroy();
     await fjpitReport(data, saved);
 
-    // 6. 完全成功，才发结束信号
+    // 5. 完全成功，才发结束信号
     window.shiguangBridge.notifyTaskCompletion();
 }
 
