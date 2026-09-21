@@ -5,6 +5,7 @@
 const FJPIT_API = 'https://jw-api.fjpit.com/api';
 const FJPIT_HOST_KEY = 'fjpit.com';
 const FJPIT_LOGIN_WAIT_MS = 5 * 60 * 1000;
+const FJPIT_BREAK_RE = /中午|午休|午间|晚休|休息/;   // 作息表里的非上课行，需剔除
 
 // ---------- 通用工具 ----------
 
@@ -167,28 +168,46 @@ async function fjpitForEachLimit(items, limit, worker) {
     return results;
 }
 
-/** 作息列表 → [{number,startTime,endTime}]，编号或时间非法的项丢弃 */
+/** 作息 → {slots, nodeMap}。午休/晚休不是正式节次，须剔除并把课程节次重编号 */
 function fjpitParseTimeSlots(raw) {
     const arr = Array.isArray(raw) ? raw : Object.values(raw || {});
     const ok = /^\d{1,2}:\d{2}$/;
-    return arr.map(function (e) {
+    const all = arr.map(function (e) {
         return {
-            number: Number(e && e.jcdm),
+            node: Number(e && e.jcdm),
+            name: String((e && e.jcmc) || ''),
             startTime: String((e && e.jcskkssj) || '').slice(0, 5),
             endTime: String((e && e.jcskjssj) || '').slice(0, 5)
         };
     }).filter(function (t) {
-        return t.number >= 1 && ok.test(t.startTime) && ok.test(t.endTime);
-    }).sort(function (a, b) { return a.number - b.number; });
+        return t.node >= 1 && ok.test(t.startTime) && ok.test(t.endTime);
+    }).sort(function (a, b) { return a.node - b.node; });
+
+    // 教务按「含休息行」的顺序给课程节点编号，故剔除休息行后必须同步重编号
+    let kept = all.filter(function (t) { return !FJPIT_BREAK_RE.test(t.name); });
+    if (!kept.length) kept = all;      // 名称识别不出节次时保持原样，避免误伤
+
+    const nodeMap = {};
+    const slots = kept.map(function (t, i) {
+        nodeMap[t.node] = i + 1;
+        return { number: i + 1, startTime: t.startTime, endTime: t.endTime };
+    });
+    return { slots: slots, nodeMap: nodeMap, dropped: all.length - kept.length };
+}
+
+/** 节次编号折算到重排后的编号；无对应项时原样返回 */
+function fjpitMapNode(node, nodeMap) {
+    const n = Number(node);
+    return (nodeMap && nodeMap[n]) ? nodeMap[n] : n;
 }
 
 /** 单条课表记录 → entry；课程名/星期/节次非法的返回 null */
-function fjpitParseEntry(rec, week) {
+function fjpitParseEntry(rec, week, nodeMap) {
     if (!rec) return null;
     const name = String(rec.course == null ? '' : rec.course).trim();
     const day = Number(rec.DayIndex);
-    const start = Number(rec.startNode);
-    const end = Number(rec.endNode);
+    const start = fjpitMapNode(rec.startNode, nodeMap);
+    const end = fjpitMapNode(rec.endNode, nodeMap);
     if (!name || !(day >= 1 && day <= 7) || !(start >= 1) || !(end >= start)) return null;
     return {
         week: week, day: day, date: '',
@@ -223,7 +242,8 @@ async function fjpitCollectData(token, bar) {
     const totalWeeks = Number(sc.totalWeeks) || 0;
     if (!(totalWeeks >= 1)) throw new Error('/semesterConfig 未返回有效 totalWeeks');
     const startDate = fjpitAlignToMonday(sc.startDate);      // 教务给的不一定是周一
-    const timeSlots = fjpitParseTimeSlots(await slotPromise);
+    const ts = fjpitParseTimeSlots(await slotPromise);
+    console.log('JS: 作息 ' + ts.slots.length + ' 节（剔除休息行 ' + ts.dropped + '）');
 
     // 3) 逐周课表（限并发；单周失败只记账不中断）
     bar.setStatus('抓取周课表…');
@@ -249,7 +269,7 @@ async function fjpitCollectData(token, bar) {
     results.forEach(function (r) {
         if (!r.ok) { failedWeeks.push(r.week); return; }
         r.list.forEach(function (rec) {
-            const e = fjpitParseEntry(rec, r.week);
+            const e = fjpitParseEntry(rec, r.week, ts.nodeMap);
             if (e) entries.push(e);
         });
     });
@@ -264,7 +284,7 @@ async function fjpitCollectData(token, bar) {
         + '；请求间隔 ' + FJPIT_CUR_GAP_MS + 'ms');
 
     return {
-        entries: entries, timeSlots: timeSlots,
+        entries: entries, timeSlots: ts.slots,
         semesterStartDate: startDate, totalWeeks: totalWeeks,
         failedWeeks: failedWeeks, elapsedMs: elapsedMs
     };
