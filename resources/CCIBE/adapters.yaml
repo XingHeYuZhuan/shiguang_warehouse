@@ -1,0 +1,9 @@
+# resources/CCIBE/adapters.yaml
+adapters:
+  - adapter_id: "CCIBE"
+    adapter_name: "重庆对外经贸学院教务系统"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "ccibe.js"
+    import_url: "https://my-443.vpn.ccibe.edu.cn/"
+    maintainer: "ZBL-code"
+    description: "重庆对外经贸学院一站式服务大厅进入教务系统。请先登录并进入“我的课表”页面，然后点击导入。"
