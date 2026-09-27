@@ -1132,4 +1132,9 @@ schools:
     name: "上海电力大学"
     initial: "S"
     resource_folder: "SHIEP"
+
+   - id: "CCIBE"
+    name: "重庆对外经贸学院"
+    initial: "C"
+    resource_folder: "CCIBE"
     
