@@ -5,5 +5,5 @@ adapters:
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "fjpit_01.js"
     import_url: "https://jw.fjpit.com/#/auth/login"
-    maintainer: "Panda35064"
-    description: "登录前需直接点击导入按钮！！！（学校防火墙限制），后续会弹窗引导。龙腰校区实测可用，如有问题请提issues"
+    maintainer: "Panda君"
+    description: "登录完成后，直接点击“导入按钮”即可；龙腰校区实测可用，如有问题请提issues"
