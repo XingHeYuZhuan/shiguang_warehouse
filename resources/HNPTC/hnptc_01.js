@@ -2,11 +2,24 @@
 // 适配作者：小漫君
 // 学生端入口：http://jx.hnxyjf.com:10081/jsxsd/
 // 使用流程：在软件内置浏览器登录学生端，点击导入并选择学期。
-// 说明：直接请求整学期课表与教学周历；开学日期和作息时间请按学校实际安排核对。
+// 说明：直接请求整学期课表与教学周历；作息参考学校 2025-2026 学年校历，后续调整请核对。
 
 const HNPTC_KB_URL = '/jsxsd/xskb/xskb_list.do';
 const HNPTC_CALENDAR_URL = '/jsxsd/jxzl/jxzl_query';
 const HNPTC_POST_OPTIONS = { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } };
+// https://jwc.hnptc.edu.cn/2025_09/19_09/content-30331.html
+const HNPTC_TIME_SLOTS = [
+    { number: 1, startTime: '08:30', endTime: '09:15' },
+    { number: 2, startTime: '09:25', endTime: '10:10' },
+    { number: 3, startTime: '10:25', endTime: '11:10' },
+    { number: 4, startTime: '11:20', endTime: '12:05' },
+    { number: 5, startTime: '14:00', endTime: '14:45' },
+    { number: 6, startTime: '14:55', endTime: '15:40' },
+    { number: 7, startTime: '15:50', endTime: '16:35' },
+    { number: 8, startTime: '16:45', endTime: '17:30' },
+    { number: 9, startTime: '19:30', endTime: '20:15' },
+    { number: 10, startTime: '20:25', endTime: '21:10' }
+];
 
 // ==================== 桥接封装 ====================
 
@@ -434,6 +447,23 @@ async function runImportFlow() {
         if (saved !== true && saved !== 'true') {
             toast('课程保存失败，请重试');
             return;
+        }
+
+        // 校历只列出十节；若教务课表出现更多节次，保留课程导入并交由用户核对作息。
+        if (courses.every(function (course) { return course.endSection <= HNPTC_TIME_SLOTS.length; })) {
+            try {
+                const timeSaved = await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(HNPTC_TIME_SLOTS));
+                if (timeSaved === true || timeSaved === 'true') {
+                    toast('已按 2025-2026 学年校历预设作息，请核对学校最新安排');
+                } else {
+                    toast('作息时间未写入，请手动核对');
+                }
+            } catch (error) {
+                console.warn('[HNPTC] 作息时间未写入：', error);
+                toast('作息时间未写入，请手动核对');
+            }
+        } else {
+            toast('课表含校历之外的节次，请手动核对作息');
         }
 
         toast('导入成功：' + semester.label + ' 共 ' + courses.length + ' 条课程时段');
