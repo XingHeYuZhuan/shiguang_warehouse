@@ -1138,7 +1138,13 @@ schools:
     initial: "S"
     resource_folder: "SHIEP"
 
+  - id: "SHNU"
+    name: "上海师范大学"
+    initial: "S"
+    resource_folder: "SHNU"
+
   - id: "NEFU"
     name: "东北林业大学"
     initial: "D"
     resource_folder: "NEFU"
+    
