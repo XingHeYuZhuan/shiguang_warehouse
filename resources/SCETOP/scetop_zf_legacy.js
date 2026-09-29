@@ -289,6 +289,61 @@
     return count;
   }
 
+  // ---------------- 课程性质（选修/必修）----------------
+  // 课表页里没有「课程性质」，要去「学生选课情况查询」页取。
+  var COURSE_TYPE_PATH = 'xsxkqk.aspx?gnmkdm=N121615';
+
+  function normalizeCourseName(name) {
+    return String(name || '').replace(/\s+/g, '').replace(/（/g, '(').replace(/）/g, ')');
+  }
+
+  function isElectiveType(type) {
+    return /选修/.test(String(type || ''));
+  }
+
+  function findCourseTypeTable(doc) {
+    var tables = [].slice.call(doc.querySelectorAll('table'));
+    for (var i = 0; i < tables.length; i++) {
+      var head = tables[i].rows && tables[i].rows[0];
+      if (head && /课程性质/.test(String(head.textContent || ''))) return tables[i];
+    }
+    return null;
+  }
+
+  /** 从「学生选课情况查询」页读出 课程名称 -> 课程性质 */
+  function parseCourseTypes(doc) {
+    var map = {};
+    var table = findCourseTypeTable(doc);
+    if (!table || !table.rows) return map;
+    for (var r = 0; r < table.rows.length; r++) {
+      var cells = table.rows[r].cells;
+      if (!cells || cells.length < 3) continue;
+      var name = String(cells[1].textContent || '').trim();
+      var type = String(cells[2].textContent || '').trim();
+      if (!name || !type || name === '课程名称') continue;
+      map[normalizeCourseName(name)] = type;
+    }
+    return map;
+  }
+
+  /** 读取「学生选课情况查询」页；学期与当前页不一致时按它自己的表单回发一次 */
+  async function loadCourseTypes(studentId, liveTerm) {
+    var url = String(window.location.origin || '') + '/' + COURSE_TYPE_PATH + '&xh=' + encodeURIComponent(studentId);
+    var doc = await fetchDocument(url);
+
+    var yearSelect = doc.querySelector('select[name="ddlXN"]');
+    var termSelect = doc.querySelector('select[name="ddlXQ"]');
+    if (liveTerm && yearSelect && termSelect &&
+        (yearSelect.value !== liveTerm.year || termSelect.value !== liveTerm.term)) {
+      var rerendered = await repostWithTerm(doc, url, {
+        yearField: yearSelect.name, year: liveTerm.year,
+        termField: termSelect.name, term: liveTerm.term
+      });
+      if (rerendered) doc = rerendered;
+    }
+    return parseCourseTypes(doc);
+  }
+
   function collectCourses(doc, stats) {
     var found = findCourseTable(doc);
     if (!found) return [];
@@ -520,12 +575,16 @@
    * 合并：个人课表优先，班级课表只补录个人课表里没有的课程。
    * 判据用课程名——同一门课两个页面的周次/教室可能不一样，以个人课表为准。
    */
-  function mergeWithPersonalPriority(personal, classCourses, stats) {
+  function mergeWithPersonalPriority(personal, classCourses, stats, typeMap) {
     var known = {};
-    personal.forEach(function (course) { known[course.name] = true; });
+    personal.forEach(function (course) { known[normalizeCourseName(course.name)] = true; });
 
     var added = classCourses.filter(function (course) {
-      if (known[course.name]) { stats.supplementedSkip++; return false; }
+      var key = normalizeCourseName(course.name);
+      var type = typeMap ? typeMap[key] : '';
+      // 选修课只认个人侧：班级课表里的选修课不参与补录（班级课表本来也不含选修）
+      if (type && isElectiveType(type)) { stats.electiveSkipped++; return false; }
+      if (known[key]) { stats.supplementedSkip++; return false; }
       stats.supplementedAdd++;
       return true;
     });
@@ -563,7 +622,8 @@
     var liveTerm = readTerm(document);
     var stats = {
       unrecognized: [], incomplete: 0, dayMismatch: 0, sectionOverflow: 0,
-      supplementedAdd: 0, supplementedSkip: 0, failedPages: []
+      supplementedAdd: 0, supplementedSkip: 0, electiveSkipped: 0,
+      typeMap: {}, typeLoaded: false, failedPages: []
     };
 
     var pageInfo = [];
@@ -586,7 +646,18 @@
     var personal = await loadOne('student', '学生个人课表');
     var classCourses = await loadOne('class', '班级课表');
 
-    var courses = applyCustomTimes(mergeWithPersonalPriority(personal, classCourses, stats));
+    // 课程性质（选修/必修）：课表页没有，单独去「学生选课情况查询」页取
+    try {
+      stats.typeMap = await loadCourseTypes(studentId, liveTerm);
+      stats.typeLoaded = Object.keys(stats.typeMap).length > 0;
+      pageInfo.push('课程性质：读到 ' + Object.keys(stats.typeMap).length + ' 门');
+    } catch (error) {
+      stats.typeMap = {};
+      console.warn('[四川托普] 课程性质读取失败（不影响导入，只影响选修课隔离）：', error);
+      pageInfo.push('课程性质：读取失败');
+    }
+
+    var courses = applyCustomTimes(mergeWithPersonalPriority(personal, classCourses, stats, stats.typeMap));
     var fromClassOnly = personal.length === 0 && courses.length > 0;
 
     if (!courses.length) {
@@ -655,6 +726,14 @@
     if (customCount) {
       message.push('其中 ' + customCount + ' 门课的上课时间与默认作息不同，已经单独设置。');
     }
+    if (stats.typeLoaded) {
+      var electiveCount = courses.filter(function (course) {
+        return isElectiveType(stats.typeMap[normalizeCourseName(course.name)]);
+      }).length;
+      message.push('按教务的课程性质，这次导入里有选修课 ' + electiveCount + ' 门（选修课只出现在个人课表里，班级课表不含选修）。');
+    } else {
+      message.push('这次没能读到课程性质，选修课与必修课没有做区分。');
+    }
     if (untimedCount) {
       message.push('另有 ' + untimedCount + ' 门课程没有固定上课时间（实践、实训类），没有导入，可以自己手动添加。');
     }
@@ -675,6 +754,7 @@
     }
 
     console.log('[四川托普] 取数明细：' + pageInfo.join('；'));
+    console.log('[四川托普] 课程性质：' + JSON.stringify(stats.typeMap) + '（班级课表里被隔离的选修课 ' + stats.electiveSkipped + ' 条）');
     console.log('[四川托普] 导入完成：' + courses.length + ' 门课程（学生个人课表 ' + personal.length +
       '，班级课表补录 ' + stats.supplementedAdd + '，班级课表被跳过的重复课 ' + stats.supplementedSkip + '）');
     if (stats.unrecognized.length) console.warn('[四川托普] 没能识别的内容：', stats.unrecognized);
