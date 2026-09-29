@@ -1,9 +1,12 @@
 // 四川托普信息技术职业学院 · 老版正方教务课表导入
 //
-// 一次导入会同时读取两个课表页并合并：
-//   1. 学生个人课表 xskbcx.aspx（优先，格子格式「周一第1,2节{第1-17周}」）
-//   2. 班级课表查询 tjkbcx.aspx（只用于补录，格子格式「1-14(1,2)」）
-// 开学初期学生个人课表通常还没排出来，这时班级课表会把整份课表补全。
+// 一次导入会读取三个页面并合并：
+//   1. 班级课表查询 tjkbcx.aspx（必修类以此为准；格子格式「1-14(1,2)」）
+//   2. 学生个人课表 xskbcx.aspx（选修课以此为准；格子格式「周一第1,2节{第1-17周}」）
+//   3. 学生选课情况查询 xsxkqk.aspx（只用来读「课程性质」，区分选修/必修）
+// 合并规则：选修课以个人课表为准；必修类只要班级课表里有就以班级课表为准
+// （班级课表调课会及时更新，个人课表是学期初的快照），班级课表完全没有的必修课
+// 才用个人课表兜底。
 // 从任意一个课表页点导入都可以，脚本会自己去读另一个页面。
 //
 // 作息取自学校作息时间表：A 教学区的第 3/4 节与其它教学区不同，周五下午整体提前半小时。
@@ -572,23 +575,36 @@
   }
 
   /**
-   * 合并：个人课表优先，班级课表只补录个人课表里没有的课程。
-   * 判据用课程名——同一门课两个页面的周次/教室可能不一样，以个人课表为准。
+   * 合并规则（2026-09-29 用户拍板）：
+   *   选修课 → 以个人课表为准（班级课表里属于选修课的条目不采用）
+   *   必修类 → 只要班级课表里有这门课就以班级课表为准；只有班级课表完全没有这门课时，
+   *            才用个人课表的版本兜底
+   * 原因：班级课表调课会及时更新；个人课表是学期初的快照，调课之后不会更新。
    */
-  function mergeWithPersonalPriority(personal, classCourses, stats, typeMap) {
-    var known = {};
-    personal.forEach(function (course) { known[normalizeCourseName(course.name)] = true; });
+  function mergeCourses(personal, classCourses, stats, typeMap) {
+    function typeOf(course) { return typeMap ? (typeMap[normalizeCourseName(course.name)] || '') : ''; }
+    function elective(course) { return isElectiveType(typeOf(course)); }
 
-    var added = classCourses.filter(function (course) {
-      var key = normalizeCourseName(course.name);
-      var type = typeMap ? typeMap[key] : '';
-      // 选修课只认个人侧：班级课表里的选修课不参与补录（班级课表本来也不含选修）
-      if (type && isElectiveType(type)) { stats.electiveSkipped++; return false; }
-      if (known[key]) { stats.supplementedSkip++; return false; }
-      stats.supplementedAdd++;
-      return true;
+    var classNames = {};
+    classCourses.forEach(function (course) { classNames[normalizeCourseName(course.name)] = true; });
+
+    var result = [];
+
+    classCourses.forEach(function (course) {
+      if (elective(course)) { stats.classElectiveSkipped++; return; }
+      result.push(course);
     });
-    return personal.concat(added);
+    stats.requiredFromClass = result.length;
+
+    personal.forEach(function (course) {
+      var key = normalizeCourseName(course.name);
+      if (elective(course)) { result.push(course); stats.electiveFromPersonal++; return; }
+      if (classNames[key]) { stats.requiredSkippedPersonal++; return; }
+      result.push(course);
+      stats.requiredFromPersonal++;
+    });
+
+    return result;
   }
 
   // ---------------- 主流程 ----------------
@@ -622,7 +638,8 @@
     var liveTerm = readTerm(document);
     var stats = {
       unrecognized: [], incomplete: 0, dayMismatch: 0, sectionOverflow: 0,
-      supplementedAdd: 0, supplementedSkip: 0, electiveSkipped: 0,
+      requiredFromClass: 0, electiveFromPersonal: 0, requiredFromPersonal: 0,
+      classElectiveSkipped: 0, requiredSkippedPersonal: 0,
       typeMap: {}, typeLoaded: false, failedPages: []
     };
 
@@ -657,8 +674,7 @@
       pageInfo.push('课程性质：读取失败');
     }
 
-    var courses = applyCustomTimes(mergeWithPersonalPriority(personal, classCourses, stats, stats.typeMap));
-    var fromClassOnly = personal.length === 0 && courses.length > 0;
+    var courses = applyCustomTimes(mergeCourses(personal, classCourses, stats, stats.typeMap));
 
     if (!courses.length) {
       window.shiguangBridge.showToast('两个课表页都还没有排课。');
@@ -713,26 +729,19 @@
     var customCount = courses.filter(function (course) { return course.isCustomTime; }).length;
     var untimedCount = countCoursesWithoutTime(document);
 
-    var message = [];
-    if (fromClassOnly) {
-      message.push('学生个人课表还没有排出来，本次按班级课表导入了 ' + courses.length + ' 门课程。');
-      message.push('班级课表包含全班一起上的课程，你个人选的课可能不在其中，可以自己补充。');
-    } else {
-      message.push('已导入 ' + courses.length + ' 门课程。');
-      message.push('其中学生个人课表 ' + personal.length + ' 门' +
-        (stats.supplementedAdd ? '，另有 ' + stats.supplementedAdd + ' 门只在班级课表里，已经补上。' : '。'));
+    var message = ['已导入 ' + courses.length + ' 门课程。'];
+    message.push('其中必修类 ' + stats.requiredFromClass + ' 门以班级课表为准（班级课表调课会及时更新）' +
+      (stats.requiredFromPersonal ? '，另有 ' + stats.requiredFromPersonal + ' 门班级课表里没有、从个人课表补上' : '') +
+      '；选修课 ' + stats.electiveFromPersonal + ' 门以个人课表为准。');
+    if (!stats.electiveFromPersonal && !stats.requiredFromPersonal) {
+      message.push('学生个人课表这次没有课程，整份课表都来自班级课表。');
     }
     message.push(timeSlotsSaved ? '上课时间已按学校作息设置。' : '作息时间没有写进去，请在「课表设置」里手动填写。');
     if (customCount) {
       message.push('其中 ' + customCount + ' 门课的上课时间与默认作息不同，已经单独设置。');
     }
-    if (stats.typeLoaded) {
-      var electiveCount = courses.filter(function (course) {
-        return isElectiveType(stats.typeMap[normalizeCourseName(course.name)]);
-      }).length;
-      message.push('按教务的课程性质，这次导入里有选修课 ' + electiveCount + ' 门（选修课只出现在个人课表里，班级课表不含选修）。');
-    } else {
-      message.push('这次没能读到课程性质，选修课与必修课没有做区分。');
+    if (!stats.typeLoaded) {
+      message.push('这次没能读到课程性质，选修课与必修课没有区分，全部按班级课表优先处理。');
     }
     if (untimedCount) {
       message.push('另有 ' + untimedCount + ' 门课程没有固定上课时间（实践、实训类），没有导入，可以自己手动添加。');
@@ -754,9 +763,10 @@
     }
 
     console.log('[四川托普] 取数明细：' + pageInfo.join('；'));
-    console.log('[四川托普] 课程性质：' + JSON.stringify(stats.typeMap) + '（班级课表里被隔离的选修课 ' + stats.electiveSkipped + ' 条）');
-    console.log('[四川托普] 导入完成：' + courses.length + ' 门课程（学生个人课表 ' + personal.length +
-      '，班级课表补录 ' + stats.supplementedAdd + '，班级课表被跳过的重复课 ' + stats.supplementedSkip + '）');
+    console.log('[四川托普] 课程性质：' + JSON.stringify(stats.typeMap) + '（班级课表里属于选修、按个人课表处理的条目 ' + stats.classElectiveSkipped + ' 条）');
+    console.log('[四川托普] 导入完成：' + courses.length + ' 门课程（必修来自班级课表 ' + stats.requiredFromClass +
+      '，选修来自个人课表 ' + stats.electiveFromPersonal + '，个人课表兜底补上 ' + stats.requiredFromPersonal +
+      '；班级课表里属于选修的条目被丢弃 ' + stats.classElectiveSkipped + ' 条，被班级课表覆盖的个人必修 ' + stats.requiredSkippedPersonal + ' 条）');
     if (stats.unrecognized.length) console.warn('[四川托普] 没能识别的内容：', stats.unrecognized);
     if (stats.dayMismatch) console.warn('[四川托普] 有 ' + stats.dayMismatch + ' 条课程的星期与所在列不一致，已按格内文字处理');
     if (stats.incomplete) console.warn('[四川托普] 有 ' + stats.incomplete + ' 条课程缺少教师或地点');
