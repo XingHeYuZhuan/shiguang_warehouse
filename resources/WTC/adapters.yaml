@@ -1,0 +1,9 @@
+# resources/WTC/adapters.yaml
+adapters:
+  - adapter_id: "WTC_01"
+    adapter_name: "武汉职业技术大学教务系统"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "wtc.js"
+    import_url: "https://jwxt1.wtc.edu.cn/admin/login"
+    maintainer: "82042"
+    description: "武汉职业技术大学超星教务适配。登录后直接执行导入即可，无需进入课表页面。自动识别当前学期与校区，导入课程、作息时间与开学日期。"

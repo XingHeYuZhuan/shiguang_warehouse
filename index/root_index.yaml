@@ -1158,3 +1158,7 @@ schools:
     initial: "D"
     resource_folder: "NEFU"
     
+  - id: "WTC"
+    name: "武汉职业技术大学"
+    initial: "W"
+    resource_folder: "WTC"
