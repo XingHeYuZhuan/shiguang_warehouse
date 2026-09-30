@@ -1167,8 +1167,19 @@ schools:
     name: "湖南农业大学"
     initial: "H"
     resource_folder: "HUNAU"
-    
+  
   - id: "YSSDUFE"
     name: "山东财经大学燕山学院"
     initial: "S"
-    resource_folder: "YSSDUFE"    
+    resource_folder: "YSSDUFE"
+
+  - id: "NJCIT"
+    name: "南京信息职业技术学院"
+    initial: "N"
+    resource_folder: "NJCIT"
+
+  - id: "QVTU"
+    name: "泉州职业技术大学"
+    initial: "Q"
+    resource_folder: "QVTU"
+    
