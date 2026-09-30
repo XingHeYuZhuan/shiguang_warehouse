@@ -12,9 +12,12 @@
 //   5. 2026-09 按官方《适配脚本开发指南 v2》迁移桥接 API：
 //      window.shiguangBridgePromise（异步）+ window.shiguangBridge（同步）
 //      notifyTaskCompletion 仅在整条流程成功后调用
+//   6. 2026-09-30 通过 /jsxsd/jxzl/jxzl_query（教学周历）自动获取开学日期，
+//      传入 saveCourseConfig 的 semesterStartDate；失败时静默降级
 
 var JWXT_BASE = "https://http-jwxt-csuft-edu-cn-80.webvpn.csuft.edu.cn/jsxsd";
 var KB_URL = JWXT_BASE + "/xskb/xskb_list.do";
+var JXZL_URL = JWXT_BASE + "/jxzl/jxzl_query"; // 教学周历（校历），用于推算开学日期
 
 var WEEK_DAY_MAP = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '日': 7, '天': 7 };
 
@@ -194,6 +197,67 @@ function parseSchedule(doc) {
     return mergeCourses(raw);
 }
 
+// 从教学周历页(jxzl_query)解析开学日期与总周数。
+// 页面每行形如 "第1周 | 07 | 08 | 09 | 10 | 11 | 09月12日 | 09月13日"：
+// 周一~周五只显示日号，周末才有"月日"，所以取最早的带月份单元格作锚点，
+// 用 (锚点日期 - 距第1周周一的天数) 反推第一周周一；年份由学期号推断。
+function parseTermInfo(html, semId) {
+    var doc = new DOMParser().parseFromString(html, "text/html");
+    var table = null, tables = doc.getElementsByTagName('table');
+    for (var i = 0; i < tables.length; i++) {
+        if (/第\s*1\s*周/.test(tables[i].textContent)) { table = tables[i]; break; }
+    }
+    if (!table) return null;
+
+    var fullRe = /(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/;
+    var mdRe = /(\d{1,2})\s*月\s*(\d{1,2})/;
+    var anchors = [], maxWeek = 0;
+    var rows = table.getElementsByTagName('tr');
+    for (var r = 0; r < rows.length; r++) {
+        var cells = rows[r].getElementsByTagName('td');
+        if (cells.length < 2) continue;
+        var wm = trimText(cells[0].textContent).match(/第\s*(\d+)\s*周/);
+        if (!wm) continue;
+        var w = parseInt(wm[1], 10);
+        if (w > maxWeek) maxWeek = w;
+        for (var d = 0; d < 7 && d + 1 < cells.length; d++) {
+            var t = trimText(cells[d + 1].textContent);
+            var m = t.match(fullRe) || t.match(mdRe);
+            if (!m) continue;
+            anchors.push({
+                idx: (w - 1) * 7 + d,
+                year: m.length === 4 ? parseInt(m[1], 10) : null,
+                month: parseInt(m[m.length - 2], 10),
+                day: parseInt(m[m.length - 1], 10)
+            });
+        }
+    }
+    if (!anchors.length) return null;
+
+    anchors.sort(function (a, b) { return a.idx - b.idx; });
+    var a0 = anchors[0];
+    var y0 = parseInt((String(semId).match(/^(\d{4})/) || [])[1], 10);
+    var year = a0.year ||
+        (a0.month >= 8 ? (y0 || new Date().getFullYear())
+                        : (y0 ? y0 + 1 : new Date().getFullYear()));
+    var start = new Date(year, a0.month - 1, a0.day - a0.idx); // Date 自动处理跨月/负数日
+    if (isNaN(start.getTime())) return null;
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return {
+        startDate: start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate()),
+        totalWeeks: maxWeek || null
+    };
+}
+
+// 校历获取失败不阻断导入，只少传开学日期
+async function fetchTermInfo(semId) {
+    try {
+        var resp = await fetch(JXZL_URL, { credentials: "include" });
+        if (!resp.ok) return null;
+        return parseTermInfo(await resp.text(), semId);
+    } catch (e) { return null; }
+}
+
 function mergeCourses(courses) {
     if (courses.length <= 1) return courses;
     courses.sort(function (a, b) {
@@ -333,10 +397,11 @@ async function fetchAndParseCourses(term) {
     return courses;
 }
 
-async function saveAll(courses) {
+async function saveAll(courses, termInfo) {
     try {
-        await window.shiguangBridgePromise.saveCourseConfig(
-            JSON.stringify({ semesterTotalWeeks: 20, firstDayOfWeek: 1 }));
+        var config = { semesterTotalWeeks: (termInfo && termInfo.totalWeeks) || 20, firstDayOfWeek: 1 };
+        if (termInfo && termInfo.startDate) config.semesterStartDate = termInfo.startDate;
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
         await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(TIME_SLOTS));
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         return true;
@@ -362,10 +427,12 @@ async function runImportFlow() {
     const courses = await fetchAndParseCourses(term);
     if (courses === null) return; // 失败原因已在 fetchAndParseCourses 中提示
 
-    if (!(await saveAll(courses))) return;
+    const termInfo = await fetchTermInfo(term.semId);
+    if (!(await saveAll(courses, termInfo))) return;
 
     // 整条流程成功后才发送结束信号
-    window.shiguangBridge.showToast("成功导入 " + courses.length + " 门课程");
+    window.shiguangBridge.showToast("成功导入 " + courses.length + " 门课程" +
+        (termInfo && termInfo.startDate ? "，开学日期 " + termInfo.startDate : ""));
     window.shiguangBridge.notifyTaskCompletion();
 }
 
