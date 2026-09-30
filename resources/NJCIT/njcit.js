@@ -11,23 +11,102 @@ const text = value => String(value == null ? '': value).replace(/^\s+|\s+$/g, ''
 async function promptUserToStart() {
     return await window.shiguangBridgePromise.showAlert(
         "教务系统课表导入",
-        "导入前请确保您已在浏览器中成功登录教务系统并打开【个人课表查询】页面选择学年与学期",
+        "导入前请确保您已在浏览器中成功登录教务系统（无需打开课表页面），点击开始后将弹窗选择学期。",
         "好的，开始导入"
     );
 }
 
-function getAcademicYearAndSemester() {
-    const selectedYearCode = document.querySelector("#xnm")?.value || null;
-    const selectedsemsterCode = document.querySelector("#xqm")?.value || null;
-    
-    if (!(selectedYearCode && selectedsemsterCode)) {
+async function fetchAcademicOptions() {
+    const url = "/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default"
+
+    try {
+        const response = await fetch(url, {
+            method : "GET",
+            credentials: "include"
+        }) 
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const htmlText = await response.text();
+        const doc = new DOMParser().parseFromString(htmlText, "text/html");
+
+        const parseOptions = (selector) => {
+            const list = [];
+            let defaultIdx = 0;
+
+            for (const opt of doc.querySelectorAll(`${selector} option`)) {
+                const value = opt.getAttribute("value") || opt.value;
+                if (!value) continue;
+
+                const selected = opt.hasAttribute("selected") || opt.selected;
+                if (selected) defaultIdx = list.length;
+                
+                list.push({value, text: text(opt.textContent), selected});
+            }
+
+            return {list, defaultIdx};
+        }
+        const {list: allYears, defaultIdx: yearIdx} = parseOptions("#xnm");
+        const {list: semesterOptions, defaultIdx: defaultSemesterIndex } = parseOptions("#xqm");
+
+        if (allYears.length == 0 || semesterOptions.length == 0) return null;
+
+        const start = Math.max(0, yearIdx - 2);
+        const end = Math.min(allYears.length, yearIdx + 3);
+
+        const yearOptions = allYears.slice(start, end);
+
+        return {
+            yearOptions,
+            semesterOptions,
+            defaultYearIndex: yearIdx - start,
+            defaultSemesterIndex
+        }
+    } catch(error) {
+        console.error(error.message);
+        return null;
+    }
+}
+
+
+async function selectAcademicYearAndSemester()  {
+    const optionsData = await fetchAcademicOptions();
+        
+    if (!optionsData) {
+        window.shiguangBridge.showToast("从教务系统读取学年学期失败，请确保登录状态。");
         return null;
     }
 
+    const { yearOptions, semesterOptions, defaultYearIndex, defaultSemesterIndex } = optionsData;
+    
+    const yearTexts = yearOptions.map(item => item.text);
+    const yearIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择学年",
+        JSON.stringify(yearTexts),
+        defaultYearIndex
+    );
+
+    if (yearIndex === null || yearIndex === -1) {
+        return null;
+    }
+    const selectedYearCode = yearOptions[yearIndex].value;
+
+    const semesterTexts = semesterOptions.map(item => item.text); 
+    const semesterIndex = await window.shiguangBridgePromise.showSingleSelection(
+        "选择学期",
+        JSON.stringify(semesterTexts),
+        defaultSemesterIndex
+    );
+
+    if (semesterIndex === null || semesterIndex === -1) return null;
+    const selectedSemesterCode = semesterOptions[semesterIndex].value;
+
     return {
         academicYear: selectedYearCode,
-        semesterCode: selectedsemsterCode
-    }   
+        semesterCode: selectedSemesterCode
+    };
 }
 
 async function fetchSemesterStartDate(academicYear, semesterCode) {
@@ -360,7 +439,7 @@ async function saveConfig(config) {
         return;
     }
 
-    const selection = getAcademicYearAndSemester();
+    const selection = await selectAcademicYearAndSemester();
     if (!selection) {
         window.shiguangBridge.showToast("未选择学年学期，导入流程终止。");
         return;

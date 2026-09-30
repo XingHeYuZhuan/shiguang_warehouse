@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "njcit.js"
     import_url: "https://jw.njcit.cn/sso/lyiotlogin"
     maintainer: "astraumbra"
-    description: "请使用统一身份认证登录，进入【个人课表查询】页面后点击右上角导入"
+    description: "南京信息职业技术学院教务适配，登录后可直接导入"
