@@ -388,6 +388,37 @@ function getTotalWeeks(htmlText) {
     return maxWeek > 0 ? maxWeek : null;
 }
 
+// 拿学年
+
+function getAcademicYearInfo(htmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, 'text/html');
+
+    // 优先从下拉框取
+    const select = doc.querySelector('#xnxq01id');
+    if (select) {
+        const selected = select.querySelector('option[selected]');
+        const value = selected ? selected.value : (select.options[0] && select.options[0].value);
+        if (value) {
+            const parts = value.split('-'); // ["2026", "2027", "1"]
+            return parts[0]
+        }
+    }
+
+    // 退化方案：从页面文字里正则匹配
+    const text = doc.body ? doc.body.innerText : '';
+    const m = text.match(/(\d{4})-(\d{4})\s*学年\s*第\s*(\d)\s*学期/);
+    if (m) {
+        return {
+            year: m[1],
+            academicYear: `${m[1]}-${m[2]}`,
+            semester: m[3]
+        };
+    }
+
+    return null;
+}
+
 window.isYMD = function (str) {
     // 1. 格式匹配：4位-2位-2位
     if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return "开始日期格式错误了喵~。请再次输入喵~";
@@ -413,21 +444,6 @@ async function runImportFlow() {
         const confirmed = await window.shiguangBridgePromise.showAlert("提示喵~", "请确保已成功登录教务系统喵~。是否开始导入？", "开始");
         if (!confirmed) return;
 
-        /*
-        // 1. 获取就读校区
-        const campusIndex = await window.shiguangBridgePromise.showSingleSelection("选择所在校区喵~", JSON.stringify(["清远校区", "广州白云校区","广州天河校区"]), -1);
-        if (campusIndex === null) return;
-
-        */
-        // 2. 获取学年
-        const year = await window.shiguangBridgePromise.showPrompt("选择学年喵~", "请输入要导入课程的起始学年喵~（例如 2025-2026 应输入2025):", "", "validateYearInput");
-        if (!year) return;
-
-        // 3. 获取学期并记录索引
-        const semesterIndex = await window.shiguangBridgePromise.showSingleSelection("选择学期喵~", JSON.stringify(["第一学期", "第二学期"]), -1);
-        if (semesterIndex === null) return;
-        const semesterId = `${year}-${parseInt(year) + 1}-${semesterIndex + 1}`;
-
         const response_calendar = await fetch("https://jw.gdkm.edu.cn/jsxsd/jxzl/jxzl_query", {
             "headers": {
                 "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -442,11 +458,32 @@ async function runImportFlow() {
         })
         const html_calendar = await response_calendar.text();
 
+
+        /*
+        // 1. 获取就读校区
+        const campusIndex = await window.shiguangBridgePromise.showSingleSelection("选择所在校区喵~", JSON.stringify(["清远校区", "广州白云校区","广州天河校区"]), -1);
+        if (campusIndex === null) return;
+
+        */
+        // 2. 获取学年
+        var year = getAcademicYearInfo(html_calendar)
+        if (window.validateYearInput(year)) {
+            year = await window.shiguangBridgePromise.showPrompt("选择学年喵~", "请输入要导入课程的起始学年喵~（例如 2025-2026 应输入2025):", "", "validateYearInput");
+        }
+        if (!year) return;
+
+        // 3. 获取学期并记录索引
+        const semesterIndex = await window.shiguangBridgePromise.showSingleSelection("选择学期喵~", JSON.stringify(["第一学期", "第二学期"]), -1);
+        if (semesterIndex === null) return;
+        const semesterId = `${year}-${parseInt(year) + 1}-${semesterIndex + 1}`;
+
+
         var semesterStartDate = getSchoolStartDate(html_calendar);
 
         if (window.isYMD(semesterStartDate)) {
             semesterStartDate = await window.shiguangBridgePromise.showPrompt("选择开始日期喵~" + "errror " + semesterStartDate + window.isYMD(semesterStartDate), "请输入要导入课程的开始日期喵~ 格式为:YYYY-MM-DD,例如1145-01-04", "", "isYMD");
         }
+        if (!semesterStartDate) return;
 
         var semesterTotalWeeks = getTotalWeeks(html_calendar)
 
@@ -481,6 +518,7 @@ async function runImportFlow() {
         await saveAppTimeSlots();
         // 保存课程
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
+
         window.shiguangBridge.showToast(`成功导入 ${finalCourses.length} 门课程喵~`);
         window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
