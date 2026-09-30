@@ -6,7 +6,7 @@
 
 // 工具函数
 
-window.validateYearInput = function(input) {
+window.validateYearInput = function (input) {
     return /^[0-9]{4}$/.test(input) ? false : "请输入四位数字的学年喵~";
 };
 
@@ -17,10 +17,10 @@ function mergeAndDistinctCourses(courses) {
     if (courses.length <= 1) return courses;
 
     courses.sort((a, b) => {
-        return a.name.localeCompare(b.name) || 
-               a.day - b.day || 
-               a.startSection - b.startSection || 
-               a.weeks.join(',').localeCompare(b.weeks.join(','));
+        return a.name.localeCompare(b.name) ||
+            a.day - b.day ||
+            a.startSection - b.startSection ||
+            a.weeks.join(',').localeCompare(b.weeks.join(','));
     });
 
     const merged = [];
@@ -28,7 +28,7 @@ function mergeAndDistinctCourses(courses) {
 
     for (let i = 1; i < courses.length; i++) {
         const next = courses[i];
-        const isSameCourse = 
+        const isSameCourse =
             current.name === next.name &&
             current.teacher === next.teacher &&
             current.position === next.position &&
@@ -268,8 +268,8 @@ function parseWeeks(weekStr) {
 
 // 配置与流程
 
-async function saveAppConfig(semesterStartDate,semesterTotalWeeks) {
-    const config = { "semesterTotalWeeks": semesterTotalWeeks, "firstDayOfWeek": 1 ,"semesterStartDate" : semesterStartDate};
+async function saveAppConfig(semesterStartDate, semesterTotalWeeks) {
+    const config = { "semesterTotalWeeks": semesterTotalWeeks, "firstDayOfWeek": 1, "semesterStartDate": semesterStartDate };
     return await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 }
 
@@ -278,43 +278,134 @@ async function saveAppConfig(semesterStartDate,semesterTotalWeeks) {
  */
 async function saveAppTimeSlots() {
     const slots = [
-            { "number": 1, "startTime": "08:30", "endTime": "09:10" },
-            { "number": 2, "startTime": "09:20", "endTime": "10:00" },
-            { "number": 3, "startTime": "10:20", "endTime": "11:00" },
-            { "number": 4, "startTime": "11:10", "endTime": "11:50" },
-            { "number": 5, "startTime": "14:00", "endTime": "14:40" },
-            { "number": 6, "startTime": "14:50", "endTime": "15:20" },
-            { "number": 7, "startTime": "15:30", "endTime": "16:10" },
-            { "number": 8, "startTime": "16:20", "endTime": "16:50" },
-            { "number": 9, "startTime": "18:30", "endTime": "19:10" },
-            { "number": 10, "startTime": "19:20", "endTime": "19:50" },
-            { "number": 11, "startTime": "20:00", "endTime": "20:40" },
-            { "number": 12, "startTime": "20:50", "endTime": "21:20" },
+        { "number": 1, "startTime": "08:30", "endTime": "09:10" },
+        { "number": 2, "startTime": "09:20", "endTime": "10:00" },
+        { "number": 3, "startTime": "10:20", "endTime": "11:00" },
+        { "number": 4, "startTime": "11:10", "endTime": "11:50" },
+        { "number": 5, "startTime": "14:00", "endTime": "14:40" },
+        { "number": 6, "startTime": "14:50", "endTime": "15:20" },
+        { "number": 7, "startTime": "15:30", "endTime": "16:10" },
+        { "number": 8, "startTime": "16:20", "endTime": "16:50" },
+        { "number": 9, "startTime": "18:30", "endTime": "19:10" },
+        { "number": 10, "startTime": "19:20", "endTime": "19:50" },
+        { "number": 11, "startTime": "20:00", "endTime": "20:40" },
+        { "number": 12, "startTime": "20:50", "endTime": "21:20" },
     ]
-    
+
 
     return await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(slots));
 }
 
+//拿开学日期
+function getSchoolStartDate(htmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, 'text/html');
 
-window.isYMD = function(str) {
-  // 1. 格式匹配：4位-2位-2位
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return "开始日期格式错误了喵~。请再次输入喵~";
+    // 找到第1周那一行
+    const rows = doc.querySelectorAll('tr.qz-weeklyTable-tr');
+    let firstWeekRow = null;
+    for (const row of rows) {
+        const label = row.querySelector('.qz-weeklyTable-label .td-cell');
+        if (label && label.textContent.trim() === '第1周') {
+            firstWeekRow = row;
+            break;
+        }
+    }
+    if (!firstWeekRow) throw new Error('未找到第1周的数据');
 
-  // 2. 校验是否是真实存在的日期（防止 2024-02-30）
-  const [y, m, d] = str.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
+    // 取日期单元格：cells[0]=星期一，cells[5]=星期六
+    const cells = firstWeekRow.querySelectorAll('td.qz-weeklyTable-normalDay');
+    const mondayText = cells[0].textContent.trim();   // 例如 "31"
+    const saturdayText = cells[5].textContent.trim(); // 例如 "09月05日"
 
-  if (! (date.getFullYear() === y && date.getMonth() === m - 1 &&date.getDate() === d)){
-    return "开始日期格式错误了喵~。请再次输入喵~"
-  } 
-  return false
+    // 从星期六的文本里提取月份和日号
+    const satMatch = saturdayText.match(/(\d{1,2})月(\d{1,2})日/);
+    if (!satMatch) throw new Error('无法从周末日期中解析出月日');
+    const month = parseInt(satMatch[1], 10);
+    const satDay = parseInt(satMatch[2], 10);
+
+    // 星期一那格可能只有日号，也可能带“月日”
+    let day;
+    const dayMatch = mondayText.match(/(\d{1,2})日/);
+    day = dayMatch ? parseInt(dayMatch[1], 10) : parseInt(mondayText, 10);
+    if (isNaN(day)) throw new Error('无法解析星期一的日期');
+
+    // 取学年起始年（如 "2026-2027-1" → 2026）
+    let year = new Date().getFullYear();
+    const yearSelect = doc.querySelector('#xnxq01id');
+    if (yearSelect) {
+        const selected = yearSelect.querySelector('option[selected]');
+        const value = selected ? selected.value : yearSelect.options[0].value;
+        year = parseInt(value.split('-')[0], 10);
+    }
+
+    // 跨月修正：若周一日期数字 > 周六日期数字，说明周一在上一个月
+    let finalMonth = month;
+    let finalDay = day;
+    if (day > satDay) {
+        finalMonth = month - 1;
+        if (finalMonth === 0) finalMonth = 12;
+    }
+
+    // 格式化为 YYYY-MM-DD
+    const mm = String(finalMonth).padStart(2, '0');
+    const dd = String(finalDay).padStart(2, '0');
+    return `${year}-${mm}-${dd}`;
+}
+
+//拿总周数
+function getTotalWeeks(htmlText) {
+    if (!htmlText || typeof htmlText !== 'string') return null;
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, 'text/html');
+
+    // 优先用 .qz-weeklyTable-label 精确匹配
+    const labels = doc.querySelectorAll('.qz-weeklyTable-label .td-cell');
+    let maxWeek = 0;
+
+    labels.forEach(el => {
+        const text = el.textContent.trim();
+        const match = text.match(/^第\s*(\d+)\s*周$/);
+        if (match) {
+            const n = parseInt(match[1], 10);
+            if (n > maxWeek) maxWeek = n;
+        }
+    });
+
+    // 如果精确选择器没找到，退回全表扫描
+    if (maxWeek === 0) {
+        const allText = doc.body ? doc.body.innerText : '';
+        const re = /第\s*(\d+)\s*周/g;
+        let m;
+        while ((m = re.exec(allText)) !== null) {
+            const n = parseInt(m[1], 10);
+            if (n > maxWeek) maxWeek = n;
+        }
+    }
+
+    // 解析失败返回 null，成功返回最大周数
+    return maxWeek > 0 ? maxWeek : null;
+}
+
+window.isYMD = function (str) {
+    // 1. 格式匹配：4位-2位-2位
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return "开始日期格式错误了喵~。请再次输入喵~";
+
+    // 2. 校验是否是真实存在的日期（防止 2024-02-30）
+    const [y, m, d] = str.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+
+    if (!(date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d)) {
+        return "开始日期格式错误了喵~。请再次输入喵~"
+    }
+    return false
 }
 
 // ================= 流程编排 =================
 
-window.semesterTotalWeeksInput = function(str){
-    return /^-?\d+$/.test(str) ? false:"请输入周数喵~只要数字喵~"
+window.semesterTotalWeeksInput = function (str) {
+    return /^-?\d+$/.test(str) ? false : "请输入周数喵~只要数字喵~"
 }
 
 async function runImportFlow() {
@@ -337,23 +428,43 @@ async function runImportFlow() {
         if (semesterIndex === null) return;
         const semesterId = `${year}-${parseInt(year) + 1}-${semesterIndex + 1}`;
 
+        const response_calendar = await fetch("https://jw.gdkm.edu.cn/jsxsd/jxzl/jxzl_query", {
+            "headers": {
+                "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                "accept-language": "zh-CN,zh;q=0.9",
+                "priority": "u=0, i",
+                "upgrade-insecure-requests": "1"
+            },
+            "body": null,
+            "method": "GET",
+            "mode": "cors",
+            "credentials": "include"
+        })
+        const html_calendar = await response_calendar.text();
 
-        // 4. 获得学期开始日期
-        const semesterStartDate = await window.shiguangBridgePromise.showPrompt("选择开始日期喵~", "请输入要导入课程的开始日期喵~ 格式为:YYYY-MM-DD,例如1145-01-04", "", "isYMD");
+        var semesterStartDate = getSchoolStartDate(html_calendar);
 
-        // 2. 获取周数
-        const semesterTotalWeeks = await window.shiguangBridgePromise.showPrompt("选择周数喵~", "请输入要导入课程的周数喵~（例如 20):", "", "semesterTotalWeeksInput");
+        if (window.isYMD(semesterStartDate)) {
+            semesterStartDate = await window.shiguangBridgePromise.showPrompt("选择开始日期喵~" + "errror " + semesterStartDate + window.isYMD(semesterStartDate), "请输入要导入课程的开始日期喵~ 格式为:YYYY-MM-DD,例如1145-01-04", "", "isYMD");
+        }
+
+        var semesterTotalWeeks = getTotalWeeks(html_calendar)
+
+        if (window.semesterTotalWeeksInput(semesterTotalWeeks)) {
+            semesterTotalWeeks = await window.shiguangBridgePromise.showPrompt("选择周数喵~" + "errror " + semesterTotalWeeks + window.semesterTotalWeeksInput(semesterStartDate), "请输入要导入课程的周数喵~（例如 20):", "", "semesterTotalWeeksInput");
+        }
+
         if (!semesterTotalWeeks) return;
 
         window.shiguangBridge.showToast("正在请求数据喵~");
         const url = `https://jw.gdkm.edu.cn/jsxsd/xskb/xskb_list.do?viweType=0&xnxq01id=${semesterId}&zc=`;
         const response = await fetch(url, {
-        method: "GET",
-        credentials: "include",
-        headers: {
-            "Referer": "https://jw.gdkm.edu.cn/jsxsd/"
-        }
-    });
+            method: "GET",
+            credentials: "include",
+            headers: {
+                "Referer": "https://jw.gdkm.edu.cn/jsxsd/"
+            }
+        });
 
 
         const html = await response.text();
@@ -365,12 +476,12 @@ async function runImportFlow() {
         }
 
         // 保存全局设置
-        await saveAppConfig(semesterStartDate,parseInt(semesterTotalWeeks));
+        await saveAppConfig(semesterStartDate, parseInt(semesterTotalWeeks));
         // 传入作息
         await saveAppTimeSlots();
         // 保存课程
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
-        
+
         window.shiguangBridge.showToast(`成功导入 ${finalCourses.length} 门课程喵~`);
         window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
