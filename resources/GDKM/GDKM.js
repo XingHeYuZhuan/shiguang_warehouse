@@ -489,16 +489,8 @@ async function runImportFlow() {
         */
         // 2. 获取学年
         var semesterId_array = getAcademicYearInfo(html_calendar)
-        var semesterId_index = await window.shiguangBridgePromise.showSingleSelection("选择学年喵~", JSON.stringify(semesterId_array), -1);
+        var semesterId_index = await window.shiguangBridgePromise.showSingleSelection("选择学年学期喵~", JSON.stringify(semesterId_array), 0);
         var semesterId = semesterId_array[semesterId_index]
-        if (window.isAcademicYear(semesterId)) {
-            var year = await window.shiguangBridgePromise.showPrompt("选择学年喵~", "请输入要导入课程的起始学年喵~（例如 2025-2026 应输入2025):", "", "validateYearInput");
-            // 3. 获取学期并记录索引
-            const semesterIndex = await window.shiguangBridgePromise.showSingleSelection("选择学期喵~", JSON.stringify(["第一学期", "第二学期"]), -1);
-            if (semesterIndex === null) return;
-            
-            semesterId = `${year}-${parseInt(year) + 1}-${semesterIndex + 1}`;
-        }
         if (!semesterId) return;
 
 
