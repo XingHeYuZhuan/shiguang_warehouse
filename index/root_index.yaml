@@ -1157,4 +1157,8 @@ schools:
     name: "东北林业大学"
     initial: "D"
     resource_folder: "NEFU"
-    
+
+  - id: "QVTU"
+    name: "泉州职业技术大学"
+    initial: "Q"
+    resource_folder: "QVTU"
