@@ -1167,4 +1167,8 @@ schools:
     name: "湖南农业大学"
     initial: "H"
     resource_folder: "HUNAU"
-    
+
+  - id: "OUC"
+    name: "中国海洋大学"
+    initial: "Z"
+    resource_folder: "OUC"
