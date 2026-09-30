@@ -481,7 +481,6 @@ async function runImportFlow() {
         await saveAppTimeSlots();
         // 保存课程
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
-
         window.shiguangBridge.showToast(`成功导入 ${finalCourses.length} 门课程喵~`);
         window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
