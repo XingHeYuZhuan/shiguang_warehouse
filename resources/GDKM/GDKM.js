@@ -394,18 +394,23 @@ function getAcademicYearInfo(htmlText) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlText, 'text/html');
 
-    // 优先从下拉框取
+    const results = [];
+
+    // 从下拉框取所有选项
     const select = doc.querySelector('#xnxq01id');
     if (select) {
-        const selected = select.querySelector('option[selected]');
-        const value = selected ? selected.value : (select.options[0] && select.options[0].value);
-        if (value) {
-            const parts = value.split('-'); // ["2026", "2027", "1"]
-            return parts[0]
-        }
-    }
+        const options = select.querySelectorAll('option');
+        options.forEach(opt => {
+            const value = (opt.value || '').trim(); // 例如 "2026-2027-1"
+            if (!value) return;
 
-    return null;
+            // 只做格式校验：起始年-结束年-学期
+            if (/^\d{4}-\d{4}-\d+$/.test(value)) {
+                results.push(value);
+            }
+        });
+    }
+    return results.length > 0 ? results : null;
 }
 
 window.isYMD = function (str) {
@@ -421,6 +426,34 @@ window.isYMD = function (str) {
     }
     return false
 }
+
+window.isAcademicYear = function (str) {
+    if (typeof str !== 'string') {
+        return "请输入学年学期喵~（例如 2025-2026-1）";
+    }
+
+    // 1. 格式匹配：4位-4位-1到2位
+    if (!/^\d{4}-\d{4}-\d{1,2}$/.test(str.trim())) {
+        return "学年学期格式错误喵~。正确格式为:2025-2026-1";
+    }
+
+    const parts = str.trim().split('-');
+    const startYear = parseInt(parts[0], 10);
+    const endYear = parseInt(parts[1], 10);
+    const semester = parseInt(parts[2], 10);
+
+    // 2. 结束学年必须比起始学年大 1
+    if (endYear !== startYear + 1) {
+        return "结束学年必须是起始学年的下一年喵~（例如 2025-2026）";
+    }
+
+    // 3. 学期只能是 1 或 2（如学校有小学期可自行放宽）
+    if (semester !== 1 && semester !== 2) {
+        return "学期只能是 1 或 2 喵~";
+    }
+
+    return false;
+};
 
 // ================= 流程编排 =================
 
@@ -455,16 +488,20 @@ async function runImportFlow() {
 
         */
         // 2. 获取学年
-        var year = getAcademicYearInfo(html_calendar)
-        if (window.validateYearInput(year)) {
-            year = await window.shiguangBridgePromise.showPrompt("选择学年喵~", "请输入要导入课程的起始学年喵~（例如 2025-2026 应输入2025):", "", "validateYearInput");
+        var semesterId_array = getAcademicYearInfo(html_calendar)
+        var semesterId_index = await window.shiguangBridgePromise.showSingleSelection("选择学年喵~", JSON.stringify(semesterId_array), -1);
+        var semesterId = semesterId_array[semesterId_index]
+        if (window.isAcademicYear(semesterId)) {
+            var year = await window.shiguangBridgePromise.showPrompt("选择学年喵~", "请输入要导入课程的起始学年喵~（例如 2025-2026 应输入2025):", "", "validateYearInput");
+            // 3. 获取学期并记录索引
+            const semesterIndex = await window.shiguangBridgePromise.showSingleSelection("选择学期喵~", JSON.stringify(["第一学期", "第二学期"]), -1);
+            if (semesterIndex === null) return;
+            
+            semesterId = `${year}-${parseInt(year) + 1}-${semesterIndex + 1}`;
         }
-        if (!year) return;
+        if (!semesterId) return;
 
-        // 3. 获取学期并记录索引
-        const semesterIndex = await window.shiguangBridgePromise.showSingleSelection("选择学期喵~", JSON.stringify(["第一学期", "第二学期"]), -1);
-        if (semesterIndex === null) return;
-        const semesterId = `${year}-${parseInt(year) + 1}-${semesterIndex + 1}`;
+
 
 
         var semesterStartDate = getSchoolStartDate(html_calendar);
