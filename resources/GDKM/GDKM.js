@@ -405,17 +405,6 @@ function getAcademicYearInfo(htmlText) {
         }
     }
 
-    // 退化方案：从页面文字里正则匹配
-    const text = doc.body ? doc.body.innerText : '';
-    const m = text.match(/(\d{4})-(\d{4})\s*学年\s*第\s*(\d)\s*学期/);
-    if (m) {
-        return {
-            year: m[1],
-            academicYear: `${m[1]}-${m[2]}`,
-            semester: m[3]
-        };
-    }
-
     return null;
 }
 
