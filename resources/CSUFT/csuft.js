@@ -197,65 +197,101 @@ function parseSchedule(doc) {
     return mergeCourses(raw);
 }
 
-// 从教学周历页(jxzl_query)解析开学日期与总周数。
-// 页面每行形如 "第1周 | 07 | 08 | 09 | 10 | 11 | 09月12日 | 09月13日"：
-// 周一~周五只显示日号，周末才有"月日"，所以取最早的带月份单元格作锚点，
-// 用 (锚点日期 - 距第1周周一的天数) 反推第一周周一；年份由学期号推断。
+// 从教学周历页(jxzl_query)解析开学日期与总周数，返回 {startDate, totalWeeks}。
+// 兼容两代强智：
+//   新版(qz-)：每行 "第1周 | 07 | 08 | 09 | 10 | 11 | 09月12日 | 09月13日"，
+//     周一~周五只显示日号，周末才有"月日"，取最早的带月份单元格作锚点反推第一周周一；
+//   老版：#kbtable，日期藏在 td 的 title 属性（"YYYY年MM月DD日"），第1行第1格即周一。
 function parseTermInfo(html, semId) {
     var doc = new DOMParser().parseFromString(html, "text/html");
-    var table = null, tables = doc.getElementsByTagName('table');
-    for (var i = 0; i < tables.length; i++) {
-        if (/第\s*1\s*周/.test(tables[i].textContent)) { table = tables[i]; break; }
-    }
-    if (!table) return null;
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
 
     var fullRe = /(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/;
     var mdRe = /(\d{1,2})\s*月\s*(\d{1,2})/;
     var anchors = [], maxWeek = 0;
-    var rows = table.getElementsByTagName('tr');
-    for (var r = 0; r < rows.length; r++) {
-        var cells = rows[r].getElementsByTagName('td');
-        if (cells.length < 2) continue;
-        var wm = trimText(cells[0].textContent).match(/第\s*(\d+)\s*周/);
-        if (!wm) continue;
-        var w = parseInt(wm[1], 10);
-        if (w > maxWeek) maxWeek = w;
-        for (var d = 0; d < 7 && d + 1 < cells.length; d++) {
-            var t = trimText(cells[d + 1].textContent);
-            var m = t.match(fullRe) || t.match(mdRe);
-            if (!m) continue;
-            anchors.push({
-                idx: (w - 1) * 7 + d,
-                year: m.length === 4 ? parseInt(m[1], 10) : null,
-                month: parseInt(m[m.length - 2], 10),
-                day: parseInt(m[m.length - 1], 10)
-            });
+    var table = null, tables = doc.getElementsByTagName('table');
+    for (var i = 0; i < tables.length; i++) {
+        if (/第\s*1\s*周/.test(tables[i].textContent)) { table = tables[i]; break; }
+    }
+    if (table) {
+        var rows = table.getElementsByTagName('tr');
+        for (var r = 0; r < rows.length; r++) {
+            var cells = rows[r].getElementsByTagName('td');
+            if (cells.length < 2) continue;
+            var wm = trimText(cells[0].textContent).match(/第\s*(\d+)\s*周/);
+            if (!wm) continue;
+            var w = parseInt(wm[1], 10);
+            if (w > maxWeek) maxWeek = w;
+            for (var d = 0; d < 7 && d + 1 < cells.length; d++) {
+                var t = trimText(cells[d + 1].textContent);
+                var m = t.match(fullRe) || t.match(mdRe);
+                if (!m) continue;
+                anchors.push({
+                    idx: (w - 1) * 7 + d,
+                    year: m.length === 4 ? parseInt(m[1], 10) : null,
+                    month: parseInt(m[m.length - 2], 10),
+                    day: parseInt(m[m.length - 1], 10)
+                });
+            }
         }
     }
-    if (!anchors.length) return null;
 
-    anchors.sort(function (a, b) { return a.idx - b.idx; });
-    var a0 = anchors[0];
-    var y0 = parseInt((String(semId).match(/^(\d{4})/) || [])[1], 10);
-    var year = a0.year ||
-        (a0.month >= 8 ? (y0 || new Date().getFullYear())
-                        : (y0 ? y0 + 1 : new Date().getFullYear()));
-    var start = new Date(year, a0.month - 1, a0.day - a0.idx); // Date 自动处理跨月/负数日
-    if (isNaN(start.getTime())) return null;
-    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-    return {
-        startDate: start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate()),
-        totalWeeks: maxWeek || null
-    };
+    if (anchors.length) {
+        anchors.sort(function (a, b) { return a.idx - b.idx; });
+        var a0 = anchors[0];
+        var y0 = parseInt((String(semId).match(/^(\d{4})/) || [])[1], 10);
+        var year = a0.year ||
+            (a0.month >= 8 ? (y0 || new Date().getFullYear())
+                            : (y0 ? y0 + 1 : new Date().getFullYear()));
+        var start = new Date(year, a0.month - 1, a0.day - a0.idx); // Date 自动处理跨月/负数日
+        if (!isNaN(start.getTime())) {
+            return {
+                startDate: start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate()),
+                totalWeeks: maxWeek || null
+            };
+        }
+    }
+
+    // 老版强智兜底：#kbtable + td[title="YYYY年MM月DD日"]
+    var legacy = doc.getElementById ? doc.getElementById('kbtable') : null;
+    if (legacy) {
+        var startDate = null;
+        var lrows = legacy.getElementsByTagName('tr');
+        for (var r2 = 0; r2 < lrows.length; r2++) {
+            var tds = lrows[r2].getElementsByTagName('td');
+            if (!tds.length) continue;
+            var n = parseInt(trimText(tds[0].textContent), 10);
+            if (!isNaN(n) && n > maxWeek) maxWeek = n;
+            if (!startDate && tds[0].getAttribute) {
+                var lm = (tds[0].getAttribute('title') || '').match(/(\d{4})年(\d{1,2})月(\d{1,2})/);
+                if (lm) startDate = lm[1] + '-' + pad(lm[2]) + '-' + pad(lm[3]);
+            }
+        }
+        if (startDate) return { startDate: startDate, totalWeeks: maxWeek || null };
+    }
+    return null;
 }
 
-// 校历获取失败不阻断导入，只少传开学日期
-async function fetchTermInfo(semId) {
-    try {
-        var resp = await fetch(JXZL_URL, { credentials: "include" });
-        if (!resp.ok) return null;
-        return parseTermInfo(await resp.text(), semId);
-    } catch (e) { return null; }
+// 按 YSSDUFE 标准姿势获取学期配置：POST 带 xnxq01id 请求所选学期的校历，
+// 失败则退回 GET 带学期参数（ZHKU 姿势）→ GET 不带参数（仅当前学期）。
+async function fetchTermInfo(semesterId) {
+    var postUrl = JXZL_URL;
+    var getUrl = JXZL_URL + (semesterId ? "?xnxq01id=" + encodeURIComponent(semesterId) : "");
+    var attempts = [
+        { url: postUrl, options: { method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "xnxq01id=" + encodeURIComponent(semesterId || "") } },
+        { url: getUrl, options: { method: "GET" } }
+    ];
+    for (var i = 0; i < attempts.length; i++) {
+        try {
+            var resp = await fetch(attempts[i].url, Object.assign({ credentials: "include" }, attempts[i].options));
+            if (!resp.ok) continue;
+            var info = parseTermInfo(await resp.text(), semesterId);
+            if (info && info.startDate) return info;
+        } catch (e) { /* 尝试下一种方式 */ }
+    }
+    return null;
 }
 
 function mergeCourses(courses) {
