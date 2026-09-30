@@ -2,11 +2,14 @@
 // 泉州职业技术大学（jw.qvtu.edu.cn/jsxsd，强智教务）
 // 拾光课程表适配脚本
 //
-// 数据源：仅"学期理论课表"（xskb_list.do，整学期带周次区间）。
-// App 只导入当前学期，不引入首页周课表等冗余数据源。
+// 参照官方强智适配案例（YSSDUFE_01，见 shiguangschedule Wiki
+// "常见教务系统适配案例参考"）编写：
+//   1. 教学周历 jxzl_query 提供学期列表 / 开学日期 / 总周数；
+//   2. 学期理论课表 xskb_list.do 提供课程数据。
+// 若站点周历页结构与案例不同，自动降级：跳过选学期、不提交开学日期，
+// 课程解析回退到本站 <p title> 格式，任何情况都不会阻塞导入。
 // 流程遵循官方开发文档约定：学期配置 → 课程 → 作息时间（可选，失败不阻止完成）；
 // notifyTaskCompletion 只在流程成功后调用。
-// 总周数取课程最大周次；开学日期教务接口无可靠来源，不提交（App 里可手动设置）。
 // 出现问题请联系开发者或提交 PR 更改。
 // ============================================================
 
@@ -37,7 +40,8 @@ const QVTU_TIME_SLOTS = [
 
 // 教务系统地址与接口
 const QVTU_ORIGIN_CHECK = /jw\.qvtu\.edu\.cn$/i; // 只在教务站点上运行
-const QVTU_XSKB_URL = "/jsxsd/xskb/xskb_list.do"; // 学期理论课表（整学期，带周次区间）
+const QVTU_JXZL_URL = "/jsxsd/jxzl/jxzl_query"; // 教学周历（学期列表 + 开学日期 + 总周数）
+const QVTU_XSKB_URL = "/jsxsd/xskb/xskb_list.do"; // 学期理论课表
 
 const QVTU_REQUEST_TIMEOUT = 8000; // 单请求超时（毫秒）
 
@@ -52,60 +56,93 @@ function notifyDone() {
   window.shiguangBridge.notifyTaskCompletion();
 }
 
-// 带超时保护的 fetch
-function fetchText(url, options, tag) {
-  const p = fetch(url, options || { method: "GET", credentials: "include" }).then(r => r.text());
-  if (typeof setTimeout !== "function") return p; // 无定时器环境跳过（浏览器始终可用）
-  return Promise.race([p, new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("请求超时：" + tag)), QVTU_REQUEST_TIMEOUT);
-  })]);
+// 带超时保护的 fetch（门户切换页面时站点脚本会中断进行中的请求，失败重试一次）
+async function fetchText(url, options, tag) {
+  const opts = options || { method: "GET", credentials: "include" };
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const p = fetch(url, opts).then(r => r.text());
+      if (typeof setTimeout !== "function") return await p;
+      return await Promise.race([p, new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("请求超时：" + tag)), QVTU_REQUEST_TIMEOUT);
+      })]);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new Error("请求失败（" + tag + "）：" + (lastErr && lastErr.message ? lastErr.message : "网络错误"));
+}
+
+// 解析 HTML 文本为文档对象
+function parseHtml(html) {
+  return new DOMParser().parseFromString(String(html || ""), "text/html");
 }
 
 // 只认可解析得了的课表（登录页/错误页不含这些标记）。
-// xskb_list.do 的格子用 class="kbcontent"，其他课表视图可能用 class="kb_table"，两者都认。
+// 不同强智版本课表格子用 class="kbcontent" 或 class="kb_table"，本站另有 <p title=...> 格式。
 function hasCourse(text) {
   return /课程名称：|kbcontent|kb_table/.test(String(text || ""));
 }
 
-// ================= 核心解析逻辑 =================
+// ================= 核心解析逻辑（一）：教学周历 =================
 
-// 本站课表单元格式：
-// <p title='课程学分：2<br/>课程名称：大学英语3（25工B4班）<br/>上课时间：第3周 星期一 [01-02]节<br/>上课地点：B216教室'>
-function parsePTitle(html) {
-  const merged = {};
-  const re = /<p\b[^>]*title\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/p>/gi;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    const title = m[1] != null ? m[1] : m[2];
-    if (!title || !/课程名称：|上课时间：/.test(title)) continue;
+// GET 周历页：解析学期下拉框，以当前选中学期为原点上下各取 3 个。
+// 站点若无 xnxq01id 下拉框则返回空列表（流程自动跳过选学期）。
+async function fetchSemesterList() {
+  const doc = parseHtml(await fetchText(location.origin + QVTU_JXZL_URL, null, "教学周历页"));
+  const select = doc.getElementById("xnxq01id");
+  if (!select) return { list: [], defaultIndex: -1 };
 
-    const lines = title.split(/<br\s*\/?\s*>/i).map(s => s.trim()).filter(Boolean);
-    let name = "", timeStr = "", position = "", teacher = "";
-    for (const line of lines) {
-      if (/^课程名称[:：]/.test(line)) name = line.replace(/^课程名称[:：]/, "");
-      else if (/^上课时间[:：]/.test(line)) timeStr = line.replace(/^上课时间[:：]/, "");
-      else if (/^上课地点[:：]/.test(line)) position = line.replace(/^上课地点[:：]/, "");
-      else if (/^(?:授课|任课)?教师[:：]/.test(line)) teacher = line.replace(/^(?:授课|任课)?教师[:：]/, "");
-    }
-    if (!name || !timeStr) continue;
-
-    const star = timeStr.indexOf("星期");
-    const weeks = parseWeeks(star >= 0 ? timeStr.slice(0, star) : timeStr);
-    const day = dayFrom(star >= 0 ? timeStr.slice(star) : "");
-    const sections = sectionsFrom(star >= 0 ? timeStr.slice(star) : timeStr);
-    if (!weeks.length || !day || !sections.length) continue;
-
-    // 同名同天同节次同地点 → 合并周次
-    const key = [name.trim(), day, sections.join("-"), position.trim()].join("|");
-    if (!merged[key]) {
-      merged[key] = { name: name.trim(), teacher: teacher.trim(), position: position.trim(), day, weeks, sections };
-    } else {
-      for (const w of weeks) if (!merged[key].weeks.includes(w)) merged[key].weeks.push(w);
-      merged[key].weeks.sort((a, b) => a - b);
-    }
-  }
-  return Object.values(merged);
+  const all = Array.from(select.querySelectorAll("option")).map(opt => ({
+    value: opt.value,
+    label: opt.textContent.trim(),
+    selected: opt.hasAttribute("selected")
+  }));
+  let idx = all.findIndex(o => o.selected);
+  if (idx === -1) idx = 0;
+  const start = Math.max(0, idx - 3);
+  return {
+    list: all.slice(start, Math.min(all.length, idx + 4)),
+    defaultIndex: idx - start
+  };
 }
+
+// POST 周历页：解析指定学期的开学日期（首行 td[title]）与总周数（首列最大整数）。
+// 结构不符时返回 { startDate: null, totalWeeks: null }，不阻塞流程。
+async function fetchSemesterInfo(semesterId) {
+  const html = await fetchText(location.origin + QVTU_JXZL_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "xnxq01id=" + encodeURIComponent(semesterId),
+    credentials: "include"
+  }, "教学周历详情");
+  const doc = parseHtml(html);
+  const timetable = doc.getElementById("kbtable");
+  if (!timetable) return { startDate: null, totalWeeks: null };
+
+  const rows = Array.from(timetable.querySelectorAll("tr")).filter(r => r.querySelector("td"));
+  if (!rows.length) return { startDate: null, totalWeeks: null };
+
+  // 开学日期：第一行首个带 title 的 td，如 "2025年9月1日"（兼容不补零）
+  const title = (rows[0].querySelector("td[title]") || {}).getAttribute
+    ? rows[0].querySelector("td[title]").getAttribute("title") : "";
+  const m = String(title).match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/);
+  const pad = n => (n < 10 ? "0" + n : "" + n);
+  const startDate = m ? m[1] + "-" + pad(+m[2]) + "-" + pad(+m[3]) : null;
+
+  // 总周数：所有行首列能解析为整数的最大值
+  let totalWeeks = null;
+  for (const row of rows) {
+    const td = row.querySelector("td");
+    if (!td) continue;
+    const n = parseInt(td.textContent.trim(), 10);
+    if (!isNaN(n) && n > 0 && (totalWeeks === null || n > totalWeeks)) totalWeeks = n;
+  }
+  return { startDate, totalWeeks };
+}
+
+// ================= 核心解析逻辑（二）：课程 =================
 
 // "第3周"、"第1-16周"、"第1,3,5-8周"、"第1-15周(单周)" → [3] / [1..16] / 奇数周…
 function parseWeeks(text) {
@@ -149,40 +186,132 @@ function dayFrom(text) {
   return m ? map[m[1]] : 0;
 }
 
-// 把解析结果合并进总表
-function mergeInto(merged, course) {
-  const key = [course.name, course.day, course.sections.join("-"), course.position].join("|");
-  if (!merged[key]) {
-    merged[key] = course;
+// 最终课程条目合并：同名同天同节次区间同地点 → 合并周次
+function mergeCourse(map, c) {
+  if (!c.name || !c.day || !c.weeks.length || !c.startSection) return;
+  const key = [c.name, c.day, c.startSection + "-" + c.endSection, c.position].join("|");
+  if (!map[key]) {
+    map[key] = c;
   } else {
-    for (const w of course.weeks) if (!merged[key].weeks.includes(w)) merged[key].weeks.push(w);
-    merged[key].weeks.sort((a, b) => a - b);
+    for (const w of c.weeks) if (!map[key].weeks.includes(w)) map[key].weeks.push(w);
+    map[key].weeks.sort((a, b) => a - b);
   }
 }
 
-// ================= 数据抓取 =================
+// 解析路径 A：官方案例的 DOM 结构（#kbtable 内 div.kbcontent，多课程以长横线分隔）
+function parseKbcontent(doc) {
+  const timetable = doc.getElementById("kbtable");
+  if (!timetable) return [];
+  const map = {};
+  const rows = Array.from(timetable.querySelectorAll("tr")).filter(r => r.querySelector("td"));
+  rows.forEach(row => {
+    const cells = row.querySelectorAll("td");
+    cells.forEach((cell, dayIndex) => {
+      const day = dayIndex + 1;
+      cell.querySelectorAll("div.kbcontent").forEach(div => {
+        const raw = div.innerHTML.trim();
+        if (!raw || raw === "&nbsp;" || div.innerText.trim().length < 2) return;
+        raw.split(/-{10,}/).forEach(block => {
+          if (!block.trim()) return;
+          const box = document.createElement("div");
+          box.innerHTML = block;
 
-// 抓取学期课表页（失败重试一次；门户切换页面时站点脚本会中断进行中的请求）
-async function fetchXskbPage() {
-  let lastErr = null;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      return await fetchText(location.origin + QVTU_XSKB_URL, null, "学期课表页");
-    } catch (e) {
-      lastErr = e;
+          let name = "";
+          for (const node of box.childNodes) {
+            if (node.nodeType === 3 && node.textContent.trim() !== "") { name = node.textContent.trim(); break; }
+          }
+          const teacher = (box.querySelector('font[title="老师"], font[title="教师"]') || {}).innerText || "";
+          const position = (box.querySelector('font[title="教室"]') || {}).innerText || "未知地点";
+          const weekStr = ((box.querySelector('font[title="周次(节次)"]') || {}).innerText) || "";
+
+          let startSection = 0, endSection = 0;
+          const sec = weekStr.match(/\[(.*?)节\]/);
+          if (sec && sec[1]) {
+            const nums = sec[1].split("-").map(Number).filter(n => !isNaN(n));
+            if (nums.length) { startSection = nums[0]; endSection = nums[nums.length - 1]; }
+          }
+          if (name && startSection > 0) {
+            mergeCourse(map, {
+              name, teacher: teacher.replace(/任课教师[:：]/, "").trim() || "未知教师",
+              position, day, weeks: parseWeeks(weekStr),
+              startSection, endSection
+            });
+          }
+        });
+      });
+    });
+  });
+  return Object.values(map);
+}
+
+// 解析路径 B（本站回退）：<p title='课程学分：2<br/>课程名称：…<br/>上课时间：…'> 格式
+function parsePTitle(html) {
+  const map = {};
+  const re = /<p\b[^>]*title\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/p>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const title = m[1] != null ? m[1] : m[2];
+    if (!title || !/课程名称：|上课时间：/.test(title)) continue;
+
+    const lines = title.split(/<br\s*\/?\s*>/i).map(s => s.trim()).filter(Boolean);
+    let name = "", timeStr = "", position = "", teacher = "";
+    for (const line of lines) {
+      if (/^课程名称[:：]/.test(line)) name = line.replace(/^课程名称[:：]/, "");
+      else if (/^上课时间[:：]/.test(line)) timeStr = line.replace(/^上课时间[:：]/, "");
+      else if (/^上课地点[:：]/.test(line)) position = line.replace(/^上课地点[:：]/, "");
+      else if (/^(?:授课|任课)?教师[:：]/.test(line)) teacher = line.replace(/^(?:授课|任课)?教师[:：]/, "");
     }
+    if (!name || !timeStr) continue;
+
+    const star = timeStr.indexOf("星期");
+    const weeks = parseWeeks(star >= 0 ? timeStr.slice(0, star) : timeStr);
+    const day = dayFrom(star >= 0 ? timeStr.slice(star) : "");
+    const sections = sectionsFrom(star >= 0 ? timeStr.slice(star) : timeStr);
+    if (!weeks.length || !day || !sections.length) continue;
+
+    mergeCourse(map, {
+      name: name.trim(), teacher: teacher.trim(), position: position.trim(),
+      day, weeks,
+      startSection: Math.min(...sections), endSection: Math.max(...sections)
+    });
   }
-  throw new Error("获取学期课表失败（" + (lastErr && lastErr.message ? lastErr.message : "网络错误") +
-    "）。请在教务页面停留几秒后重新运行。");
+  return Object.values(map);
 }
 
-// 抓取并解析"学期理论课表"。失败时区分"未登录"与"内容异常"，并留诊断信息。
+// ================= 数据抓取与编排 =================
+
 async function fetchAndParseCourses() {
   if (!QVTU_ORIGIN_CHECK.test(location.hostname)) {
     throw new Error("请先在浏览器/WebView 打开教务网站（https://jw.qvtu.edu.cn/jsxsd）并登录，再运行。当前页面：" + location.href);
   }
 
-  const html = await fetchXskbPage();
+  // 1) 学期列表 + 用户选择（站点无学期下拉框时自动跳过，导入当前学期）
+  let semesterId = null;
+  const { list, defaultIndex } = await fetchSemesterList();
+  if (list.length) {
+    const picked = await window.shiguangBridgePromise.showSingleSelection(
+      "选择学期", JSON.stringify(list.map(s => s.label)), defaultIndex
+    );
+    if (picked === null) { toast("已取消导入。"); return null; }
+    semesterId = list[picked].value;
+  }
+
+  // 2) 教学周历 → 开学日期 + 总周数（结构不符则降级为 null）
+  let startDate = null, totalWeeks = null;
+  if (semesterId) {
+    const info = await fetchSemesterInfo(semesterId);
+    startDate = info.startDate;
+    totalWeeks = info.totalWeeks;
+  }
+
+  // 3) 课表：选了学期用 POST 指定学期，否则 GET 当前学期
+  const html = await fetchText(location.origin + QVTU_XSKB_URL, semesterId ? {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "jx0404id=&cj0701id=&zc=&demo=&xnxq01id=" + encodeURIComponent(semesterId),
+    credentials: "include"
+  } : null, "学期课表页");
+
   if (!hasCourse(html)) {
     if (/用户登录|请登录|loginForm|passwd/i.test(String(html))) {
       throw new Error("教务会话已过期或尚未登录（接口返回登录页）。请重新登录教务系统后运行。");
@@ -192,42 +321,33 @@ async function fetchAndParseCourses() {
     throw new Error("学期课表页返回了无法识别的内容，请按 F12 打开控制台，把警告信息发给开发者核对。");
   }
 
-  const merged = {};
-  for (const c of parsePTitle(html)) mergeInto(merged, c);
-
-  const courses = Object.values(merged).map(c => ({
-    name: c.name,
-    teacher: c.teacher || "",
-    position: c.position || "",
-    day: c.day,
-    weeks: c.weeks,
-    startSection: Math.min(...c.sections),
-    endSection: Math.max(...c.sections)
-  }));
+  // 4) 解析：优先官方案例 DOM 结构，0 条时回退本站 <p title> 格式
+  const courses = parseKbcontent(parseHtml(html));
+  if (!courses.length) for (const c of parsePTitle(html)) courses.push(c);
   if (!courses.length) {
-    throw new Error("教务页面里没有解析到课程。请确认当前学期已有排课，或把错误信息发给我核对。");
+    throw new Error("教务页面里没有解析到课程。请确认所选学期已有排课，或把错误信息发给我核对。");
   }
 
-  // 总周数取课程最大周次
-  let total = 0;
-  for (const c of courses) {
-    for (const w of c.weeks) if (w > total) total = w;
+  // 5) 周历未给出总周数时，取课程最大周次兜底
+  if (!totalWeeks) {
+    for (const c of courses) for (const w of c.weeks) if (w > totalWeeks) totalWeeks = w;
   }
-  return { courses, total };
+  return { courses, startDate, totalWeeks };
 }
 
 // ================= 保存步骤（顺序参照官方开发文档） =================
 
-// 保存学期配置（总周数来自课程最大周次；开学日期教务接口无可靠来源，不提交，App 里可手动设置）
+// 保存学期配置（开学日期/总周数来自教学周历，没拿到就不提交/用课程最大周兜底）
 // defaultClassDuration/defaultBreakDuration 与作息表一致（45 分钟一节、小节间休息 15 分钟）
-async function saveCourseConfig(total) {
+async function saveCourseConfig(startDate, totalWeeks) {
   try {
     const config = {
       firstDayOfWeek: 1,
       defaultClassDuration: 45,
       defaultBreakDuration: 15,
-      semesterTotalWeeks: total > 0 ? total : 20
+      semesterTotalWeeks: totalWeeks > 0 ? totalWeeks : 20
     };
+    if (startDate) config.semesterStartDate = startDate;
     const ok = await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
     if (!ok) { toast("学期配置保存失败。"); return false; }
     return true;
@@ -263,15 +383,6 @@ async function savePresetTimeSlots() {
 
 // ================= 流程编排 =================
 
-// 1. 公告和前置检查
-async function promptUserToStart() {
-  return (await window.shiguangBridgePromise.showAlert(
-    "提示",
-    "请确保已成功登录泉州职业技术大学教务系统。是否开始导入？",
-    "开始"
-  )) === true;
-}
-
 /**
  * 编排整个课程导入流程（顺序与约定参照官方开发文档）。
  * 用户取消或关键步骤保存失败时立即结束；作息时间为可选步骤，失败不阻止完成；
@@ -280,18 +391,24 @@ async function promptUserToStart() {
 async function runImportFlow() {
   try {
     // 1. 公告和前置检查
-    const confirmed = await promptUserToStart();
+    const confirmed = await window.shiguangBridgePromise.showAlert(
+      "提示",
+      "请确保已成功登录泉州职业技术大学教务系统。是否开始导入？",
+      "开始"
+    );
     if (!confirmed) {
       toast("已取消导入。");
       return;
     }
 
-    // 2. 网络请求和数据解析
+    // 2. 网络请求和数据解析（内部含选学期；取消时返回 null）
     toast("正在获取学期课表…");
-    const { courses, total } = await fetchAndParseCourses();
+    const result = await fetchAndParseCourses();
+    if (!result) return;
+    const { courses, startDate, totalWeeks } = result;
 
     // 3. 保存学期配置
-    if (!await saveCourseConfig(total)) return;
+    if (!await saveCourseConfig(startDate, totalWeeks)) return;
 
     // 4. 保存课程数据
     toast("正在保存 " + courses.length + " 条课程安排…");
@@ -303,7 +420,8 @@ async function runImportFlow() {
     }
 
     // 6. 流程成功，发送结束信号
-    toast(`成功导入 ${courses.length} 条课程安排！共 ${total} 周。开学日期可在 App 里手动设置。`);
+    toast(`成功导入 ${courses.length} 条课程安排！` +
+      (startDate ? `学期 ${startDate} 起，共 ${totalWeeks} 周。` : "开学日期未能自动获取，可在 App 里手动设置。"));
     notifyDone();
   } catch (error) {
     // 任何一步失败：记录并提示用户，与官方适配一致不向外抛出，也不发送完成信号

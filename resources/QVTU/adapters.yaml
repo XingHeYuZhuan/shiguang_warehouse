@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "qvtu.js"
     import_url: "https://jw.qvtu.edu.cn/jsxsd/"
     maintainer: "suiren0219"
-    description: "泉州职业技术大学强智教务。登录教务系统后停留在学生页面直接导入即可，无需进入课表界面；开学日期与总周数从教务接口自动推算，任何学期通用。有问题请通过 GitHub 联系开发者。"
+    description: "泉州职业技术大学强智教务。登录教务系统后直接导入即可，可选择学期；开学日期与总周数取自教学周历。有问题请通过 GitHub 联系开发者。"
