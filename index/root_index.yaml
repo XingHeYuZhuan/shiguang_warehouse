@@ -1158,3 +1158,13 @@ schools:
     initial: "D"
     resource_folder: "NEFU"
     
+  - id: "SCETOP"
+    name: "四川托普信息技术职业学院"
+    initial: "S"
+    resource_folder: "SCETOP"
+
+  - id: "HUNAU"
+    name: "湖南农业大学"
+    initial: "H"
+    resource_folder: "HUNAU"
+    
