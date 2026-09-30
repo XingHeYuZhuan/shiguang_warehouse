@@ -198,10 +198,9 @@ function parseSchedule(doc) {
 }
 
 // 从教学周历页(jxzl_query)解析开学日期与总周数，返回 {startDate, totalWeeks}。
-// 兼容两代强智：
-//   新版(qz-)：每行 "第1周 | 07 | 08 | 09 | 10 | 11 | 09月12日 | 09月13日"，
-//     周一~周五只显示日号，周末才有"月日"，取最早的带月份单元格作锚点反推第一周周一；
-//   老版：#kbtable，日期藏在 td 的 title 属性（"YYYY年MM月DD日"），第1行第1格即周一。
+// 新版强智(qz-)校历每行形如 "第1周 | 07 | 08 | 09 | 10 | 11 | 09月12日 | 09月13日"：
+// 周一~周五只显示日号，周末才有"月日"，所以取最早的带月份单元格作锚点，
+// 用 (锚点日期 - 距第1周周一的天数) 反推第一周周一；年份由学期号推断。
 function parseTermInfo(html, semId) {
     var doc = new DOMParser().parseFromString(html, "text/html");
     var pad = function (n) { return (n < 10 ? '0' : '') + n; };
@@ -213,63 +212,42 @@ function parseTermInfo(html, semId) {
     for (var i = 0; i < tables.length; i++) {
         if (/第\s*1\s*周/.test(tables[i].textContent)) { table = tables[i]; break; }
     }
-    if (table) {
-        var rows = table.getElementsByTagName('tr');
-        for (var r = 0; r < rows.length; r++) {
-            var cells = rows[r].getElementsByTagName('td');
-            if (cells.length < 2) continue;
-            var wm = trimText(cells[0].textContent).match(/第\s*(\d+)\s*周/);
-            if (!wm) continue;
-            var w = parseInt(wm[1], 10);
-            if (w > maxWeek) maxWeek = w;
-            for (var d = 0; d < 7 && d + 1 < cells.length; d++) {
-                var t = trimText(cells[d + 1].textContent);
-                var m = t.match(fullRe) || t.match(mdRe);
-                if (!m) continue;
-                anchors.push({
-                    idx: (w - 1) * 7 + d,
-                    year: m.length === 4 ? parseInt(m[1], 10) : null,
-                    month: parseInt(m[m.length - 2], 10),
-                    day: parseInt(m[m.length - 1], 10)
-                });
-            }
-        }
-    }
+    if (!table) return null;
 
-    if (anchors.length) {
-        anchors.sort(function (a, b) { return a.idx - b.idx; });
-        var a0 = anchors[0];
-        var y0 = parseInt((String(semId).match(/^(\d{4})/) || [])[1], 10);
-        var year = a0.year ||
-            (a0.month >= 8 ? (y0 || new Date().getFullYear())
-                            : (y0 ? y0 + 1 : new Date().getFullYear()));
-        var start = new Date(year, a0.month - 1, a0.day - a0.idx); // Date 自动处理跨月/负数日
-        if (!isNaN(start.getTime())) {
-            return {
-                startDate: start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate()),
-                totalWeeks: maxWeek || null
-            };
+    var rows = table.getElementsByTagName('tr');
+    for (var r = 0; r < rows.length; r++) {
+        var cells = rows[r].getElementsByTagName('td');
+        if (cells.length < 2) continue;
+        var wm = trimText(cells[0].textContent).match(/第\s*(\d+)\s*周/);
+        if (!wm) continue;
+        var w = parseInt(wm[1], 10);
+        if (w > maxWeek) maxWeek = w;
+        for (var d = 0; d < 7 && d + 1 < cells.length; d++) {
+            var t = trimText(cells[d + 1].textContent);
+            var m = t.match(fullRe) || t.match(mdRe);
+            if (!m) continue;
+            anchors.push({
+                idx: (w - 1) * 7 + d,
+                year: m.length === 4 ? parseInt(m[1], 10) : null,
+                month: parseInt(m[m.length - 2], 10),
+                day: parseInt(m[m.length - 1], 10)
+            });
         }
     }
+    if (!anchors.length) return null;
 
-    // 老版强智兜底：#kbtable + td[title="YYYY年MM月DD日"]
-    var legacy = doc.getElementById ? doc.getElementById('kbtable') : null;
-    if (legacy) {
-        var startDate = null;
-        var lrows = legacy.getElementsByTagName('tr');
-        for (var r2 = 0; r2 < lrows.length; r2++) {
-            var tds = lrows[r2].getElementsByTagName('td');
-            if (!tds.length) continue;
-            var n = parseInt(trimText(tds[0].textContent), 10);
-            if (!isNaN(n) && n > maxWeek) maxWeek = n;
-            if (!startDate && tds[0].getAttribute) {
-                var lm = (tds[0].getAttribute('title') || '').match(/(\d{4})年(\d{1,2})月(\d{1,2})/);
-                if (lm) startDate = lm[1] + '-' + pad(lm[2]) + '-' + pad(lm[3]);
-            }
-        }
-        if (startDate) return { startDate: startDate, totalWeeks: maxWeek || null };
-    }
-    return null;
+    anchors.sort(function (a, b) { return a.idx - b.idx; });
+    var a0 = anchors[0];
+    var y0 = parseInt((String(semId).match(/^(\d{4})/) || [])[1], 10);
+    var year = a0.year ||
+        (a0.month >= 8 ? (y0 || new Date().getFullYear())
+                        : (y0 ? y0 + 1 : new Date().getFullYear()));
+    var start = new Date(year, a0.month - 1, a0.day - a0.idx); // Date 自动处理跨月/负数日
+    if (isNaN(start.getTime())) return null;
+    return {
+        startDate: start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate()),
+        totalWeeks: maxWeek || null
+    };
 }
 
 // 按 YSSDUFE 标准姿势获取学期配置：POST 带 xnxq01id 请求所选学期的校历，
