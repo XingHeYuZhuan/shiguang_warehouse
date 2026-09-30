@@ -5,9 +5,9 @@
 // 参照官方强智适配案例（YSSDUFE_01，见 shiguangschedule Wiki
 // "常见教务系统适配案例参考"）编写：
 //   1. 教学周历 jxzl_query 提供学期列表 / 开学日期 / 总周数；
-//   2. 学期理论课表 xskb_list.do 提供课程数据。
+//   2. 学期理论课表 xskb_list.do 提供课程数据（#kbtable / div.kbcontent 官方结构）。
 // 若站点周历页结构与案例不同，自动降级：跳过选学期、不提交开学日期，
-// 课程解析回退到本站 <p title> 格式，任何情况都不会阻塞导入。
+// 任何情况都不会阻塞导入。
 // 流程遵循官方开发文档约定：学期配置 → 课程 → 作息时间（可选，失败不阻止完成）；
 // notifyTaskCompletion 只在流程成功后调用。
 // 出现问题请联系开发者或提交 PR 更改。
@@ -164,29 +164,7 @@ function parseWeeks(text) {
   return weeks.sort((a, b) => a - b);
 }
 
-// "[01-02]节"、"第1-2节"、"01,02节" → [1, 2]
-function sectionsFrom(text) {
-  const t = String(text || "").replace(/\s/g, "");
-  let m = t.match(/\[\s*(\d+)\s*[-–,，]\s*(\d+)\s*\]/) || t.match(/(?:第)?(\d+)\s*[-–]\s*(\d+)\s*节/);
-  if (m) {
-    const arr = [];
-    for (let w = Math.min(+m[1], +m[2]); w <= Math.max(+m[1], +m[2]); w++) arr.push(w);
-    return arr;
-  }
-  m = t.match(/(\d+)\s*[，,]\s*(\d+)/);
-  if (m) return [+m[1], +m[2]];
-  m = t.match(/(?:第|\[)?(\d{1,2})(?:节|\])?/);
-  return m && +m[1] >= 1 && +m[1] <= 14 ? [+m[1]] : [];
-}
-
-// 星期一/二/…/日 → 1..7
-function dayFrom(text) {
-  const map = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7 };
-  const m = String(text || "").match(/星期\s*([一二三四五六日天])/);
-  return m ? map[m[1]] : 0;
-}
-
-// 最终课程条目合并：同名同天同节次区间同地点 → 合并周次
+// 把解析结果合并进总表（同名同天同节次区间同地点 → 合并周次）
 function mergeCourse(map, c) {
   if (!c.name || !c.day || !c.weeks.length || !c.startSection) return;
   const key = [c.name, c.day, c.startSection + "-" + c.endSection, c.position].join("|");
@@ -244,40 +222,6 @@ function parseKbcontent(doc) {
   return Object.values(map);
 }
 
-// 解析路径 B（本站回退）：<p title='课程学分：2<br/>课程名称：…<br/>上课时间：…'> 格式
-function parsePTitle(html) {
-  const map = {};
-  const re = /<p\b[^>]*title\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/p>/gi;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    const title = m[1] != null ? m[1] : m[2];
-    if (!title || !/课程名称：|上课时间：/.test(title)) continue;
-
-    const lines = title.split(/<br\s*\/?\s*>/i).map(s => s.trim()).filter(Boolean);
-    let name = "", timeStr = "", position = "", teacher = "";
-    for (const line of lines) {
-      if (/^课程名称[:：]/.test(line)) name = line.replace(/^课程名称[:：]/, "");
-      else if (/^上课时间[:：]/.test(line)) timeStr = line.replace(/^上课时间[:：]/, "");
-      else if (/^上课地点[:：]/.test(line)) position = line.replace(/^上课地点[:：]/, "");
-      else if (/^(?:授课|任课)?教师[:：]/.test(line)) teacher = line.replace(/^(?:授课|任课)?教师[:：]/, "");
-    }
-    if (!name || !timeStr) continue;
-
-    const star = timeStr.indexOf("星期");
-    const weeks = parseWeeks(star >= 0 ? timeStr.slice(0, star) : timeStr);
-    const day = dayFrom(star >= 0 ? timeStr.slice(star) : "");
-    const sections = sectionsFrom(star >= 0 ? timeStr.slice(star) : timeStr);
-    if (!weeks.length || !day || !sections.length) continue;
-
-    mergeCourse(map, {
-      name: name.trim(), teacher: teacher.trim(), position: position.trim(),
-      day, weeks,
-      startSection: Math.min(...sections), endSection: Math.max(...sections)
-    });
-  }
-  return Object.values(map);
-}
-
 // ================= 数据抓取与编排 =================
 
 async function fetchAndParseCourses() {
@@ -321,9 +265,8 @@ async function fetchAndParseCourses() {
     throw new Error("学期课表页返回了无法识别的内容，请按 F12 打开控制台，把警告信息发给开发者核对。");
   }
 
-  // 4) 解析：优先官方案例 DOM 结构，0 条时回退本站 <p title> 格式
+  // 4) 解析（官方案例 DOM 结构）
   const courses = parseKbcontent(parseHtml(html));
-  if (!courses.length) for (const c of parsePTitle(html)) courses.push(c);
   if (!courses.length) {
     throw new Error("教务页面里没有解析到课程。请确认所选学期已有排课，或把错误信息发给我核对。");
   }
