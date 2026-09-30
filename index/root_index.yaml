@@ -1177,3 +1177,9 @@ schools:
     name: "南京信息职业技术学院"
     initial: "N"
     resource_folder: "NJCIT"
+
+  - id: "QVTU"
+    name: "泉州职业技术大学"
+    initial: "Q"
+    resource_folder: "QVTU"
+    
