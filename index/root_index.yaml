@@ -1157,4 +1157,9 @@ schools:
     name: "东北林业大学"
     initial: "D"
     resource_folder: "NEFU"
+
+  - id: "HUNAU"
+    name: "湖南农业大学"
+    initial: "H"
+    resource_folder: "HUNAU"
     
