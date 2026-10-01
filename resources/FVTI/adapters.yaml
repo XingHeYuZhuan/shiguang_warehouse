@@ -1,7 +1,7 @@
 # resources/FVTI/adapters.yaml
 adapters:
   - adapter_id: "FVTI_01"
-    adapter_name: "福州职业技术学院"
+    adapter_name: "福州职业技术大学"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "fvti_01.js"
     import_url: "https://jw.webvpn.fvti.cn/Framework/lyssoNew/login.php"
