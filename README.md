@@ -19,7 +19,7 @@ shiguang_warehouse/
 ├───resources/               # 资源目录
 │   ├───CUST/                # 学校目录
 │   │   ├───adapters.yaml    # 配置信息
-│   │   └───cust_chaoyang.js # 朝阳校区适配脚本
+│   │   └───cust.js          # 适配脚本
 │   ├───GLOBAL_TOOLS/        # 通用工具
 │   │   ├───adapters.yaml
 │   │   ├───school.js        # 组件测试脚本

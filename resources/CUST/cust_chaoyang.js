@@ -153,12 +153,111 @@ function buildPosition(item) {
         .join(' ') || '未指定';
 }
 
+// 基于主仓库教程的 mergeAndDistinctCourses：先合并节次与重复记录，再合并同节次的周次。
+// 来源：https://github.com/ShiGuangSchedule/shiguangschedule/wiki/课程合并与去重函数
+// kbpro 补充：周次先去重、处理重叠节次，并在周次合并后继续处理新形成的连续节次。
+function mergeAndDistinctCourses(courses) {
+    if (!Array.isArray(courses)) {
+        return [];
+    }
+
+    // 复制课程和周次数组，避免合并过程修改原始数据。
+    let list = courses.map(course => ({
+        ...course,
+        name: course.name || '',
+        teacher: course.teacher || '',
+        position: course.position || '',
+        weeks: Array.isArray(course.weeks)
+            ? Array.from(new Set(course.weeks)).sort((a, b) => a - b)
+            : []
+    }));
+
+    if (list.length <= 1) {
+        return list;
+    }
+
+    let previousCount;
+
+    do {
+        previousCount = list.length;
+
+        // 阶段 1：名称、教师、地点、星期、周次一致时合并连续节次，并去掉重复或重叠部分。
+        list.sort((a, b) =>
+            a.name.localeCompare(b.name)
+            || a.teacher.localeCompare(b.teacher)
+            || a.position.localeCompare(b.position)
+            || a.day - b.day
+            || a.weeks.join(',').localeCompare(b.weeks.join(','))
+            || a.startSection - b.startSection
+            || a.endSection - b.endSection
+        );
+
+        const step1Merged = [];
+        let current = list[0];
+
+        for (let index = 1; index < list.length; index++) {
+            const next = list[index];
+            const isSameCourseAndWeeks = current.name === next.name
+                && current.teacher === next.teacher
+                && current.position === next.position
+                && current.day === next.day
+                && current.weeks.join(',') === next.weeks.join(',');
+
+            // 已按开始节次排序，因此该条件同时覆盖连续、完全重复和部分重叠的节次。
+            if (isSameCourseAndWeeks && next.startSection <= current.endSection + 1) {
+                current.endSection = Math.max(current.endSection, next.endSection);
+            } else {
+                step1Merged.push(current);
+                current = next;
+            }
+        }
+        step1Merged.push(current);
+
+        // 阶段 2：名称、教师、地点、星期及起止节次一致时，合并并排序上课周次。
+        step1Merged.sort((a, b) =>
+            a.name.localeCompare(b.name)
+            || a.teacher.localeCompare(b.teacher)
+            || a.position.localeCompare(b.position)
+            || a.day - b.day
+            || a.startSection - b.startSection
+            || a.endSection - b.endSection
+        );
+
+        const step2Merged = [];
+        let cur = step1Merged[0];
+
+        for (let index = 1; index < step1Merged.length; index++) {
+            const next = step1Merged[index];
+            const isSameCourseAndSection = cur.name === next.name
+                && cur.teacher === next.teacher
+                && cur.position === next.position
+                && cur.day === next.day
+                && cur.startSection === next.startSection
+                && cur.endSection === next.endSection;
+
+            if (isSameCourseAndSection) {
+                cur.weeks = Array.from(new Set([...cur.weeks, ...next.weeks])).sort((a, b) => a - b);
+            } else {
+                step2Merged.push(cur);
+                cur = next;
+            }
+        }
+        step2Merged.push(cur);
+        list = step2Merged;
+
+        // 周次合并可能让相邻时段的周次变得一致；每轮有合并时再处理，记录数不再减少即停止。
+    } while (list.length < previousCount);
+
+    return list;
+}
+
 // 将 getSchedulejson 返回结果转换成时光课表格式
 // 返回 { courses, timeSlots }：courses 用于课程导入，timeSlots 是接口给出的课程时段边界。
 // timeSlots 不是完整的每节作息表，后续由 generateTimeSlots 补齐为第 1～12 节。
 function convertScheduleData(apiData) {
-    // 第一张表按课程时段聚合周次；第二张表保存不同的节次范围与起止时间组合。
-    const exactCoursesMap = new Map();
+    // 先解析为教程函数要求的标准课程数组，作息边界单独收集。
+    const rawCourses = [];
+    const teacherDisplaysMap = new Map();
     const timeSlotsMap = new Map();
 
     apiData.forEach(item => {
@@ -188,32 +287,22 @@ function convertScheduleData(apiData) {
             return;
         }
 
-        // 同一门课、同一教师集合、同一地点、同一天、同一节次范围：合并所有周次
-        const exactKey = [
-            courseName,
-            teacherKey,
+        // 教程函数直接比较 teacher 字段，先使用排序后的教师集合，防止姓名顺序不同影响合并。
+        // 显示名称另外保留，合并后还原为接口首次出现的顺序。
+        const teacherDisplayKey = JSON.stringify([courseName, teacherKey, position, day]);
+        if (!teacherDisplaysMap.has(teacherDisplayKey)) {
+            teacherDisplaysMap.set(teacherDisplayKey, teacherDisplay);
+        }
+
+        rawCourses.push({
+            name: courseName,
+            teacher: teacherKey,
             position,
             day,
             startSection,
-            endSection
-        ].join('||');
-
-        if (!exactCoursesMap.has(exactKey)) {
-            exactCoursesMap.set(exactKey, {
-                name: courseName,
-                teacher: teacherDisplay,
-                // 内部合并字段，保存到 App 前会删除；weeks 使用 Set 去掉重复周次。
-                _teacherKey: teacherKey,
-                position,
-                day,
-                startSection,
-                endSection,
-                weeks: new Set()
-            });
-        }
-
-        const course = exactCoursesMap.get(exactKey);
-        weeks.forEach(week => course.weeks.add(week));
+            endSection,
+            weeks
+        });
 
         // 收集 API 给出的时间范围，用于覆盖默认作息时间的起止边界
         // beginTime/endTime 表示整段课程的开始和结束，不能据此推算中间每节课的时间。
@@ -231,68 +320,13 @@ function convertScheduleData(apiData) {
         }
     });
 
-    // 第一轮：将同一课程时段的单周记录合并为完整周次记录
-    // 输出周次按数字升序排列，避免重复周次以及字符串排序造成的顺序错误。
-    const exactCourses = Array.from(exactCoursesMap.values()).map(course => ({
+    // 调用教程的合并去重函数，再还原教师显示名称，不向 App 输出内部比较字段。
+    const courses = mergeAndDistinctCourses(rawCourses).map(course => ({
         ...course,
-        weeks: Array.from(course.weeks).sort((a, b) => a - b)
+        teacher: teacherDisplaysMap.get(JSON.stringify([
+            course.name, course.teacher, course.position, course.day
+        ])) ?? course.teacher
     }));
-
-    // 第二轮：同一课程如果被接口拆成连续节次，例如矩阵论 5-6 节 + 7 节，合并成 5-7 节。
-    // 只有课程、教师集合、地点、星期、周次完全一致，且节次重叠或相邻时才合并。
-    // 例如 1-2 节与 5-6 节之间有间隔，会保留为两条记录，避免把空闲节次也算成上课。
-    const mergeGroups = new Map();
-
-    exactCourses.forEach(course => {
-        const mergeKey = [
-            course.name,
-            course._teacherKey,
-            course.position,
-            course.day,
-            course.weeks.join(',')
-        ].join('||');
-
-        if (!mergeGroups.has(mergeKey)) {
-            mergeGroups.set(mergeKey, []);
-        }
-
-        mergeGroups.get(mergeKey).push(course);
-    });
-
-    const courses = [];
-
-    mergeGroups.forEach(group => {
-        group.sort((a, b) => {
-            if (a.startSection !== b.startSection) {
-                return a.startSection - b.startSection;
-            }
-            return a.endSection - b.endSection;
-        });
-
-        let current = null;
-
-        // 先按节次排序，再累积连续区间；遇到间隔时输出上一段并开启下一段。
-        group.forEach(course => {
-            if (!current) {
-                current = { ...course };
-                return;
-            }
-
-            if (course.startSection <= current.endSection + 1) {
-                current.startSection = Math.min(current.startSection, course.startSection);
-                current.endSection = Math.max(current.endSection, course.endSection);
-            } else {
-                delete current._teacherKey;
-                courses.push(current);
-                current = { ...course };
-            }
-        });
-
-        if (current) {
-            delete current._teacherKey;
-            courses.push(current);
-        }
-    });
 
     // 最终按星期、起止节次、课程名称排序，便于检查导入结果。
     courses.sort((a, b) => {
