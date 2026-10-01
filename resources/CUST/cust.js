@@ -1,6 +1,11 @@
 // 文件: cust.js
 // 长春理工大学 kbpro 课程表导入脚本
+//
+// 导入流程：判断页面 → 获取学期和课程 → 合并课程 → 保存课程 → 保存每节作息 → 通知完成。
+// 数据分开保存：课程包含星期、周次和起止节次；作息表包含各节次的开始、结束时间。
+// 本脚本使用 V2 的 window.shiguangBridge / window.shiguangBridgePromise。
 
+// 课表页面用于建立当前登录会话；两个接口请求均使用该会话的 Cookie。
 const SCHEDULE_PAGE_URL = 'https://kbpro.cust.edu.cn/Schedule/';
 const SCHEDULE_INFO_API = 'https://kbpro.cust.edu.cn/Schedule/scheduleInfo';
 const SCHEDULE_JSON_API = 'https://kbpro.cust.edu.cn/Schedule/getSchedulejson';
@@ -17,6 +22,7 @@ function isOnSchedulePage() {
 }
 
 // 直接进入新版课表页面，不再进入旧教务系统 Student 页面
+// 跳转只负责打开目标页面；当前执行不会在跳转后接着请求数据，需要在新页面执行脚本。
 function redirectToSchedulePage() {
     console.log('当前不在新版课表页面，正在跳转:', SCHEDULE_PAGE_URL);
     window.shiguangBridge.showToast('正在打开课程表...');
@@ -41,6 +47,7 @@ async function fetchJson(url, description) {
     }
 
     const contentType = response.headers.get('content-type') || '';
+    // 登录失效时可能返回登录页 HTML，不能把它当作课程 JSON 继续导入。
     if (!contentType.toLowerCase().includes('application/json')) {
         throw new Error(`${description}返回的不是 JSON，可能登录状态已失效`);
     }
@@ -49,6 +56,7 @@ async function fetchJson(url, description) {
 }
 
 // 获取学期、开学日期、当前周以及周次日期映射
+// 当前实现只将这些信息输出到日志，没有调用 saveCourseConfig 保存学期开始日期或总周数。
 async function fetchScheduleInfo() {
     try {
         console.log('正在获取学期信息...');
@@ -63,6 +71,8 @@ async function fetchScheduleInfo() {
 }
 
 // 获取课程明细
+// 预期返回课程数组：courseName/teacherName 为课程和教师，dayOfWeek 为星期，
+// beginSection/endSection 为节次，weekDescription 为周次位图，beginTime/endTime 为时刻。
 async function fetchScheduleData() {
     try {
         console.log('正在获取课程明细...');
@@ -85,6 +95,7 @@ async function fetchScheduleData() {
 // weekDescription 是 25 位周次位图。
 // 下标直接对应 scheduleInfo.dateList 中的 weekOrder：
 // 第 0 位 = weekOrder 0（开学前一周），正式导入时忽略；第 1 位 = 第 1 周，以此类推。
+// 例如 "0101..." 表示第 1、3 周有课；这是接口约定，不能把所有下标统一加 1。
 function parseWeekDescription(weekDescription) {
     if (typeof weekDescription !== 'string') {
         return [];
@@ -102,6 +113,7 @@ function parseWeekDescription(weekDescription) {
 }
 
 // 教师显示名称：保持接口第一次出现的顺序，只把空格统一成“、”
+// 重复姓名只保留一次，例如 "张老师 李老师 张老师" 显示为 "张老师、李老师"。
 function normalizeTeacherDisplay(teacherName) {
     if (!teacherName) {
         return '';
@@ -116,6 +128,7 @@ function normalizeTeacherDisplay(teacherName) {
 }
 
 // 教师比较键：忽略多人教师在不同周返回时的排列顺序
+// "张老师 李老师" 与 "李老师 张老师" 可归为同一教师集合，显示名称仍保持首次顺序。
 function normalizeTeacherKey(teacherName) {
     if (!teacherName) {
         return '';
@@ -130,6 +143,7 @@ function normalizeTeacherKey(teacherName) {
 }
 
 // 拼接完整上课地点
+// 按校区、教学楼、教室依次拼接；空字段跳过，全部为空时显示“未指定”。
 function buildPosition(item) {
     return [item.campus, item.buildingName, item.classroomName]
         .map(value => (value || '').trim())
@@ -138,7 +152,10 @@ function buildPosition(item) {
 }
 
 // 将 getSchedulejson 返回结果转换成时光课表格式
+// 返回 { courses, timeSlots }：courses 用于课程导入，timeSlots 是接口给出的课程时段边界。
+// timeSlots 不是完整的每节作息表，后续由 generateTimeSlots 补齐为第 1～12 节。
 function convertScheduleData(apiData) {
+    // 第一张表按课程时段聚合周次；第二张表保存不同的节次范围与起止时间组合。
     const exactCoursesMap = new Map();
     const timeSlotsMap = new Map();
 
@@ -147,11 +164,13 @@ function convertScheduleData(apiData) {
         const teacherDisplay = normalizeTeacherDisplay(item.teacherName);
         const teacherKey = normalizeTeacherKey(item.teacherName);
         const position = buildPosition(item);
+        // 接口字段可能是数字字符串，转为整数后再校验；星期 1～7 分别表示周一～周日。
         const day = Number(item.dayOfWeek);
         const startSection = Number(item.beginSection);
         const endSection = Number(item.endSection);
         const weeks = parseWeekDescription(item.weekDescription);
 
+        // 无课程名称、无正式上课周次或星期/节次不合法的记录不导入。
         if (!courseName || weeks.length === 0) {
             return;
         }
@@ -181,6 +200,7 @@ function convertScheduleData(apiData) {
             exactCoursesMap.set(exactKey, {
                 name: courseName,
                 teacher: teacherDisplay,
+                // 内部合并字段，保存到 App 前会删除；weeks 使用 Set 去掉重复周次。
                 _teacherKey: teacherKey,
                 position,
                 day,
@@ -194,6 +214,7 @@ function convertScheduleData(apiData) {
         weeks.forEach(week => course.weeks.add(week));
 
         // 收集 API 给出的时间范围，用于覆盖默认作息时间的起止边界
+        // beginTime/endTime 表示整段课程的开始和结束，不能据此推算中间每节课的时间。
         const beginTime = (item.beginTime || '').trim();
         const endTime = (item.endTime || '').trim();
 
@@ -209,13 +230,15 @@ function convertScheduleData(apiData) {
     });
 
     // 第一轮：将同一课程时段的单周记录合并为完整周次记录
+    // 输出周次按数字升序排列，避免重复周次以及字符串排序造成的顺序错误。
     const exactCourses = Array.from(exactCoursesMap.values()).map(course => ({
         ...course,
         weeks: Array.from(course.weeks).sort((a, b) => a - b)
     }));
 
     // 第二轮：同一课程如果被接口拆成连续节次，例如矩阵论 5-6 节 + 7 节，合并成 5-7 节。
-    // 只有课程、教师集合、地点、星期、周次完全一致并且节次相邻时才合并，避免误合并两个独立时段。
+    // 只有课程、教师集合、地点、星期、周次完全一致，且节次重叠或相邻时才合并。
+    // 例如 1-2 节与 5-6 节之间有间隔，会保留为两条记录，避免把空闲节次也算成上课。
     const mergeGroups = new Map();
 
     exactCourses.forEach(course => {
@@ -246,6 +269,7 @@ function convertScheduleData(apiData) {
 
         let current = null;
 
+        // 先按节次排序，再累积连续区间；遇到间隔时输出上一段并开启下一段。
         group.forEach(course => {
             if (!current) {
                 current = { ...course };
@@ -268,6 +292,7 @@ function convertScheduleData(apiData) {
         }
     });
 
+    // 最终按星期、起止节次、课程名称排序，便于检查导入结果。
     courses.sort((a, b) => {
         if (a.day !== b.day) return a.day - b.day;
         if (a.startSection !== b.startSection) return a.startSection - b.startSection;
@@ -286,6 +311,9 @@ function convertScheduleData(apiData) {
 }
 
 // 生成时间段配置
+// 每节都有独立的 number、startTime、endTime；当前共配置 12 节，时刻格式为 HH:mm。
+// 下表是脚本内置的兜底作息，不表示每一节都由本次接口返回，也不是实时校验的官方作息。
+// 课程记录只保存节次，App 使用这张作息表将节次对应到具体时间，不使用课程自定义时间模式。
 function generateTimeSlots(timeSlotsFromAPI) {
     const defaultTimeSlots = [
         { number: 1, startTime: '08:00', endTime: '08:45' },
@@ -304,6 +332,11 @@ function generateTimeSlots(timeSlotsFromAPI) {
 
     if (Array.isArray(timeSlotsFromAPI)) {
         timeSlotsFromAPI.forEach(slot => {
+            // 只覆盖首节的开始时间、末节的结束时间，其余节次继续使用默认值。
+            // 例如接口返回 5-7 节 13:30～16:20：更新第 5 节开始、第 7 节结束，
+            // 第 5 节结束、第 6 节起止、第 7 节开始仍按内置作息，不均分课程总时长。
+            // 同一边界有多条不同时间时，后处理的记录覆盖先处理的记录。
+            // 接口节次超出 1～12 时找不到对应作息，因此不会新增节次。
             const first = defaultTimeSlots.find(item => item.number === slot.startSection);
             const last = defaultTimeSlots.find(item => item.number === slot.endSection);
 
@@ -321,11 +354,13 @@ function generateTimeSlots(timeSlotsFromAPI) {
 }
 
 // 主函数：获取并导入课程
+// 所有数据保存都 await V2 Promise 接口；获取失败、没有课程或课程保存失败时退出。
 async function importCourseSchedule() {
     try {
         console.log('开始导入 kbpro 课程表...');
         window.shiguangBridge.showToast('正在获取课程表...');
 
+        // 1. 获取学期信息供日志查看；此处不修改 App 的学期配置。
         const scheduleInfo = await fetchScheduleInfo();
         if (!scheduleInfo) {
             return false;
@@ -337,6 +372,7 @@ async function importCourseSchedule() {
             + `当前周: ${scheduleInfo.weekNum ?? '未知'}`
         );
 
+        // 2. 获取当前会话对应的课程数组，并转换为 App 需要的字段。
         const scheduleData = await fetchScheduleData();
         if (!scheduleData) {
             return false;
@@ -349,6 +385,8 @@ async function importCourseSchedule() {
             return false;
         }
 
+        // 3. 先保存课程：name、teacher、position、day、startSection、endSection、weeks。
+        // 起止时刻不直接放入课程对象，下一步单独保存每节作息。
         const coursesResult = await window.shiguangBridgePromise.saveImportedCourses(
             JSON.stringify(courses)
         );
@@ -362,6 +400,7 @@ async function importCourseSchedule() {
         console.log('课程导入成功');
         window.shiguangBridge.showToast(`成功导入 ${courses.length} 条课程记录！`);
 
+        // 4. 以 12 节默认作息为基础应用接口边界，再提交完整作息表。
         const finalTimeSlots = generateTimeSlots(timeSlots);
         console.log('时间段配置:', finalTimeSlots);
 
@@ -373,6 +412,7 @@ async function importCourseSchedule() {
             console.log('时间段导入成功');
             window.shiguangBridge.showToast('时间段配置成功！');
         } else {
+            // 返回 false 时保留已导入课程，并提示作息失败；抛出异常时则进入下面的 catch。
             console.warn('时间段导入失败，返回:', timeSlotsResult);
             window.shiguangBridge.showToast('课程已导入，但时间段配置失败');
         }
@@ -397,6 +437,7 @@ if (!isOnSchedulePage()) {
     setTimeout(async () => {
         const success = await importCourseSchedule();
         if (success) {
+            // 完成信号用于通知 App 收尾；获取或课程保存失败时不发送。
             window.shiguangBridge.notifyTaskCompletion();
         }
     }, 1000);
