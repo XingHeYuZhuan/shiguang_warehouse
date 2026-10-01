@@ -1,9 +1,9 @@
 # resources/CUST/adapters.yaml
 adapters:
   - adapter_id: "CUST_01"
-    adapter_name: "长春理工大学教务系统"
+    adapter_name: "长春理工大学教务系统（朝阳校区）"
     category: "BACHELOR_AND_ASSOCIATE"
-    asset_js_path: "cust.js"
+    asset_js_path: "cust_chaoyang.js"
     import_url: "https://mysso.cust.edu.cn/cas/login?service=https://jwgl.cust.edu.cn/welcome"
     maintainer: "itdong"
-    description: ""
+    description: "适用于朝阳校区，导入个人课程表并配置第 1～12 节作息时间。"
