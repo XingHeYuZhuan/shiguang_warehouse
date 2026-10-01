@@ -1,6 +1,7 @@
 // 福州职业技术学院（FVTI）课表导入
 // 课表走移动端接口 POST /studentportal.php/Appusermobile/zkcb（optype=xszkcb&dqz=周次）
 // 学期总周数与节次时间接口都不提供，从桌面周课表页读取（周次标签 + 行标题里的节次时间）
+// 读取失败时：总周数退回"最后一个有课的周"，节次时间则不导入（课程导入不受影响）
 // 合规：不使用自建 DOM 控件，交互全部走原生桥接；DOMParser 只解析接口返回的独立片段
 (function () {
     'use strict';
@@ -15,22 +16,6 @@
     var SCAN_MAX_WEEK = 24;    // 拿不到周数时的扫描上限
     var TIMEOUT_MS = 12000;
     var MAX_RETRY = 2;
-
-    // 兜底作息：万一读不到周课表页时使用（本校 12 节，午休两段不属于上课时段）
-    var FALLBACK_SECTION_TIMES = [
-        { number: 1, startTime: '08:30', endTime: '09:15' },
-        { number: 2, startTime: '09:20', endTime: '10:05' },
-        { number: 3, startTime: '10:25', endTime: '11:10' },
-        { number: 4, startTime: '11:15', endTime: '12:00' },
-        { number: 5, startTime: '14:00', endTime: '14:45' },
-        { number: 6, startTime: '14:50', endTime: '15:35' },
-        { number: 7, startTime: '15:55', endTime: '16:40' },
-        { number: 8, startTime: '16:45', endTime: '17:30' },
-        { number: 9, startTime: '18:15', endTime: '19:00' },
-        { number: 10, startTime: '19:05', endTime: '19:50' },
-        { number: 11, startTime: '19:55', endTime: '20:40' },
-        { number: 12, startTime: '20:45', endTime: '21:30' },
-    ];
 
     // ---------- 基础工具 ----------
 
@@ -266,7 +251,7 @@
 
         return {
             courses: courses,
-            timeSlots: (await fetchSectionTimes(weekTabs.firstWeekUrl)) || FALLBACK_SECTION_TIMES,
+            timeSlots: (await fetchSectionTimes(weekTabs.firstWeekUrl)) || [],
             totalWeeks: totalWeeks > 0 ? totalWeeks : Math.max(maxCourseWeek, 20),
             title: title,
             startDate: firstDates ? alignToMonday(fullDate(firstDates[0])) : '',
@@ -334,7 +319,7 @@
                     + '第 1 周：' + (data.firstWeekText || '（未返回日期）') + '\n'
                     + '学期：共 ' + data.totalWeeks + ' 周\n'
                     + '课程：' + data.courses.length + ' 条（' + Object.keys(names).length + ' 门）\n'
-                    + '作息：' + data.timeSlots.length + ' 节\n'
+                    + '作息：' + (data.timeSlots.length ? data.timeSlots.length + ' 节' : '未取到（已跳过时间段导入）') + '\n'
                     + '用时：' + (data.elapsedMs / 1000).toFixed(1) + 's',
                 '好的',
             );
