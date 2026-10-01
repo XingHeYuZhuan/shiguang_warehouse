@@ -17,12 +17,9 @@ shiguang_warehouse/
 ├───index/
 │   └───root_index.yaml      # 整个适配器仓库的根索引文件
 ├───resources/               # 资源目录
-│   ├───CUST/                # 学校目录
-│   │   ├───adapters.yaml    # 配置信息
-│   │   └───cust.js          # 适配脚本
-│   ├───GLOBAL_TOOLS/        # 通用工具
-│   │   ├───adapters.yaml
-│   │   ├───school.js        # 组件测试脚本
+│   ├───GLOBAL_TOOLS/        # 通用工具目录(目录名称和index规定的一致)
+│   │   ├───adapters.yaml    # 学校适配器配置信息(可以存放多个适配器)
+│   │   ├───school.js        # 适配代码(javascript文件，与学校适配器配置信息对应)   
 │   │   └───...
 │   └───...
 ├───proto/
