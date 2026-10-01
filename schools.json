@@ -5,7 +5,8 @@
     "initial": "C",
     "importUrl": "",
     "assetJsPath" : "schools/school.js",
-    "maintainer": "星河欲转"
+    "maintainer": "星河欲转",
+    "category": "GENERAL_TOOL"
   },
   {
     "id": "school_cust",
@@ -13,6 +14,16 @@
     "initial": "C",
     "importUrl": "https://mysso.cust.edu.cn/cas/login?service=https://jwgl.cust.edu.cn/welcome",
     "assetJsPath": "schools/cust.js",
-    "maintainer": "itdong"
+    "maintainer": "itdong",
+    "category": "BACHELOR_AND_ASSOCIATE"
+  },
+  {
+    "id": "school_shzq",
+    "name": "上海中侨职业技术大学",
+    "initial": "S",
+    "importUrl": "https://jw.shzq.edu.cn/jwglxt/",
+    "assetJsPath" : "schools/shzq.js",
+    "maintainer": "Kredenk",
+    "category": "BACHELOR_AND_ASSOCIATE"
   }
 ]

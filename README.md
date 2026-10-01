@@ -20,6 +20,7 @@
 | `importUrl`    | String  | 教务系统登录的 URL                      |
 | `assetJsPath`  | String  | 适配脚本路径（如 `schools/school.js`）  |
 | `maintainer`   | String  | 维护者信息（如姓名或 GitHub 用户名）    |
+| `category`   | String  | 适配类别。 `BACHELOR_AND_ASSOCIATE` 表示“本科/专科”，`POSTGRADUATE` 表示“研究生”，`GENERAL_TOOL` 表示“通用工具”。 |
 
 示例：
 ```json
@@ -30,7 +31,8 @@
     "initial": "C",
     "importUrl": "",
     "assetJsPath": "schools/school.js",
-    "maintainer": "星河欲转"
+   "maintainer": "星河欲转",
+   "category": "GENERAL_TOOL"
   }
 ]
 ```
@@ -43,18 +45,22 @@
 
 ## 开发流程
 
-1. **Fork 仓库**  
-   - 所有开发者需先 fork 本仓库（本仓库带有 `lighthouse` 标签，软件会自动校验仓库标签以保证数据来源正确）。
+1.  **Fork 仓库**
 
-2. **添加适配代码**  
-   - 在 `schools/` 文件夹下新建对应学校的适配 JS 文件。
-   - 在 `schools.json` 中添加学校索引信息，确保各字段填写完整。
+      - 所有开发者需先 fork 本仓库（本仓库带有 `lighthouse` 标签，已经在开发者软件版本关闭检查逻辑，希望各位开发者对使用的git仓库链接负责）。
 
-3. **软件测试**  
-   - 开发者需在软件的“我的-更多-更新仓库”中选择**自定义仓库或私有仓库**，来拉取并更新自己的仓库代码进行实际测试，完成 Beta 阶段适配验证。
+3.  **添加适配代码**
 
-4. **提交 PR**  
-   - 测试通过后，提交 Pull Request，等待审核合并。
+      - 在 `schools/` 文件夹下新建对应学校的适配 JS 文件。
+      - 在 `schools.json` 中添加学校索引信息，确保各字段填写完整。
+
+4.  **软件测试**
+
+      - 开发者需要安装 dev(开发者版，图标红色)版本app,在软件的“我的-更多-更新仓库”中选择**自定义仓库或私有仓库**，来拉取并更新自己的仓库代码进行实际测试，完成 Beta 阶段适配验证。
+
+5.  **提交 PR**
+
+      - 测试通过后，提交 Pull Request，等待审核合并。
 
 ## 社区约束
 
