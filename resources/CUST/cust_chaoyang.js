@@ -1,6 +1,8 @@
-// 文件: cust.js
-// 长春理工大学 kbpro 课程表导入脚本
+// 文件: cust_chaoyang.js
+// 长春理工大学朝阳校区 kbpro 课程表导入脚本
 //
+// 适用校区：朝阳校区；沿用现有第 1～12 节作息配置。
+// 导入学生个人课表，课程地点仍按接口返回的校区、教学楼和教室显示。
 // 导入流程：判断页面 → 获取学期和课程 → 合并课程 → 保存课程 → 保存每节作息 → 通知完成。
 // 数据分开保存：课程包含星期、周次和起止节次；作息表包含各节次的开始、结束时间。
 // 本脚本使用 V2 的 window.shiguangBridge / window.shiguangBridgePromise。
@@ -310,9 +312,10 @@ function convertScheduleData(apiData) {
     };
 }
 
-// 生成时间段配置
+// 生成朝阳校区时间段配置
 // 每节都有独立的 number、startTime、endTime；当前共配置 12 节，时刻格式为 HH:mm。
-// 下表是脚本内置的兜底作息，不表示每一节都由本次接口返回，也不是实时校验的官方作息。
+// 下表为现有朝阳校区的默认作息，不表示每一节都由本次接口返回。
+// 本文件的作息只用于朝阳校区；春明湖校区需另行配置独立脚本和时间表。
 // 课程记录只保存节次，App 使用这张作息表将节次对应到具体时间，不使用课程自定义时间模式。
 function generateTimeSlots(timeSlotsFromAPI) {
     const defaultTimeSlots = [
@@ -357,7 +360,7 @@ function generateTimeSlots(timeSlotsFromAPI) {
 // 所有数据保存都 await V2 Promise 接口；获取失败、没有课程或课程保存失败时退出。
 async function importCourseSchedule() {
     try {
-        console.log('开始导入 kbpro 课程表...');
+        console.log('开始导入朝阳校区 kbpro 课程表...');
         window.shiguangBridge.showToast('正在获取课程表...');
 
         // 1. 获取学期信息供日志查看；此处不修改 App 的学期配置。
@@ -400,9 +403,9 @@ async function importCourseSchedule() {
         console.log('课程导入成功');
         window.shiguangBridge.showToast(`成功导入 ${courses.length} 条课程记录！`);
 
-        // 4. 以 12 节默认作息为基础应用接口边界，再提交完整作息表。
+        // 4. 以朝阳校区 12 节默认作息为基础应用接口边界，再提交完整作息表。
         const finalTimeSlots = generateTimeSlots(timeSlots);
-        console.log('时间段配置:', finalTimeSlots);
+        console.log('朝阳校区时间段配置:', finalTimeSlots);
 
         const timeSlotsResult = await window.shiguangBridgePromise.savePresetTimeSlots(
             JSON.stringify(finalTimeSlots)
@@ -410,7 +413,7 @@ async function importCourseSchedule() {
 
         if (timeSlotsResult === true) {
             console.log('时间段导入成功');
-            window.shiguangBridge.showToast('时间段配置成功！');
+            window.shiguangBridge.showToast('朝阳校区作息配置成功！');
         } else {
             // 返回 false 时保留已导入课程，并提示作息失败；抛出异常时则进入下面的 catch。
             console.warn('时间段导入失败，返回:', timeSlotsResult);
@@ -430,8 +433,8 @@ async function importCourseSchedule() {
 if (!isOnSchedulePage()) {
     redirectToSchedulePage();
 } else {
-    console.log('已进入长春理工大学新版课表页面');
-    window.shiguangBridge.showToast('正在准备导入课程表...');
+    console.log('已进入长春理工大学朝阳校区新版课表导入流程');
+    window.shiguangBridge.showToast('正在准备导入朝阳校区课程表...');
 
     // 等待页面和登录态稳定后请求接口
     setTimeout(async () => {
