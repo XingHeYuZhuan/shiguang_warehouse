@@ -1,0 +1,9 @@
+# resources/TSU/adapters.yaml
+adapters:
+  - adapter_id: "TSU_01"
+    adapter_name: "泰山学院青果教务"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "tsu_01.js"
+    import_url: "http://jwxt.tsu.edu.cn"
+    maintainer: "素绫理"
+    description: "泰山学院青果教务系统课表适配，登陆后点击左侧【教学安排】，再点击【执行导入】即可，导入后不要忘记设置本学期的开学日期"
