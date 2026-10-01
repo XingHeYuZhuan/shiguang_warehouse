@@ -1,6 +1,6 @@
 // 福州职业技术学院（FVTI）课表导入
 // 课表走移动端接口 POST /studentportal.php/Appusermobile/zkcb（optype=xszkcb&dqz=周次）
-// 学期总周数接口不提供，单独用 1 次轻量请求从桌面周课表的周次标签读取
+// 学期总周数与节次时间接口都不提供，从桌面周课表页读取（周次标签 + 行标题里的节次时间）
 // 合规：不使用自建 DOM 控件，交互全部走原生桥接；DOMParser 只解析接口返回的独立片段
 (function () {
     'use strict';
@@ -16,8 +16,8 @@
     var TIMEOUT_MS = 12000;
     var MAX_RETRY = 2;
 
-    // 本校作息（12 节；中午 12:10-12:55 / 13:05-13:50 不是上课时段）
-    var SECTION_TIMES = [
+    // 兜底作息：万一读不到周课表页时使用（本校 12 节，午休两段不属于上课时段）
+    var FALLBACK_SECTION_TIMES = [
         { number: 1, startTime: '08:30', endTime: '09:15' },
         { number: 2, startTime: '09:20', endTime: '10:05' },
         { number: 3, startTime: '10:25', endTime: '11:10' },
@@ -90,17 +90,39 @@
         return { week: week, title: json.Data.title || '', dates: (json.Data.kcbrq || []).map(function (x) { return x.rq; }), table: parseTable(json.Data.kcb) };
     }
 
-    // 取学期总周数：桌面周课表壳页里每周地址含 /dqz/N/，最大 N 即教务配置的周数
-    async function fetchTotalWeeks() {
+    // 桌面周课表壳页：既给学期总周数（每周地址含 /dqz/N/），也给第 1 周的地址
+    async function fetchWeekTabs() {
         try {
             var html = await request(WEEK_TABS, {});
             var max = 0;
             var re = /\/dqz\/(\d+)\//g;
             var m;
             while ((m = re.exec(html)) !== null) if (Number(m[1]) > max) max = Number(m[1]);
-            return max;
+            var first = /attr\('src','([^']+)'\)/.exec(html);
+            return { totalWeeks: max, firstWeekUrl: first ? first[1] : '' };
         } catch (e) {
-            return 0;
+            return { totalWeeks: 0, firstWeekUrl: '' };
+        }
+    }
+
+    // 节次时间：接口只给节次序号，时间从周课表页行标题（"第1节<br>08:30-09:15"）读取
+    async function fetchSectionTimes(firstWeekUrl) {
+        if (!firstWeekUrl) return null;
+        try {
+            var html = await request(firstWeekUrl, {});
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            var rows = Array.prototype.slice.call(doc.querySelectorAll('tr'));
+            var slots = [];
+            for (var i = 1; i < rows.length; i++) {
+                var td = rows[i].querySelector('td');
+                if (!td) continue;
+                var sec = /第(\d+)节/.exec(norm(td.textContent));
+                var time = /(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/.exec(td.innerHTML.replace(/<br\s*\/?>/gi, ' '));
+                if (sec && time) slots.push({ number: Number(sec[1]), startTime: time[1], endTime: time[2] });
+            }
+            return slots.length ? slots : null;
+        } catch (e) {
+            return null;
         }
     }
 
@@ -205,12 +227,13 @@
         var firstDates = null;
         var failed = [];
 
-        var totalWeeksPromise = fetchTotalWeeks();
+        var weekTabsPromise = fetchWeekTabs();
         var first = [];
         for (var i = 1; i <= CHUNK; i++) first.push(i);
         var results = await fetchChunks(first);
 
-        var totalWeeks = await totalWeeksPromise;
+        var weekTabs = await weekTabsPromise;
+        var totalWeeks = weekTabs.totalWeeks;
         var scanCount = totalWeeks > 0 ? totalWeeks : SCAN_MAX_WEEK;
         var rest = [];
         for (var j = CHUNK + 1; j <= scanCount; j++) rest.push(j);
@@ -243,7 +266,7 @@
 
         return {
             courses: courses,
-            timeSlots: SECTION_TIMES,
+            timeSlots: (await fetchSectionTimes(weekTabs.firstWeekUrl)) || FALLBACK_SECTION_TIMES,
             totalWeeks: totalWeeks > 0 ? totalWeeks : Math.max(maxCourseWeek, 20),
             title: title,
             startDate: firstDates ? alignToMonday(fullDate(firstDates[0])) : '',
