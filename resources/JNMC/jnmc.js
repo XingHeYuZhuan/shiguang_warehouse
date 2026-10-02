@@ -168,11 +168,16 @@ function extractSemesterOptions(doc) {
 
 // 导入前提示先登录教务系统
 async function promptUserToStart() {
-    return await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.AndroidBridgePromise.showAlert(
         "济宁医学院教务导入",
         "请先确保已登录教务系统，再继续导入。",
         "我已登录"
     );
+    if (!confirmed) {
+        AndroidBridge.showToast("用户取消了导入。");
+        return null;
+    }
+    return true;
 }
 
 // 选择学期
@@ -314,8 +319,8 @@ async function savePresetTimeSlots() {
 // 主流程：提示 → 选学期 → 拉课表 → 保存课程与作息
 async function runImportFlow() {
     try {
-        const confirmed = await promptUserToStart();
-        if (!confirmed) { AndroidBridge.showToast("导入已取消"); return; }
+        const alertConfirmed = await promptUserToStart();
+        if (!alertConfirmed) return;
 
         const pageHtml = await fetchSchedulePage();
         const semesterOptions = extractSemesterOptions(new DOMParser().parseFromString(pageHtml, "text/html"));
