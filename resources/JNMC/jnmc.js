@@ -168,13 +168,13 @@ function extractSemesterOptions(doc) {
 
 // 导入前提示先登录教务系统
 async function promptUserToStart() {
-    const confirmed = await window.AndroidBridgePromise.showAlert(
+    const confirmed = await window.shiguangBridgePromise.showAlert(
         "济宁医学院教务导入",
         "请先确保已登录教务系统，再继续导入。",
         "我已登录"
     );
     if (!confirmed) {
-        AndroidBridge.showToast("用户取消了导入。");
+        window.shiguangBridge.showToast("用户取消了导入。");
         return null;
     }
     return true;
@@ -182,7 +182,7 @@ async function promptUserToStart() {
 
 // 选择学期
 async function selectSemester(semesterOptions) {
-    const selectedIndex = await window.AndroidBridgePromise.showSingleSelection(
+    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
         "选择学期",
         JSON.stringify(semesterOptions.semesters),
         semesterOptions.defaultIndex
@@ -305,15 +305,15 @@ function mergeWeeklyAndFallbackCourses(kbxx, weeklyData) {
 }
 
 async function saveCourseConfig(config) {
-    await window.AndroidBridgePromise.saveCourseConfig(JSON.stringify(config));
+    await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
 }
 
 async function saveCourses(courses) {
-    await window.AndroidBridgePromise.saveImportedCourses(JSON.stringify(courses));
+    await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
 }
 
 async function savePresetTimeSlots() {
-    await window.AndroidBridgePromise.savePresetTimeSlots(JSON.stringify(PRESET_TIME_SLOTS));
+    await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(PRESET_TIME_SLOTS));
 }
 
 // 主流程：提示 → 选学期 → 拉课表 → 保存课程与作息
@@ -327,15 +327,15 @@ async function runImportFlow() {
         if (!semesterOptions) throw new Error("未找到学期列表，请先登录教务系统");
 
         const semester = await selectSemester(semesterOptions);
-        if (!semester) { AndroidBridge.showToast("导入已取消"); return; }
+        if (!semester) { window.shiguangBridge.showToast("导入已取消"); return; }
 
-        AndroidBridge.showToast(`正在获取 ${semester.label} 的课表...`);
+        window.shiguangBridge.showToast(`正在获取 ${semester.label} 的课表...`);
         const allCourseData = await fetchCourseData(semester.value);
         const weeklyData = await fetchWeeklyCourses(semester.value, allCourseData);
         const courses = mergeWeeklyAndFallbackCourses(allCourseData, weeklyData);
 
         if (courses.length === 0) {
-            await window.AndroidBridgePromise.showAlert(
+            await window.shiguangBridgePromise.showAlert(
                 "提示",
                 "该学期没有获取到课程数据，请检查登录状态和所选学期。",
                 "确定"
@@ -356,13 +356,16 @@ async function runImportFlow() {
         try {
             await savePresetTimeSlots();
         } catch (error) {
-            AndroidBridge.showToast(`课程已导入，作息时间导入失败：${error.message}`);
+            window.shiguangBridge.showToast(`课程已导入，作息时间导入失败：${error.message}`);
         }
 
-        AndroidBridge.showToast(`成功导入 ${courses.length} 门课程！`);
-        AndroidBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast(`成功导入 ${courses.length} 门课程！`);
+        if (!weeklyData.semesterStartDate) {
+            window.shiguangBridge.showToast("未获取到开学日期，请在应用内手动设置。");
+        }
+        window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
-        await window.AndroidBridgePromise.showAlert(
+        await window.shiguangBridgePromise.showAlert(
             "导入失败",
             error.message || String(error),
             "确定"
