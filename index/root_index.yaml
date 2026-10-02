@@ -218,6 +218,11 @@ schools:
     initial: "F"
     resource_folder: "FJPIT"
 
+  - id: "FVTI"
+    name: "福州职业技术大学"
+    initial: "F"
+    resource_folder: "FVTI"
+
   - id: "FOSU"
     name: "佛山大学"
     initial: "F"
