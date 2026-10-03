@@ -1027,3 +1027,8 @@ schools:
     name: "西安建筑科技大学"
     initial: "X"
     resource_folder: "XAUAT"
+
+  - id: "XHSYSU"
+    name: "广州新华学院"
+    initial: "G"
+    resource_folder: "XHSYSU"
