@@ -1187,4 +1187,9 @@ schools:
     name: "泉州职业技术大学"
     initial: "Q"
     resource_folder: "QVTU"
+
+  - id: "ZJBTI"
+    name: "浙江工商职业技术学院"
+    initial: "Z"
+    resource_folder: "ZJBTI"
     

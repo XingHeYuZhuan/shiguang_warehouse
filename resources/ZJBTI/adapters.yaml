@@ -1,0 +1,9 @@
+# resources/ZJBTI/adapters.yaml
+adapters:
+  - adapter_id: "ZJBTI_01"
+    adapter_name: "浙江工商职业技术学院教务系统"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "zjbti.js"
+    import_url: "https://cas.zjbti.net.cn"
+    maintainer: "LanRhyme"
+    description: "登录教务系统进入首页，确认课表看板加载完毕后点击导入"
