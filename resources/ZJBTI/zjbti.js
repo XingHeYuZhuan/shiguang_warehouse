@@ -61,39 +61,73 @@ function parseAndMergeKingosoftData(htmlText) {
 
     if (!table) return [];
 
-    const rows = table.querySelectorAll("tr");
-    rows.forEach(row => {
-        const cells = row.querySelectorAll("td.td, td[class*='td']");
-        if (cells.length === 0) return;
+    // 动态确定星期列数 (一般为 7 列 或 5 列)
+    let totalDays = 7;
+    for (const tr of Array.from(table.rows)) {
+        const texts = Array.from(tr.cells).map(c => c.textContent.trim());
+        const hasMon = texts.some(t => t.includes("一") || t.includes("周一") || t.includes("星期一"));
+        const hasSun = texts.some(t => t.includes("日") || t.includes("周日") || t.includes("星期日"));
+        const hasSat = texts.some(t => t.includes("六") || t.includes("周六") || t.includes("星期六"));
+        const hasFri = texts.some(t => t.includes("五") || t.includes("周五") || t.includes("星期五"));
+        if (hasMon && (hasSun || hasSat)) {
+            totalDays = 7;
+            break;
+        } else if (hasMon && hasFri) {
+            totalDays = 5;
+            break;
+        }
+    }
 
-        cells.forEach((cell, dayIndex) => {
-            const day = dayIndex + 1;
-            const courseDivs = cell.querySelectorAll("div[style*='padding-bottom:5px'], div");
+    const rows = Array.from(table.rows);
+    rows.forEach(row => {
+        const cells = Array.from(row.cells);
+        if (cells.length < totalDays) return;
+
+        cells.forEach((cell, colIndex) => {
+            const distanceToLast = cells.length - 1 - colIndex;
+            if (distanceToLast >= totalDays) return;
+            const day = totalDays - distanceToLast;
+
+            let courseDivs = Array.from(cell.querySelectorAll("div[style*='padding-bottom']"));
+            if (courseDivs.length === 0) {
+                const allDivs = Array.from(cell.querySelectorAll("div"));
+                courseDivs = allDivs.filter(d => /\[\d+.*\]/.test(d.textContent));
+            }
+            if (courseDivs.length === 0 && /\[\d+.*\]/.test(cell.textContent)) {
+                courseDivs = [cell];
+            }
 
             courseDivs.forEach(div => {
-                const lines = Array.from(div.childNodes)
+                let lines = Array.from(div.childNodes)
                     .map(n => n.textContent.trim())
                     .filter(t => t.length > 0);
+                if (lines.length === 1 && lines[0].includes("\n")) {
+                    lines = lines[0].split(/\n+/).map(t => t.trim()).filter(t => t.length > 0);
+                }
 
-                if (lines.length >= 3) {
-                    const name = lines[0];
-                    const teacher = lines[1];
-                    const timeMatch = lines[2].match(/(.*)\[(.*)\]/);
-                    const position = lines[3] || "未知地点";
-
+                const timeIndex = lines.findIndex(l => /(.*)\[(.*)\]/.test(l));
+                if (timeIndex !== -1) {
+                    const timeMatch = lines[timeIndex].match(/(.*)\[(.*)\]/);
                     if (timeMatch) {
                         const weeks = parseWeeks(timeMatch[1]);
-                        const sections = timeMatch[2].split("-").map(Number);
+                        const sectionStr = timeMatch[2].replace(/[^\d\-]/g, "");
+                        const sections = sectionStr.split("-").map(Number).filter(n => !isNaN(n));
 
-                        rawItems.push({
-                            name,
-                            teacher,
-                            position,
-                            day,
-                            startSection: sections[0],
-                            endSection: sections[sections.length - 1],
-                            weeks
-                        });
+                        if (weeks.length > 0 && sections.length > 0) {
+                            const name = lines[0] || "未知课程";
+                            const teacher = timeIndex > 1 ? lines[1] : "";
+                            const position = lines.slice(timeIndex + 1).join(" ") || "未知地点";
+
+                            rawItems.push({
+                                name,
+                                teacher,
+                                position,
+                                day,
+                                startSection: sections[0],
+                                endSection: sections[sections.length - 1],
+                                weeks
+                            });
+                        }
                     }
                 }
             });
@@ -356,12 +390,7 @@ async function runImportFlow() {
             return;
         }
 
-        const confirmed = await window.shiguangBridgePromise.showAlert(
-            "教务导入",
-            "已检测到教务管理系统，准备拉取学期列表并导入课表",
-            "开始导入"
-        );
-        if (!confirmed) return;
+        window.shiguangBridge.showToast("已连接教务管理，正在获取学期信息...");
 
         const baseUrl = getJwBaseUrl();
 
