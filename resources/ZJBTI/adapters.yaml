@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "zjbti.js"
     import_url: "https://webvpn.zjbti.net.cn"
     maintainer: "LanRhyme"
-    description: "登录 WebVPN 或教务系统进入首页，确认课表看板加载完毕后点击导入"
+    description: "登录WebVPN后点击进入教务系统，在首页课表区域切换为「学期课表」，加载完成后点击导入"
