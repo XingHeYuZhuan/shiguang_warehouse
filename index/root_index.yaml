@@ -1197,3 +1197,8 @@ schools:
     name: "广州新华学院"
     initial: "G"
     resource_folder: "XHSYSU"
+
+  - id: "HZU"
+    name: "菏泽学院"
+    initial: "H"
+    resource_folder: "HZU"

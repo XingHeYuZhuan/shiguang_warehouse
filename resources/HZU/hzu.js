@@ -1,0 +1,285 @@
+// 菏泽学院强智教务：新版学期理论课表（viweType=0）。
+// 参考仓库 CSUFT/MKU 的新版强智 DOM 结构，按本站实测重写。
+// 不保存登录凭据；所有请求沿用当前 WebView 的会话与协议。
+
+function hzuUrl(path) {
+    const pathname = window.location.pathname;
+    const index = pathname.indexOf("/jsxsd/");
+    if (index < 0 && !pathname.endsWith("/jsxsd")) {
+        throw new Error("请先登录菏泽学院教务系统，再开始导入。");
+    }
+    const prefix = index >= 0 ? pathname.slice(0, index) : pathname.slice(0, -6);
+    return window.location.origin + prefix + "/jsxsd" + path;
+}
+
+async function hzuFetchDocument(path) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try {
+        const response = await fetch(hzuUrl(path), {
+            credentials: "include",
+            signal: controller.signal
+        });
+        if (!response.ok) throw new Error("教务请求失败：HTTP " + response.status);
+        return new DOMParser().parseFromString(await response.text(), "text/html");
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+function hzuSemesters(doc) {
+    const select = doc.querySelector("#xnxq01id");
+    if (!select) throw new Error("登录已失效或未获取到课表页面，请重新登录。");
+    return Array.from(select.options).filter(option => option.value).map(option => ({
+        value: option.value,
+        text: option.textContent.trim(),
+        selected: option.selected
+    }));
+}
+
+function hzuCheckSemester(doc, semesterId) {
+    const value = doc.querySelector("#xnxq")?.value || doc.querySelector("#xnxq01id")?.value;
+    if (value !== semesterId) throw new Error("教务返回的学期与所选学期不一致，请重新查询。");
+}
+
+function hzuNumbers(text, limit) {
+    const numbers = [];
+    const parts = text.replace(/\s/g, "").split(/[,，、]/);
+    for (const part of parts) {
+        const match = part.match(/^(\d+)(?:[-~～—至](\d+))?$/);
+        if (!match) throw new Error("无法识别周次或节次：" + text);
+        const start = Number(match[1]);
+        const end = Number(match[2] || match[1]);
+        if (start < 1 || end < start || end > limit) throw new Error("周次或节次超出范围：" + text);
+        for (let number = start; number <= end; number++) numbers.push(number);
+    }
+    return Array.from(new Set(numbers)).sort((a, b) => a - b);
+}
+
+function hzuParseTime(text) {
+    const sectionMatch = text.match(/[\[［]([^[\]［］]+)节[\]］]/);
+    if (!sectionMatch || !text.slice(0, sectionMatch.index).includes("周")) {
+        throw new Error("课程缺少有效的周次或节次：" + text);
+    }
+    const weekText = text.slice(0, sectionMatch.index).replace(/第|周|\s/g, "");
+    const weeks = [];
+    for (const part of weekText.split(/[,，、]/)) {
+        const parity = part.match(/[（(]?(单|双)[）)]?$/);
+        const range = parity ? part.slice(0, parity.index) : part;
+        weeks.push(...hzuNumbers(range, 100).filter(week =>
+            !parity || week % 2 === (parity[1] === "单" ? 1 : 0)));
+    }
+    const sections = hzuNumbers(sectionMatch[1], 30);
+    // 不连续的节次拆开，不能把未上课的小节填进连续区间。
+    const ranges = [];
+    for (const section of sections) {
+        const last = ranges[ranges.length - 1];
+        if (last && last.endSection + 1 === section) last.endSection = section;
+        else ranges.push({ startSection: section, endSection: section });
+    }
+    const sortedWeeks = Array.from(new Set(weeks)).sort((a, b) => a - b);
+    if (!sortedWeeks.length) throw new Error("课程周次为空：" + text);
+    return { weeks: sortedWeeks, ranges };
+}
+
+function hzuGrid(table) {
+    const grid = [];
+    Array.from(table.rows).forEach((row, r) => {
+        if (!grid[r]) grid[r] = [];
+        let column = 0;
+        Array.from(row.cells).forEach(cell => {
+            while (grid[r][column]) column++;
+            for (let dr = 0; dr < (cell.rowSpan || 1); dr++) {
+                if (!grid[r + dr]) grid[r + dr] = [];
+                for (let dc = 0; dc < (cell.colSpan || 1); dc++) {
+                    grid[r + dr][column + dc] = cell;
+                }
+            }
+            column += cell.colSpan || 1;
+        });
+    });
+    return grid;
+}
+
+function hzuField(text, label) {
+    return (text.match(new RegExp(label + "[:：]\\s*([^;；]*)")) || [])[1]?.trim() || "";
+}
+
+function hzuParseCourses(doc) {
+    const table = doc.querySelector('td[name="kbDataTd"]')?.closest("table");
+    if (!table) {
+        if (doc.querySelector("#xnxq01id")) return [];
+        throw new Error("未获取到课表，请重新登录教务系统。");
+    }
+    const grid = hzuGrid(table);
+    const days = new Map();
+    const dayNames = "一二三四五六日";
+    for (const row of grid) {
+        row.forEach((cell, column) => {
+            if (cell.tagName !== "TH") return;
+            const match = cell.textContent.trim().match(/^(?:星期|周)([一二三四五六日天])/);
+            if (match) days.set(column, match[1] === "天" ? 7 : dayNames.indexOf(match[1]) + 1);
+        });
+    }
+    if (days.size !== 7) throw new Error("无法识别课表的星期表头，已停止导入。");
+
+    const seen = new Set();
+    const merged = new Map();
+    for (const row of grid) {
+        for (const [column, day] of days) {
+            const cell = row[column];
+            if (!cell || seen.has(cell) || cell.getAttribute("name") !== "kbDataTd") continue;
+            seen.add(cell);
+            // 只读简表课程，跳过同一格内 tooltip 的重复详情。
+            for (const item of cell.querySelectorAll("ul.courselists > li.courselists-item")) {
+                const name = item.querySelector(".qz-hasCourse-title")?.textContent.trim();
+                const info = item.querySelector(".qz-hasCourse-abbrinfo")?.textContent.trim() || "";
+                if (!name) throw new Error("课表中有无法识别的课程名称，已停止导入。");
+                const time = hzuParseTime(hzuField(info, "时间"));
+                const teacher = hzuField(info, "老师");
+                const location = hzuField(info, "地点");
+                const position = /^[（(]\s*[）)]$/.test(location) ? "" : location;
+                for (const range of time.ranges) {
+                    const key = JSON.stringify([name, teacher, position, day, range.startSection, range.endSection]);
+                    if (merged.has(key)) {
+                        const course = merged.get(key);
+                        course.weeks = Array.from(new Set(course.weeks.concat(time.weeks))).sort((a, b) => a - b);
+                    } else {
+                        merged.set(key, { name, teacher, position, day, ...range, weeks: time.weeks.slice() });
+                    }
+                }
+            }
+        }
+    }
+    return Array.from(merged.values());
+}
+
+function hzuCalendar(doc, semesterId) {
+    hzuCheckSemester(doc, semesterId);
+    const table = doc.querySelector("#dataTable");
+    if (!table) throw new Error("未找到教学周历。");
+    const anchors = [];
+    let totalWeeks = 0;
+    for (const row of table.rows) {
+        const match = row.cells[0]?.textContent.match(/第\s*(\d+)\s*周/);
+        if (!match) continue;
+        const week = Number(match[1]);
+        if (week < 1 || week > 100) throw new Error("教学周历周次异常。");
+        totalWeeks = Math.max(totalWeeks, week);
+        for (let day = 0; day < 7; day++) {
+            const cell = row.cells[day + 1];
+            const date = cell?.textContent.match(/(\d{1,2})月(\d{1,2})日/);
+            if (date) anchors.push({ offset: (week - 1) * 7 + day, month: Number(date[1]), day: Number(date[2]) });
+        }
+    }
+    if (!anchors.length || !totalWeeks) throw new Error("教学周历缺少日期。");
+    anchors.sort((a, b) => a.offset - b.offset);
+    const term = semesterId.match(/^(\d{4})-\d{4}-([12])$/);
+    if (!term) throw new Error("无法识别校历学期。");
+    const first = anchors[0];
+    const year = Number(term[1]) + (term[2] === "2" || first.month < 7 ? 1 : 0);
+    const dayMs = 86400000;
+    const startMs = Date.UTC(year, first.month - 1, first.day) - first.offset * dayMs;
+    if (new Date(startMs).getUTCDay() !== 1 || anchors.some(anchor => {
+        const date = new Date(startMs + anchor.offset * dayMs);
+        return date.getUTCMonth() + 1 !== anchor.month || date.getUTCDate() !== anchor.day;
+    })) throw new Error("教学周历日期不一致，无法确定开学日期。");
+    return { semesterStartDate: new Date(startMs).toISOString().slice(0, 10), semesterTotalWeeks: totalWeeks };
+}
+
+function hzuTimeSlots(doc) {
+    const slots = [];
+    const toMinutes = time => Number(time.split(":")[0]) * 60 + Number(time.split(":")[1]);
+    const format = minutes => String(Math.floor(minutes / 60)).padStart(2, "0") + ":" +
+        String(minutes % 60).padStart(2, "0");
+    for (const cell of doc.querySelectorAll('td[name="timeTd"]')) {
+        const text = cell.textContent;
+        const sectionText = text.match(/[（(]([\d、，,\s]+)小节[）)]/);
+        const times = text.match(/(\d{1,2}:\d{2})\s*[~～-]\s*(\d{1,2}:\d{2})/);
+        if (!sectionText || !times) return [];
+        const sections = hzuNumbers(sectionText[1], 30);
+        const start = toMinutes(times[1]);
+        const end = toMinutes(times[2]);
+        // 大节只能确定起止；50/10 的小节拆分必须由用户确认。
+        if (end - start !== sections.length * 50 + (sections.length - 1) * 10 ||
+            end >= 1440 || sections.some((section, i) => section !== slots.length + i + 1)) return [];
+        sections.forEach((number, i) => slots.push({
+            number, startTime: format(start + i * 60), endTime: format(start + i * 60 + 50)
+        }));
+    }
+    return slots;
+}
+
+async function hzuRunImportFlow() {
+    const bridge = window.shiguangBridge;
+    const api = window.shiguangBridgePromise;
+    if (!bridge || !api) throw new Error("未检测到拾光桥接接口，请在软件或测试插件中运行。");
+    if (!await api.showAlert("菏泽学院课表导入", "请确认已登录教务系统。将读取所选学期的全部周课程。", "开始导入")) return;
+
+    bridge.showToast("正在读取学期列表...");
+    const firstDoc = await hzuFetchDocument("/xskb/xskb_list.do?viweType=0&zc=");
+    const semesters = hzuSemesters(firstDoc);
+    if (!semesters.length) throw new Error("教务未提供可导入的学期。");
+    const index = await api.showSingleSelection("选择学期",
+        JSON.stringify(semesters.map(semester => semester.text)),
+        Math.max(0, semesters.findIndex(semester => semester.selected)));
+    if (index === null) return;
+    if (!Number.isInteger(index) || !semesters[index]) throw new Error("学期选择无效。");
+    const semesterId = semesters[index].value;
+    const params = new URLSearchParams({ viweType: "0", zc: "", xnxq01id: semesterId });
+    const mode = firstDoc.querySelector("#kbjcmsid")?.value;
+    if (mode) params.set("kbjcmsid", mode);
+    const doc = await hzuFetchDocument("/xskb/xskb_list.do?" + params);
+    hzuCheckSemester(doc, semesterId);
+    const courses = hzuParseCourses(doc);
+    if (!courses.length) {
+        bridge.showToast("该学期暂无已排课课程，未修改原有课表。");
+        return;
+    }
+
+    let config = null;
+    try {
+        config = hzuCalendar(await hzuFetchDocument("/jxzl/jxzl_query?xnxq01id=" +
+            encodeURIComponent(semesterId)), semesterId);
+        if (courses.some(course => course.weeks.some(week => week > config.semesterTotalWeeks))) {
+            throw new Error("课程周次超出教学周历。");
+        }
+    } catch (_) {
+        config = null;
+        if (!await api.showAlert("教学周历不可用",
+            "无法确定所选学期的开学日期与总周数。继续导入后，请在课表设置中核对学期配置。", "继续导入")) return;
+    }
+
+    let slots = hzuTimeSlots(doc);
+    if (slots.length && slots.length >= Math.max(...courses.map(course => course.endSection))) {
+        const choice = await api.showSingleSelection("确认小节作息",
+            JSON.stringify(["每小节50分钟，课间10分钟（按教务大节起止拆分）", "不导入作息时间"]), 0);
+        if (choice === null) return;
+        if (choice !== 0 && choice !== 1) throw new Error("作息选择无效。");
+        if (choice === 1) slots = [];
+    } else {
+        slots = [];
+    }
+    // 只在全部读取和确认完成后写入；保存失败不能发出完成信号。
+    if (config) {
+        config.firstDayOfWeek = 1;
+        if (slots.length) {
+            config.defaultClassDuration = 50;
+            config.defaultBreakDuration = 10;
+        }
+        if (await api.saveCourseConfig(JSON.stringify(config)) === false) throw new Error("学期配置保存失败。");
+    }
+    if (slots.length && await api.savePresetTimeSlots(JSON.stringify(slots)) === false) {
+        throw new Error("作息时间保存失败。");
+    }
+    if (await api.saveImportedCourses(JSON.stringify(courses)) === false) throw new Error("课程保存失败。");
+    bridge.showToast("成功导入 " + courses.length + " 条上课记录" +
+        (slots.length ? "" : "，请核对小节作息"));
+    bridge.notifyTaskCompletion();
+}
+
+// Start import.
+hzuRunImportFlow().catch(error => {
+    console.error("HZU import failed:", error);
+    if (window.shiguangBridge) window.shiguangBridge.showToast("导入失败：" + error.message);
+});
