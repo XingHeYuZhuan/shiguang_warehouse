@@ -121,6 +121,32 @@ function hzuLoginMessage(doc) {
     return doc.querySelector("#showMsg")?.textContent.trim() || "登录未成功，请核对账号和密码后重试。";
 }
 
+async function hzuSubmitLogin(body) {
+    let result = null;
+    let interrupted = false;
+    try {
+        result = await hzuFetchDocument("/xk/LoginToXk", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body
+        });
+    } catch (error) {
+        const nativeRequests = typeof window.WebPostService?.register === "function";
+        if (!nativeRequests || !["TypeError", "AbortError"].includes(error.name)) throw error;
+        // App 已同步重定向响应的 Cookie，但非主页面的 3xx 会退回 WebView 而报网络错误。
+        // 不重发登录 POST，只用原生 GET 验证服务器是否已经建立会话。
+        interrupted = true;
+    }
+    if (result?.querySelector('form[name="loginForm"]')) throw new Error(hzuLoginMessage(result));
+    const doc = await hzuFetchDocument("/xskb/xskb_list.do?viweType=0&zc=");
+    if (interrupted && doc.querySelector('form[name="loginForm"]')) {
+        throw new Error("登录请求已中断，且未能确认登录会话，请重试。");
+    }
+    // HTTP 200 或网络错误都不能单独判定登录结果，课表会话才是依据。
+    hzuSemesters(doc);
+    return doc;
+}
+
 async function hzuLogin() {
     if (document.getElementById("hzu-login")) throw new Error("登录窗口已打开。");
     const host = document.createElement("div");
@@ -203,15 +229,7 @@ async function hzuLogin() {
                     }
                     const body = hzuLoginParameters(loginDoc, accountInput.value.trim(), passwordInput.value).toString();
                     passwordInput.value = "";
-                    const result = await hzuFetchDocument("/xk/LoginToXk", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                        body
-                    });
-                    if (result.querySelector('form[name="loginForm"]')) throw new Error(hzuLoginMessage(result));
-                    // HTTP 200/跳转不代表登录成功，必须验证课表会话。
-                    const doc = await hzuFetchDocument("/xskb/xskb_list.do?viweType=0&zc=");
-                    hzuSemesters(doc);
+                    const doc = await hzuSubmitLogin(body);
                     resolve(doc);
                 } catch (failure) {
                     error.textContent = failure.message || "登录请求失败，请重试。";
