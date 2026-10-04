@@ -2,6 +2,19 @@
 // 参考仓库 CSUFT/MKU 的新版强智 DOM 结构，按本站实测重写。
 // 不保存登录凭据；所有请求沿用当前 WebView 的会话与协议。
 
+const HZU_TIME_SLOTS = [
+    { number: 1, startTime: "08:00", endTime: "08:50" },
+    { number: 2, startTime: "09:00", endTime: "09:50" },
+    { number: 3, startTime: "10:10", endTime: "11:00" },
+    { number: 4, startTime: "11:10", endTime: "12:00" },
+    { number: 5, startTime: "14:30", endTime: "15:20" },
+    { number: 6, startTime: "15:30", endTime: "16:20" },
+    { number: 7, startTime: "16:40", endTime: "17:30" },
+    { number: 8, startTime: "17:40", endTime: "18:30" },
+    { number: 9, startTime: "19:30", endTime: "20:20" },
+    { number: 10, startTime: "20:30", endTime: "21:20" }
+];
+
 function hzuUrl(path) {
     const pathname = window.location.pathname;
     const index = pathname.indexOf("/jsxsd/");
@@ -187,29 +200,6 @@ function hzuCalendar(doc, semesterId) {
     return { semesterStartDate: new Date(startMs).toISOString().slice(0, 10), semesterTotalWeeks: totalWeeks };
 }
 
-function hzuTimeSlots(doc) {
-    const slots = [];
-    const toMinutes = time => Number(time.split(":")[0]) * 60 + Number(time.split(":")[1]);
-    const format = minutes => String(Math.floor(minutes / 60)).padStart(2, "0") + ":" +
-        String(minutes % 60).padStart(2, "0");
-    for (const cell of doc.querySelectorAll('td[name="timeTd"]')) {
-        const text = cell.textContent;
-        const sectionText = text.match(/[（(]([\d、，,\s]+)小节[）)]/);
-        const times = text.match(/(\d{1,2}:\d{2})\s*[~～-]\s*(\d{1,2}:\d{2})/);
-        if (!sectionText || !times) return [];
-        const sections = hzuNumbers(sectionText[1], 30);
-        const start = toMinutes(times[1]);
-        const end = toMinutes(times[2]);
-        // 大节只能确定起止；50/10 的小节拆分必须由用户确认。
-        if (end - start !== sections.length * 50 + (sections.length - 1) * 10 ||
-            end >= 1440 || sections.some((section, i) => section !== slots.length + i + 1)) return [];
-        sections.forEach((number, i) => slots.push({
-            number, startTime: format(start + i * 60), endTime: format(start + i * 60 + 50)
-        }));
-    }
-    return slots;
-}
-
 async function hzuRunImportFlow() {
     const bridge = window.shiguangBridge;
     const api = window.shiguangBridgePromise;
@@ -250,31 +240,18 @@ async function hzuRunImportFlow() {
             "无法确定所选学期的开学日期与总周数。继续导入后，请在课表设置中核对学期配置。", "继续导入")) return;
     }
 
-    let slots = hzuTimeSlots(doc);
-    if (slots.length && slots.length >= Math.max(...courses.map(course => course.endSection))) {
-        const choice = await api.showSingleSelection("确认小节作息",
-            JSON.stringify(["每小节50分钟，课间10分钟（按教务大节起止拆分）", "不导入作息时间"]), 0);
-        if (choice === null) return;
-        if (choice !== 0 && choice !== 1) throw new Error("作息选择无效。");
-        if (choice === 1) slots = [];
-    } else {
-        slots = [];
-    }
     // 只在全部读取和确认完成后写入；保存失败不能发出完成信号。
     if (config) {
         config.firstDayOfWeek = 1;
-        if (slots.length) {
-            config.defaultClassDuration = 50;
-            config.defaultBreakDuration = 10;
-        }
+        config.defaultClassDuration = 50;
+        config.defaultBreakDuration = 10;
         if (await api.saveCourseConfig(JSON.stringify(config)) === false) throw new Error("学期配置保存失败。");
     }
-    if (slots.length && await api.savePresetTimeSlots(JSON.stringify(slots)) === false) {
+    if (await api.savePresetTimeSlots(JSON.stringify(HZU_TIME_SLOTS)) === false) {
         throw new Error("作息时间保存失败。");
     }
     if (await api.saveImportedCourses(JSON.stringify(courses)) === false) throw new Error("课程保存失败。");
-    bridge.showToast("成功导入 " + courses.length + " 条上课记录" +
-        (slots.length ? "" : "，请核对小节作息"));
+    bridge.showToast("成功导入 " + courses.length + " 条上课记录");
     bridge.notifyTaskCompletion();
 }
 

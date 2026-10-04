@@ -1,8 +1,8 @@
 adapters:
-  - adapter_id: "HZU_01"
+  - adapter_id: "HZU"
     adapter_name: "菏泽学院强智教务"
     category: "BACHELOR_AND_ASSOCIATE"
     asset_js_path: "hzu.js"
     import_url: "https://222.206.176.102/jsxsd/"
     maintainer: "yukoimi"
-    description: "登录后即可导入学期理论课表，支持学期选择、单双周、单节课与教学周历。小节作息按用户确认的50分钟上课、10分钟课间生成；网站证书或网络问题需先确保教务页面能正常打开。"
+    description: "登录后即可导入学期理论课表，支持学期选择、单双周、单节课与教学周历。"
