@@ -1,6 +1,6 @@
 // 菏泽学院强智教务：新版学期理论课表（viweType=0）。
 // 参考仓库 CSUFT/MKU 的新版强智 DOM 结构，按本站实测重写。
-// 不保存登录凭据；所有请求沿用当前 WebView 的会话与协议。
+// 不保存登录凭据；Android 电脑模式借用 App 原生请求通道同步会话。
 
 const HZU_TIME_SLOTS = [
     { number: 1, startTime: "08:00", endTime: "08:50" },
@@ -25,18 +25,210 @@ function hzuUrl(path) {
     return window.location.origin + prefix + "/jsxsd" + path;
 }
 
-async function hzuFetchDocument(path) {
+async function hzuFetchDocument(path, options = {}) {
+    const url = new URL(hzuUrl(path));
+    const nativeRequests = typeof window.WebPostService?.register === "function";
+    if (url.origin !== "https://222.206.176.102") {
+        throw new Error("请从菏泽学院 HTTPS 教务入口运行适配。");
+    }
+    if (nativeRequests) {
+        if (!/Windows NT/.test(navigator.userAgent)) {
+            throw new Error("请开启软件的电脑模式后，再点击导入。");
+        }
+        if (options.method === "POST" && !window._postInterceptInjected) {
+            throw new Error("软件的登录请求通道未初始化，请刷新页面后重试。");
+        }
+        // 此内部参数使普通 GET 也走原生通道；App 转发前会移除它。
+        url.searchParams.set("_webview_post_id", "hzu_" + Date.now() + "_" + Math.random().toString(36).slice(2));
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
     try {
-        const response = await fetch(hzuUrl(path), {
+        const response = await fetch(url.href, {
+            ...options,
             credentials: "include",
+            cache: "no-store",
             signal: controller.signal
         });
         if (!response.ok) throw new Error("教务请求失败：HTTP " + response.status);
         return new DOMParser().parseFromString(await response.text(), "text/html");
     } finally {
         clearTimeout(timer);
+    }
+}
+
+// 与学校 conwork.js 一致：按 UTF-16 码元编码，不能替换为 UTF-8 Base64。
+function hzuEncodeInp(input) {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    let output = "";
+    let index = 0;
+    do {
+        const first = input.charCodeAt(index++);
+        const second = input.charCodeAt(index++);
+        const third = input.charCodeAt(index++);
+        const a = first >> 2;
+        const b = ((first & 3) << 4) | (second >> 4);
+        let c = ((second & 15) << 2) | (third >> 6);
+        let d = third & 63;
+        if (Number.isNaN(second)) c = d = 64;
+        else if (Number.isNaN(third)) d = 64;
+        output += alphabet.charAt(a) + alphabet.charAt(b) + alphabet.charAt(c) + alphabet.charAt(d);
+    } while (index < input.length);
+    return output;
+}
+
+function hzuLoginParameters(doc, account, password) {
+    const form = doc.querySelector('form[name="loginForm"]');
+    if (!form || form.getAttribute("method")?.toLowerCase() !== "post") {
+        throw new Error("教务登录页面已变化，无法继续登录。");
+    }
+    const action = new URL(form.getAttribute("action"), hzuUrl("/"));
+    if (action.href !== hzuUrl("/xk/LoginToXk")) {
+        throw new Error("教务登录地址已变化，已停止提交。");
+    }
+    const extraInputs = Array.from(form.querySelectorAll("input")).filter(input =>
+        input.type !== "hidden" && !["userAccount", "userPassword"].includes(input.id));
+    if (extraInputs.length) {
+        throw new Error("当前登录需要额外验证，暂不支持自动提交。");
+    }
+    const script = Array.from(doc.scripts).filter(item => !item.src).map(item => item.textContent).join("\n");
+    let scode = script.match(/\bvar\s+scode\s*=\s*["']([a-zA-Z0-9]+)["']\s*;/)?.[1];
+    const sxh = script.match(/\bvar\s+sxh\s*=\s*["']([123]{55})["']\s*;/)?.[1];
+    if (!scode || !sxh || scode.length !== Array.from(sxh).reduce((sum, value) => sum + Number(value), 0)) {
+        throw new Error("未获取到有效的实时登录编码参数，请重试。");
+    }
+    const code = hzuEncodeInp(account) + "%%%" + hzuEncodeInp(password) + "%%%" + hzuEncodeInp(" ");
+    let encoded = "";
+    for (let index = 0; index < code.length; index++) {
+        if (index >= 55) {
+            encoded += code.slice(index);
+            break;
+        }
+        const count = Number(sxh[index]);
+        encoded += code[index] + scode.slice(0, count);
+        scode = scode.slice(count);
+    }
+    const params = new URLSearchParams();
+    for (const input of form.querySelectorAll('input[type="hidden"][name]')) {
+        if (!input.disabled) params.append(input.name, input.value);
+    }
+    params.set("userAccount", account);
+    params.set("encoded", encoded);
+    return params;
+}
+
+function hzuLoginMessage(doc) {
+    return doc.querySelector("#showMsg")?.textContent.trim() || "登录未成功，请核对账号和密码后重试。";
+}
+
+async function hzuLogin() {
+    if (document.getElementById("hzu-login")) throw new Error("登录窗口已打开。");
+    const host = document.createElement("div");
+    host.id = "hzu-login";
+    const shadow = host.attachShadow({ mode: "open" });
+    // 独立表单不依赖学校的 jQuery/layui，也不执行远程页面里的脚本。
+    shadow.innerHTML = `
+        <style>
+            :host { all: initial; }
+            * { box-sizing: border-box; letter-spacing: 0; }
+            dialog {
+                position: fixed; inset: 0; margin: auto; width: min(400px, calc(100% - 24px));
+                max-height: calc(100% - 24px); padding: 24px; overflow: auto;
+                border: 1px solid #d9dee3; border-radius: 8px; background: #fff; color: #20252b;
+                font: 16px/1.5 system-ui, sans-serif;
+            }
+            dialog::backdrop { background: rgba(0, 0, 0, .45); }
+            header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+            h2 { margin: 0; font-size: 22px; }
+            button { font: inherit; cursor: pointer; }
+            button:disabled { cursor: wait; opacity: .65; }
+            #close { width: 36px; height: 36px; flex: 0 0 36px; border: 0; background: none; font-size: 24px; }
+            label { display: block; margin-top: 16px; font-size: 14px; }
+            input { display: block; width: 100%; min-width: 0; height: 44px; margin-top: 6px;
+                padding: 8px 10px; border: 1px solid #929ca6; border-radius: 4px; font: inherit; }
+            input:focus-visible, button:focus-visible { outline: 2px solid #1769a3; outline-offset: 2px; }
+            #submit { width: 100%; min-height: 44px; margin-top: 20px; border: 0; border-radius: 4px;
+                background: #1769a3; color: #fff; }
+            #error { margin: 12px 0 0; color: #b42318; font-size: 14px; overflow-wrap: anywhere; }
+            #error:empty { display: none; }
+        </style>
+        <dialog aria-labelledby="title">
+            <header><h2 id="title">菏泽学院</h2><button id="close" type="button" aria-label="取消登录" title="取消登录">&times;</button></header>
+            <form>
+                <label for="account">账号</label>
+                <input id="account" type="text" autocomplete="username" required>
+                <label for="password">密码</label>
+                <input id="password" type="password" autocomplete="off" required>
+                <p id="error" role="alert"></p>
+                <button id="submit" type="submit">登录并导入</button>
+            </form>
+        </dialog>`;
+    document.body.appendChild(host);
+    const dialog = shadow.querySelector("dialog");
+    const form = shadow.querySelector("form");
+    const accountInput = shadow.querySelector("#account");
+    const passwordInput = shadow.querySelector("#password");
+    const submit = shadow.querySelector("#submit");
+    const close = shadow.querySelector("#close");
+    const error = shadow.querySelector("#error");
+    let busy = false;
+    try {
+        return await new Promise(resolve => {
+            const cancel = () => {
+                if (!busy) resolve(null);
+            };
+            close.addEventListener("click", cancel);
+            dialog.addEventListener("cancel", event => {
+                event.preventDefault();
+                cancel();
+            });
+            form.addEventListener("submit", async event => {
+                event.preventDefault();
+                if (busy) return;
+                if (!accountInput.value.trim() || !passwordInput.value) {
+                    error.textContent = "账号和密码不能为空。";
+                    return;
+                }
+                busy = true;
+                submit.disabled = close.disabled = accountInput.disabled = passwordInput.disabled = true;
+                submit.textContent = "正在登录...";
+                error.textContent = "";
+                try {
+                    const loginDoc = await hzuFetchDocument("/");
+                    if (!loginDoc.querySelector('form[name="loginForm"]')) {
+                        const doc = await hzuFetchDocument("/xskb/xskb_list.do?viweType=0&zc=");
+                        hzuSemesters(doc);
+                        resolve(doc);
+                        return;
+                    }
+                    const body = hzuLoginParameters(loginDoc, accountInput.value.trim(), passwordInput.value).toString();
+                    passwordInput.value = "";
+                    const result = await hzuFetchDocument("/xk/LoginToXk", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body
+                    });
+                    if (result.querySelector('form[name="loginForm"]')) throw new Error(hzuLoginMessage(result));
+                    // HTTP 200/跳转不代表登录成功，必须验证课表会话。
+                    const doc = await hzuFetchDocument("/xskb/xskb_list.do?viweType=0&zc=");
+                    hzuSemesters(doc);
+                    resolve(doc);
+                } catch (failure) {
+                    error.textContent = failure.message || "登录请求失败，请重试。";
+                } finally {
+                    passwordInput.value = "";
+                    busy = false;
+                    submit.disabled = close.disabled = accountInput.disabled = passwordInput.disabled = false;
+                    submit.textContent = "登录并导入";
+                }
+            });
+            dialog.showModal();
+            accountInput.focus();
+        });
+    } finally {
+        passwordInput.value = "";
+        dialog.close();
+        host.remove();
     }
 }
 
@@ -204,10 +396,14 @@ async function hzuRunImportFlow() {
     const bridge = window.shiguangBridge;
     const api = window.shiguangBridgePromise;
     if (!bridge || !api) throw new Error("未检测到拾光桥接接口，请在软件或测试插件中运行。");
-    if (!await api.showAlert("菏泽学院课表导入", "请确认已登录教务系统。将读取所选学期的全部周课程。", "开始导入")) return;
+    if (!await api.showAlert("菏泽学院课表导入", "将读取所选学期的全部周课程。未登录时会打开登录窗口。", "开始导入")) return;
 
     bridge.showToast("正在读取学期列表...");
-    const firstDoc = await hzuFetchDocument("/xskb/xskb_list.do?viweType=0&zc=");
+    let firstDoc = await hzuFetchDocument("/xskb/xskb_list.do?viweType=0&zc=");
+    if (firstDoc.querySelector('form[name="loginForm"]')) {
+        firstDoc = await hzuLogin();
+        if (!firstDoc) return;
+    }
     const semesters = hzuSemesters(firstDoc);
     if (!semesters.length) throw new Error("教务未提供可导入的学期。");
     const index = await api.showSingleSelection("选择学期",
@@ -256,7 +452,12 @@ async function hzuRunImportFlow() {
 }
 
 // Start import.
-hzuRunImportFlow().catch(error => {
-    console.error("HZU import failed:", error);
-    if (window.shiguangBridge) window.shiguangBridge.showToast("导入失败：" + error.message);
-});
+if (!window._hzuImportRunning) {
+    window._hzuImportRunning = true;
+    hzuRunImportFlow().catch(error => {
+        console.error("HZU import failed:", error);
+        if (window.shiguangBridge) window.shiguangBridge.showToast("导入失败：" + error.message);
+    }).finally(() => {
+        window._hzuImportRunning = false;
+    });
+}
