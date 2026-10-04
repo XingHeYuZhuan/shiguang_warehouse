@@ -1193,3 +1193,7 @@ schools:
     initial: "Z"
     resource_folder: "ZJBTI"
     
+  - id: "XHSYSU"
+    name: "广州新华学院"
+    initial: "G"
+    resource_folder: "XHSYSU"
