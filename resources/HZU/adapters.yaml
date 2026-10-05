@@ -5,4 +5,4 @@ adapters:
     asset_js_path: "hzu.js"
     import_url: "https://222.206.176.102/jsxsd/"
     maintainer: "yukoimi"
-    description: "进入后，右上角点击切换电脑模式，之后直接点击右下角的开始导入，按照流程操作即可。"
+    description: "登录后即可导入学期理论课表，支持学期选择、单双周、单节课与教学周历。"
