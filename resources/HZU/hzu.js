@@ -2,7 +2,7 @@
 // 参考仓库 CSUFT/MKU 的新版强智 DOM 结构，按本站实测重写。
 // 不保存登录凭据；所有请求沿用当前 WebView 的会话与协议。
 
-const HZU_TIME_SLOTS = [
+const HZU_SUMMER_TIME_SLOTS = [
     { number: 1, startTime: "08:00", endTime: "08:50" },
     { number: 2, startTime: "09:00", endTime: "09:50" },
     { number: 3, startTime: "10:10", endTime: "11:00" },
@@ -14,6 +14,46 @@ const HZU_TIME_SLOTS = [
     { number: 9, startTime: "19:30", endTime: "20:20" },
     { number: 10, startTime: "20:30", endTime: "21:20" }
 ];
+
+// 冬季仅下午第5至8节提前半小时，上午和晚课保持不变。
+const HZU_WINTER_TIME_SLOTS = HZU_SUMMER_TIME_SLOTS.map(slot => {
+    if (slot.number < 5 || slot.number > 8) return { ...slot };
+    const earlier = time => {
+        const [hour, minute] = time.split(":").map(Number);
+        const minutes = hour * 60 + minute - 30;
+        return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" +
+            String(minutes % 60).padStart(2, "0");
+    };
+    return { ...slot, startTime: earlier(slot.startTime), endTime: earlier(slot.endTime) };
+});
+
+function hzuComboSchedule(semesterId, config) {
+    const term = semesterId.match(/^(\d{4})-(\d{4})-[12]$/);
+    if (!term || Number(term[2]) !== Number(term[1]) + 1) {
+        throw new Error("无法识别作息所属学年。");
+    }
+    let firstYear = Number(term[1]);
+    let lastYear = Number(term[2]);
+    if (config) {
+        const startMs = Date.parse(config.semesterStartDate + "T00:00:00Z");
+        const endMs = startMs + (config.semesterTotalWeeks * 7 - 1) * 86400000;
+        firstYear = Math.min(firstYear, new Date(startMs).getUTCFullYear());
+        lastYear = Math.max(lastYear, new Date(endMs).getUTCFullYear());
+    }
+    const publicSchedules = [];
+    for (let year = firstYear; year <= lastYear; year++) {
+        publicSchedules.push({
+            name: "菏泽学院夏季作息",
+            startDate: year + "-05-01",
+            endDate: year + "-10-04",
+            defaultClassDuration: 50,
+            defaultBreakDuration: 10,
+            timeSlots: HZU_SUMMER_TIME_SLOTS
+        });
+    }
+    // App 在夏季规则之外回退到冬季基础作息，边界日期均为闭区间。
+    return { name: "菏泽学院冬夏季作息", publicSchedules };
+}
 
 function hzuUrl(path) {
     const pathname = window.location.pathname;
@@ -240,6 +280,11 @@ async function hzuRunImportFlow() {
             "无法确定所选学期的开学日期与总周数。继续导入后，请在课表设置中核对学期配置。", "继续导入")) return;
     }
 
+    const comboSchedule = hzuComboSchedule(semesterId, config);
+    if (typeof api.saveComboSchedule !== "function") {
+        throw new Error("软件不支持冬夏季自动作息，请更新软件后重试。");
+    }
+
     // 只在全部读取和确认完成后写入；保存失败不能发出完成信号。
     if (config) {
         config.firstDayOfWeek = 1;
@@ -247,8 +292,12 @@ async function hzuRunImportFlow() {
         config.defaultBreakDuration = 10;
         if (await api.saveCourseConfig(JSON.stringify(config)) === false) throw new Error("学期配置保存失败。");
     }
-    if (await api.savePresetTimeSlots(JSON.stringify(HZU_TIME_SLOTS)) === false) {
+    if (await api.savePresetTimeSlots(JSON.stringify(HZU_WINTER_TIME_SLOTS)) === false) {
         throw new Error("作息时间保存失败。");
+    }
+    // App 要求先保存基础节次，成功后再绑定组合作息，之后不能重存基础节次。
+    if (await api.saveComboSchedule(JSON.stringify(comboSchedule)) === false) {
+        throw new Error("冬夏季作息保存失败。");
     }
     if (await api.saveImportedCourses(JSON.stringify(courses)) === false) throw new Error("课程保存失败。");
     bridge.showToast("成功导入 " + courses.length + " 条上课记录");
