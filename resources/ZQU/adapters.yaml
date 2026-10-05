@@ -1,0 +1,9 @@
+# resources/ZQU/adapters.yaml
+adapters:
+  - adapter_id: "ZQU_01"
+    adapter_name: "肇庆学院（WebVPN）"
+    category: "BACHELOR_AND_ASSOCIATE"
+    asset_js_path: "zqu_01.js"
+    import_url: "https://webvpn.zqu.edu.cn/login"
+    maintainer: "NoobLLiu"
+    description: "肇庆学院URP教务，校外访问走WebVPN。登录并进入教务系统后在任意页面点击开始导入，脚本直取课表JSON接口（getKbRq），自动读取学期与周次、自动推算开学日期，无需手动切换课表页。校内直连版本另行提交。非本校开发者适配，如有误差欢迎提issue"

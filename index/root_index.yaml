@@ -1197,3 +1197,8 @@ schools:
     name: "广州新华学院"
     initial: "G"
     resource_folder: "XHSYSU"
+
+  - id: "ZQU"
+    name: "肇庆学院"
+    initial: "Z"
+    resource_folder: "ZQU"
