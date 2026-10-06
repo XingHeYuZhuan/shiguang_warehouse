@@ -1197,3 +1197,8 @@ schools:
     name: "广州新华学院"
     initial: "G"
     resource_folder: "XHSYSU"
+
+  - id: "QDU"
+    name: "青岛大学"
+    initial: "Q"
+    resource_folder: "QDU"
