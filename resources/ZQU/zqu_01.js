@@ -3,29 +3,17 @@
 // 适用范围：本脚本为【WebVPN 校外访问】版本；校内直连版本另行提交
 // 维护者：NoobLLiu
 //
-// 数据来源说明
-// ------------
-// 课表页（课表查询 → 我的课表）用的是 entss_Calendar 组件异步取数，
-// 页面网格与「列表展示」背后是同一个接口，因此本脚本不做 HTML 表格解析，
-// 而是直接请求后台 JSON 接口：
+// 课表数据直接取自后台 JSON 接口，不做 HTML 表格解析：
 //     GET xsgrkbcx!getKbRq.action?xnxqdm=<学年学期>&zc=<周次>&xsdm=
-// 返回 [课程数组, 日期数组]，字段完整、稳定，不受页面改版影响。
-//
-// 为什么全程只用网络请求、不读当前页面 DOM
-// ------------------------------------------
-// 「我的课表」内容页 xsgrkbcx!getXsgrbkList.action 里有两个下拉框：
-//   - 学期 #xnxqdm：服务端渲染，直接解析 HTML 即可拿到全部学期；
-//   - 周次 #zc     ：选项由页面 JS 在客户端填充，纯 fetch 拿不到。
-// 周次因此不从下拉框读 —— 周次本来就是请求参数（getKbRq 的 zc 参数），
-// 而每条课程记录本身也带着自己的 zc 字段（这门课在哪几周上），
-// 所以整学期的课表一次请求即可取全，无需任何 DOM 读取或周次探测。
+// zc 传空即不限周次，一次可取回整学期排课记录；每条记录自带 zc 字段
+// 标明该门课的上课周次，因此无需逐周请求，也无需读取页面 DOM。
 //
 // 使用前提：用户已在弹窗打开的网页中登录 WebVPN 并进入教务系统，
 // 停留在教务系统内的任意页面即可，无需打开课表查询页。
 
 // ---------------------------------------------------------------- 常量
 
-// 「我的课表」真实内容页（本脚本只用它取服务端渲染的学期下拉框 #xnxqdm）
+// 「我的课表」内容页，本脚本只用它取服务端渲染的学期下拉框 #xnxqdm
 const KB_LIST_PAGE = 'xsgrkbcx!getXsgrbkList.action';
 // 课表数据接口（返回 JSON）
 const KB_DATA = 'xsgrkbcx!getKbRq.action';
@@ -67,13 +55,12 @@ function siteBase() {
     try {
         const u = new URL(window.location.href);
         const path = u.pathname;
-        const marks = ['xsgrkbcx!', 'xsbjkbcx!', 'desktop!', 'login!', 'framework!', 'index!'];
-        for (const m of marks) {
-            const i = path.indexOf(m);
-            if (i > 0) return u.origin + path.slice(0, i);
-        }
-        const i = path.lastIndexOf('/');
-        return u.origin + (i > 0 ? path.slice(0, i + 1) : '/');
+        // 本脚本只请求 xsgrkbcx! 下两个接口，取该段之前的一段即为站点基址。
+        // 停留在别的页面时匹配不到，退回按最后一段斜杠截断，效果相同。
+        const i = path.indexOf('xsgrkbcx!');
+        if (i > 0) return u.origin + path.slice(0, i);
+        const j = path.lastIndexOf('/');
+        return u.origin + (j > 0 ? path.slice(0, j + 1) : '/');
     } catch (e) {
         const href = window.location.href.split(/[?#]/)[0];
         const i = href.lastIndexOf('/');
@@ -177,18 +164,6 @@ function parseWeekText(zc) {
 }
 
 /**
- * 由 "YYYY-MM-DD" 推前 n 天，返回同样的字符串。
- */
-function shiftDate(dateStr, days) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
-    if (!m) return null;
-    const dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
-    dt.setUTCDate(dt.getUTCDate() + days);
-    const pad = n => (n < 10 ? '0' + n : '' + n);
-    return dt.getUTCFullYear() + '-' + pad(dt.getUTCMonth() + 1) + '-' + pad(dt.getUTCDate());
-}
-
-/**
  * 节次与周次合并去重函数（摘自拾光课程表官方 wiki 的参考实现）。
  */
 function mergeAndDistinctCourses(courses) {
@@ -280,8 +255,7 @@ function mergeAndDistinctCourses(courses) {
 /**
  * 读取学期下拉框。
  *
- * 只请求「我的课表」内容页并解析返回的 HTML —— 学期下拉框是服务端渲染的，
- * 因此一次 fetch 就够，不涉及任何当前页面 DOM 读取。
+ * 学期下拉框由服务端随页面一起下发，所以请求一次内容页并解析返回的 HTML 即可。
  */
 async function fetchTermOptions(base) {
     const resp = await fetch(base + KB_LIST_PAGE, { method: 'GET', credentials: 'include' });
@@ -297,11 +271,11 @@ async function fetchTermOptions(base) {
 /**
  * 请求整个学期的课表原始数据（一次请求）。
  *
- * zc 传空字符串表示不限周次，服务端会返回整学期数据（实测约 127 条），
+ * zc 传空字符串表示不限周次，服务端会返回整学期数据，
  * 每条记录自带的 zc 字段即该门课上课的周次，无需逐周请求。
  *
- * 注意：不限周次时服务端不返回日期数组，学期开始日期需另行获取（见 fetchFirstWeek）。
- * @returns {{courses: Array, dates: Array}|null}
+ * 注意：不限周次时服务端不返回日期数组，学期开始日期需另行获取（见 fetchFirstWeekStart）。
+ * @returns {Array|null} 课程记录数组，取不到返回 null
  */
 async function fetchTermData(base, termCode) {
     const url = base + KB_DATA +
@@ -324,7 +298,7 @@ async function fetchTermData(base, termCode) {
         return null;
     }
     if (!Array.isArray(data) || data.length < 2) return null;
-    return { courses: data[0] || [], dates: data[1] || [] };
+    return data[0] || [];
 }
 
 /**
@@ -370,10 +344,10 @@ async function fetchFirstWeekStart(base, termCode) {
  * 因此这里按「课程名+教师+教室+星期+起止节次」聚合出 weeks 数组，
  * 同一门课的多个周次会归并到同一条记录。
  */
-function collectCourses(data) {
+function collectCourses(records) {
     const courses = [];
 
-    for (const c of data.courses) {
+    for (const c of records) {
         if (!c || typeof c !== 'object') continue;
 
         const day = parseInt(c.xq, 10);
@@ -413,13 +387,12 @@ function collectCourses(data) {
         }
     }
 
-    // 总周数：所有课程周次的最大值（实测值，取不到则交给 App 默认值）
-    let totalWeeks = 0;
-    for (const c of courses) {
-        for (const w of c.weeks) {
-            if (w > totalWeeks) totalWeeks = w;
-        }
-    }
+    // 总周数取所有课程周次的最大值；一条都取不到时保持 0，交给 App 默认值。
+    // 这里用 reduce 而非 Math.max(...spread)，避免周次过多时参数展开爆栈。
+    const totalWeeks = courses.reduce(
+        (max, c) => c.weeks.reduce((m, w) => (w > m ? w : m), max),
+        0
+    );
 
     return {
         courses: mergeAndDistinctCourses(courses),
@@ -509,20 +482,20 @@ async function runImportFlow() {
     }
 
     window.shiguangBridge.showToast('正在读取课表 ...');
-    const data = await fetchTermData(base, term.value);
-    if (!data) {
+    const records = await fetchTermData(base, term.value);
+    if (!records) {
         window.shiguangBridge.showToast('课表接口未返回数据，请检查登录状态或稍后重试。');
         return;
     }
 
-    const result = collectCourses(data);
+    const result = collectCourses(records);
     if (result.courses.length === 0) {
         window.shiguangBridge.showToast('未获取到课表数据，请确认该学期已选课。');
         return;
     }
 
     // 开学日期：额外取一次第 1 周的周一日期，再让用户确认/修正。
-    // 取不到也不阻塞流程 —— 用户可自行输入，或沿用 App 中的已有设置。
+    // 取不到也不阻塞流程，用户可自行输入。
     window.shiguangBridge.showToast('正在确认开学日期 ...');
     const startDate = await fetchFirstWeekStart(base, term.value);
 
@@ -541,7 +514,7 @@ async function runImportFlow() {
     }
 
     try {
-        // semesterTotalWeeks 取实测周次最大值；取不到就交给 App 默认值
+        // 只在取到值时才写这两个可选字段，否则交给 App 侧沿用已有设置
         const config = {};
         if (result.totalWeeks > 0) config.semesterTotalWeeks = result.totalWeeks;
         if (semesterStartDate) config.semesterStartDate = semesterStartDate;
