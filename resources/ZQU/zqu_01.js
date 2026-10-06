@@ -19,7 +19,7 @@ const KB_LIST_PAGE = 'xsgrkbcx!getXsgrbkList.action';
 const KB_DATA = 'xsgrkbcx!getKbRq.action';
 
 // 肇庆学院作息时间（每天 14 节），依据学校实际作息表。
-// 仅在无法从教务系统读到作息时作为保底使用。
+// 教务系统不提供作息数据，导入时按此预设写入。
 const PRESET_TIME_SLOTS = [
     { number: 1, startTime: '08:00', endTime: '08:40' },
     { number: 2, startTime: '08:50', endTime: '09:30' },
