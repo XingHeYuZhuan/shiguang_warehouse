@@ -1198,6 +1198,16 @@ schools:
     initial: "G"
     resource_folder: "XHSYSU"
 
+  - id: "QDU"
+    name: "青岛大学"
+    initial: "Q"
+    resource_folder: "QDU"
+
+  - id: "ZQU"
+    name: "肇庆学院"
+    initial: "Z"
+    resource_folder: "ZQU"
+
   - id: "HZU"
     name: "菏泽学院"
     initial: "H"
