@@ -2,10 +2,12 @@
 // 由本校开发者JellyfisHawthorn适配
 // 出现问题请提联系开发者或者提交pr更改,这更加快速
 
-
 const BASE_URL = "https://xjw.qdu.edu.cn";
 const URL_SEMESTER = `${BASE_URL}/jsxsd/jxzl/jxzl_query`;   // 教学周历（学期列表 + 开学日期 + 最大周次）
-const URL_COURSE   = `${BASE_URL}/jsxsd/xskb/xskb_list.do`; // 课表查询
+const URL_COURSE = `${BASE_URL}/jsxsd/xskb/xskb_list.do`; // 课表查询
+const URL_PLAN = `${BASE_URL}/jsxsd/pyfa/pyfa_query`; // 执行计划查询（用于查课程学分）
+const URL_FXPLAN = `${BASE_URL}/jsxsd/pyfa/fxpyfa_query`; // 辅修执行计划查询
+const URL_WZYPLAN = `${BASE_URL}/jsxsd/pyfa/wzypyfa_query`; // 微专业执行计划查询
 
 // 工具函数
 
@@ -47,11 +49,11 @@ function mergeAndDistinctCourses(courses) {
     // 阶段 1：合并连续节次与完全重复记录
     list.sort((a, b) => {
         return a.name.localeCompare(b.name) ||
-               a.teacher.localeCompare(b.teacher) ||
-               a.position.localeCompare(b.position) ||
-               (a.day || 0) - (b.day || 0) ||
-               a.weeks.join(',').localeCompare(b.weeks.join(',')) ||
-               (a.startSection || 0) - (b.startSection || 0);
+            a.teacher.localeCompare(b.teacher) ||
+            a.position.localeCompare(b.position) ||
+            (a.day || 0) - (b.day || 0) ||
+            a.weeks.join(',').localeCompare(b.weeks.join(',')) ||
+            (a.startSection || 0) - (b.startSection || 0);
     });
 
     const step1Merged = [];
@@ -84,11 +86,11 @@ function mergeAndDistinctCourses(courses) {
     // 阶段 2：合并同节次的周次
     step1Merged.sort((a, b) => {
         return a.name.localeCompare(b.name) ||
-               a.teacher.localeCompare(b.teacher) ||
-               a.position.localeCompare(b.position) ||
-               (a.day || 0) - (b.day || 0) ||
-               (a.startSection || 0) - (b.startSection || 0) ||
-               (a.endSection || 0) - (b.endSection || 0);
+            a.teacher.localeCompare(b.teacher) ||
+            a.position.localeCompare(b.position) ||
+            (a.day || 0) - (b.day || 0) ||
+            (a.startSection || 0) - (b.startSection || 0) ||
+            (a.endSection || 0) - (b.endSection || 0);
     });
 
     const step2Merged = [];
@@ -119,7 +121,9 @@ function mergeAndDistinctCourses(courses) {
 
 // 核心解析逻辑
 
-function parseTimetableToModel(doc) {
+function parseTimetableToModel(doc, courseCredits) {
+    // 获取课程学分对象
+
     const timetable = doc.getElementById('timetable');
     if (!timetable) return [];
 
@@ -172,7 +176,8 @@ function parseTimetableToModel(doc) {
                             "position": position,
                             "day": day,
                             "startSection": startSection,
-                            "endSection": endSection
+                            "endSection": endSection,
+                            "credit": courseCredits[name] || null
                         });
                     }
                 });
@@ -219,6 +224,39 @@ async function requestCoursePage(semesterId) {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: `jx0404id=&cj0701id=&zc=&demo=&xnxq01id=${semesterId}`,
+        credentials: "include"
+    });
+    return await response.text();
+}
+
+/**
+ * GET 执行计划页面（用于获取课程对应的学分）
+ */
+async function requestPlanPage() {
+    const response = await fetch(URL_PLAN, {
+        method: "GET",
+        credentials: "include"
+    });
+    return await response.text();
+}
+
+/**
+* GET 辅修执行计划页面（用于获取课程对应的学分）
+*/
+async function requestFxFPlanPage() {
+    const response = await fetch(URL_FXPLAN, {
+        method: "GET",
+        credentials: "include"
+    });
+    return await response.text();
+}
+
+/**
+* GET 微专业执行计划页面（用于获取课程对应的学分）
+*/
+async function requestWZYPlanPage() {
+    const response = await fetch(URL_WZYPLAN, {
+        method: "GET",
         credentials: "include"
     });
     return await response.text();
@@ -293,10 +331,70 @@ async function fetchSemesterInfo(semesterId) {
  * @returns {Promise<Array<Object>>}
  */
 async function fetchCourses(semesterId) {
+    const courseCredits = await fetchAllCourseCredits();
     const html = await requestCoursePage(semesterId);
-    // 打印html todo
-    return parseTimetableToModel(new DOMParser().parseFromString(html, "text/html"));
+    return parseTimetableToModel(new DOMParser().parseFromString(html, "text/html"), courseCredits);
 }
+
+/**
+ * 获取执行计划里所有课程对应的学分
+ * 部分限选、任选课的学分信息暂时无法获取
+ * @returns {Promise<Object>} 课程名称 -> 学分
+ */
+async function fetchAllCourseCredits() {
+
+    const courseCredits = {}; // 存储所有课程的学分信息
+
+    // 依次获取三个执行计划表的学分信息
+    const requestFns = [
+        requestPlanPage,
+        requestFxFPlanPage,
+        requestWZYPlanPage
+    ];
+
+    for (const requestFn of requestFns) {
+        const html = await requestFn();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const dataTable = doc.getElementById("dataList");
+
+        const rows = Array.from(dataTable.querySelectorAll('tr')).filter(r => r.querySelector('td'));
+
+        // 如果rows的第一项内容只有“未查询到数据”文本，说明没有数据，跳过后续处理
+        if (rows[0].querySelector('td').textContent.trim() === "未查询到数据") {
+            continue;
+        }
+
+        rows.forEach((row) => {
+
+            // 每一行的第四个单元格是课程名称，第六个单元格是学分
+            const courseName = row.querySelector('td:nth-child(4)').textContent.trim();
+            const credit = row.querySelector('td:nth-child(6)').textContent.trim();
+            if (courseName && !(courseName in courseCredits)) {
+                courseCredits[courseName] = parseFloat(credit);
+            }
+        });
+    }
+
+    return courseCredits;
+
+}
+
+/**
+ * 获取某课程的学分
+ * @param {string} courseName 课程名称 
+ * @param {Object} courseCredits 学分信息对象
+ * @returns {Promise<number|null>}
+ */
+async function fetchCourseCredit(courseName, courseCredits) {
+    if (courseName in courseCredits) {
+        return courseCredits[courseName];
+    } else {
+        window.shiguangBridge.showToast(`${courseName}的学分信息未找到！`);
+        return null;
+    }
+}
+
+
 
 // 配置保存
 
@@ -315,52 +413,117 @@ async function saveAppConfig(semesterStartDate, totalWeeks) {
 /**
  * 统一作息
  */
-async function saveAppTimeSlots() {
-    // 分别定义春夏季和秋冬季的作息时间表。注：T2时段仅供参考（因为我没上过且没找到官方具体时间）
-    const ssTimeSlots = [
-        { "number": 1,  "startTime": "08:00", "endTime": "08:50"},
-        { "number": 2,  "startTime": "09:00", "endTime": "09:50"},
-        { "number": 3,  "startTime": "10:10", "endTime": "11:00"},
-        { "number": 4,  "startTime": "11:10", "endTime": "12:00"},
-        { "number": 5,  "startTime": "13:10", "endTime": "14:00"},
-        { "number": 6,  "startTime": "14:00", "endTime": "14:50"},
-        { "number": 7,  "startTime": "15:00", "endTime": "15:50"},
-        { "number": 8,  "startTime": "16:00", "endTime": "16:50"},
-        { "number": 9,  "startTime": "17:00", "endTime": "17:50"},
-        { "number": 10, "startTime": "17:50", "endTime": "18:30"},
-        { "number": 11, "startTime": "19:00", "endTime": "19:50"},
-        { "number": 12, "startTime": "20:00", "endTime": "20:50"},
-        { "number": 13, "startTime": "21:00", "endTime": "21:50"}
-    ]
-    const awTimeSlots = [
-        { "number": 1,  "startTime": "08:00", "endTime": "08:50"},
-        { "number": 2,  "startTime": "09:00", "endTime": "09:50"},
-        { "number": 3,  "startTime": "10:10", "endTime": "11:00"},
-        { "number": 4,  "startTime": "11:10", "endTime": "12:00"},
-        { "number": 5,  "startTime": "12:40", "endTime": "13:30"},
-        { "number": 6,  "startTime": "13:30", "endTime": "14:20"},
-        { "number": 7,  "startTime": "14:30", "endTime": "15:20"},
-        { "number": 8,  "startTime": "15:30", "endTime": "16:20"},
-        { "number": 9,  "startTime": "16:30", "endTime": "17:20"},
-        { "number": 10, "startTime": "17:20", "endTime": "18:00"},
-        { "number": 11, "startTime": "18:30", "endTime": "19:20"},
-        { "number": 12, "startTime": "19:30", "endTime": "20:20"},
-        { "number": 13, "startTime": "20:30", "endTime": "21:20"}
+async function saveAppTimeSlots(semesterId) {
+    // 基础时间段
+    const baseTimeSlots = [
+        { "number": 1, "startTime": "08:00", "endTime": "08:50" },
+        { "number": 2, "startTime": "09:00", "endTime": "09:50" },
+        { "number": 3, "startTime": "10:10", "endTime": "11:00" },
+        { "number": 4, "startTime": "11:10", "endTime": "12:00" },
+        { "number": 5, "startTime": "13:10", "endTime": "14:00" },
+        { "number": 6, "startTime": "14:00", "endTime": "14:50" },
+        { "number": 7, "startTime": "15:00", "endTime": "15:50" },
+        { "number": 8, "startTime": "16:00", "endTime": "16:50" },
+        { "number": 9, "startTime": "17:00", "endTime": "17:50" },
+        { "number": 10, "startTime": "17:50", "endTime": "18:30" },
+        { "number": 11, "startTime": "19:00", "endTime": "19:50" },
+        { "number": 12, "startTime": "20:00", "endTime": "20:50" },
+        { "number": 13, "startTime": "21:00", "endTime": "21:50" }
     ];
 
-    // 用户选择作息时间表，春夏还是秋冬
-    const selectedIndex = await window.shiguangBridgePromise.showSingleSelection(
-        "选择作息时间", JSON.stringify(["春夏季作息", "秋冬季作息"]), 0
-    );
-    let timeSlots = [];
-    if (selectedIndex === null) return;
-    else if (selectedIndex === 0) {
-        timeSlots = ssTimeSlots;
-    } else {
-        timeSlots = awTimeSlots;
+    // 创建当前学期的组合作息方案。注：T2时段（第10节）仅供参考（因为我没上过且没找到官方具体时间）
+    // 根据semesterId获取此学期的信息
+    const [startYear, endYear, semester] = semesterId.split("-");
+    let comboSchedule = null;
+    if (semester === "1") {
+        // 秋冬学期
+        comboSchedule = {
+            name: `${startYear}秋组合作息方案`,
+            publicSchedules: [
+                {
+                    name: `${startYear}春夏作息`,
+                    startDate: `${startYear}-05-01`,
+                    endDate: `${startYear}-09-30`,
+                    timeSlots: [
+                        { "number": 5, "startTime": "13:10", "endTime": "14:00" },
+                        { "number": 6, "startTime": "14:00", "endTime": "14:50" },
+                        { "number": 7, "startTime": "15:00", "endTime": "15:50" },
+                        { "number": 8, "startTime": "16:00", "endTime": "16:50" },
+                        { "number": 9, "startTime": "17:00", "endTime": "17:50" },
+                        { "number": 10, "startTime": "17:50", "endTime": "18:30" },
+                        { "number": 11, "startTime": "19:00", "endTime": "19:50" },
+                        { "number": 12, "startTime": "20:00", "endTime": "20:50" },
+                        { "number": 13, "startTime": "21:00", "endTime": "21:50" }
+                    ]
+                },
+                {
+                    name: `${startYear}秋冬作息`,
+                    startDate: `${startYear}-10-01`,
+                    endDate: `${endYear}-04-30`,
+                    timeSlots: [
+                        { "number": 5, "startTime": "12:40", "endTime": "13:30" },
+                        { "number": 6, "startTime": "13:30", "endTime": "14:20" },
+                        { "number": 7, "startTime": "14:30", "endTime": "15:20" },
+                        { "number": 8, "startTime": "15:30", "endTime": "16:20" },
+                        { "number": 9, "startTime": "16:30", "endTime": "17:20" },
+                        { "number": 10, "startTime": "17:20", "endTime": "18:00" },
+                        { "number": 11, "startTime": "18:30", "endTime": "19:20" },
+                        { "number": 12, "startTime": "19:30", "endTime": "20:20" },
+                        { "number": 13, "startTime": "20:30", "endTime": "21:20" }
+                    ]
+                }
+            ]
+        };
+    } else if (semester === "2") {
+        // 春夏学期
+        comboSchedule = {
+            name: `${endYear}春组合作息方案`,
+            publicSchedules: [
+                {
+                    name: `${startYear}秋冬作息`,
+                    startDate: `${startYear}-10-01`,
+                    endDate: `${endYear}-04-30`,
+                    timeSlots: [
+                        { "number": 5, "startTime": "12:40", "endTime": "13:30" },
+                        { "number": 6, "startTime": "13:30", "endTime": "14:20" },
+                        { "number": 7, "startTime": "14:30", "endTime": "15:20" },
+                        { "number": 8, "startTime": "15:30", "endTime": "16:20" },
+                        { "number": 9, "startTime": "16:30", "endTime": "17:20" },
+                        { "number": 10, "startTime": "17:20", "endTime": "18:00" },
+                        { "number": 11, "startTime": "18:30", "endTime": "19:20" },
+                        { "number": 12, "startTime": "19:30", "endTime": "20:20" },
+                        { "number": 13, "startTime": "20:30", "endTime": "21:20" }
+                    ]
+                },
+                {
+                    name: `${endYear}春夏作息`,
+                    startDate: `${endYear}-05-01`,
+                    endDate: `${endYear}-09-30`,
+                    timeSlots: [
+                        { "number": 5, "startTime": "13:10", "endTime": "14:00" },
+                        { "number": 6, "startTime": "14:00", "endTime": "14:50" },
+                        { "number": 7, "startTime": "15:00", "endTime": "15:50" },
+                        { "number": 8, "startTime": "16:00", "endTime": "16:50" },
+                        { "number": 9, "startTime": "17:00", "endTime": "17:50" },
+                        { "number": 10, "startTime": "17:50", "endTime": "18:30" },
+                        { "number": 11, "startTime": "19:00", "endTime": "19:50" },
+                        { "number": 12, "startTime": "20:00", "endTime": "20:50" },
+                        { "number": 13, "startTime": "21:00", "endTime": "21:50" }
+                    ]
+                }
+            ]
+        };
     }
 
-    return await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(timeSlots));
+    // 保存作息方案
+    try {
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(baseTimeSlots));
+        await window.shiguangBridgePromise.saveComboSchedule(JSON.stringify(comboSchedule));
+        return true;
+    } catch (error) {
+        window.shiguangBridge.showToast("作息方案导入失败: " + error.message);
+        return false;
+    }
 }
 
 // 流程编排
@@ -403,7 +566,7 @@ async function runImportFlow() {
 
         // 6. 保存配置（含开学日期 + 最大周次（最大限制为 20））/ 作息 / 课程
         await saveAppConfig(semesterStartDate, Math.min(totalWeeks, 20));
-        await saveAppTimeSlots();
+        await saveAppTimeSlots(semesterId);
         await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(finalCourses));
 
         // 7. 完成
