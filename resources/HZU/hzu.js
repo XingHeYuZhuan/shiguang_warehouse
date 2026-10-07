@@ -27,30 +27,24 @@ const HZU_WINTER_TIME_SLOTS = HZU_SUMMER_TIME_SLOTS.map(slot => {
     return { ...slot, startTime: earlier(slot.startTime), endTime: earlier(slot.endTime) };
 });
 
-function hzuComboSchedule(semesterId, config) {
-    const term = semesterId.match(/^(\d{4})-(\d{4})-[12]$/);
+function hzuComboSchedule(semesterId) {
+    const term = semesterId.match(/^(\d{4})-(\d{4})-([12])$/);
     if (!term || Number(term[2]) !== Number(term[1]) + 1) {
         throw new Error("无法识别作息所属学年。");
     }
-    let firstYear = Number(term[1]);
-    let lastYear = Number(term[2]);
-    if (config) {
-        const startMs = Date.parse(config.semesterStartDate + "T00:00:00Z");
-        const endMs = startMs + (config.semesterTotalWeeks * 7 - 1) * 86400000;
-        firstYear = Math.min(firstYear, new Date(startMs).getUTCFullYear());
-        lastYear = Math.max(lastYear, new Date(endMs).getUTCFullYear());
-    }
-    const publicSchedules = [];
-    for (let year = firstYear; year <= lastYear; year++) {
-        publicSchedules.push({
+    const firstYear = Number(term[1]);
+    const lastYear = Number(term[2]);
+    const summerYear = term[3] === "1" ? firstYear : lastYear;
+    const publicSchedules = [
+        {
             name: "菏泽学院夏季作息",
-            startDate: year + "-05-01",
-            endDate: year + "-10-04",
+            startDate: summerYear + "-05-01",
+            endDate: summerYear + "-10-04",
             defaultClassDuration: 50,
             defaultBreakDuration: 10,
             timeSlots: HZU_SUMMER_TIME_SLOTS.filter(slot => slot.number >= 5 && slot.number <= 8)
-        });
-    }
+        }
+    ];
     // App 在夏季规则之外回退到冬季基础作息，边界日期均为闭区间。
     return { name: "菏泽学院冬夏季作息", publicSchedules };
 }
@@ -287,7 +281,7 @@ async function hzuRunImportFlow() {
             "无法确定所选学期的开学日期与总周数。继续导入后，请在课表设置中核对学期配置。", "继续导入")) return;
     }
 
-    const comboSchedule = hzuComboSchedule(semesterId, config);
+    const comboSchedule = hzuComboSchedule(semesterId);
 
     // 只在全部读取和确认完成后写入；保存失败不能发出完成信号。
     if (config) {
