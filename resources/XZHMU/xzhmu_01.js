@@ -100,14 +100,15 @@ function extractTeacherBetweenSpans(root, afterSpanIndex, beforeSpanIndex) {
 
     let node;
     while ((node = walker.nextNode())) {
-        if (node === afterSpan) { collecting = true; continue; }
-        if (node === beforeSpan) { collecting = false; break; }
+        const parent = node.parentNode;
+        if (parent === afterSpan) { collecting = true; continue; }
+        if (parent === beforeSpan) { collecting = false; break; }
         if (collecting) text += node.textContent;
     }
     return text.trim();
 }
 
-/** 解析单个 C_kc_subject div，可能包含多门课 */
+/** 解析单个 C_kc_subject / C_kc_today_subject div，可能包含多门课 */
 function parseSubjectDiv(div, day, startSection, endSection) {
     const courses = [];
     const ps = div.querySelectorAll('p');
@@ -177,6 +178,7 @@ function parseCurriculumTable() {
         for (let colIndex = 1; colIndex < tds.length; colIndex++) {
             const td = tds[colIndex];
             const key = `${rowIndex}-${colIndex}`;
+            // 先判断是否被上方 rowspan 覆盖，避免重复解析
             if (coveredCells.has(key)) continue;
 
             const style = td.getAttribute('style') || '';
@@ -186,7 +188,8 @@ function parseCurriculumTable() {
             const day = DAY_MAP[dayAttr];
             if (!day) continue;
 
-            const div = td.querySelector('.C_kc_subject');
+            // 兼容普通课程与“今天”课程
+            const div = td.querySelector('.C_kc_subject, .C_kc_today_subject');
             if (!div) continue;
 
             const rowspan = parseInt(td.getAttribute('rowspan') || '1', 10);
