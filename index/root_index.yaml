@@ -1212,3 +1212,8 @@ schools:
     name: "菏泽学院"
     initial: "H"
     resource_folder: "HZU"
+
+  - id: "YSU"
+    name: "燕山大学"
+    initial: "Y"
+    resource_folder: "YSU"
