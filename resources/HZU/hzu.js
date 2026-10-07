@@ -48,7 +48,7 @@ function hzuComboSchedule(semesterId, config) {
             endDate: year + "-10-04",
             defaultClassDuration: 50,
             defaultBreakDuration: 10,
-            timeSlots: HZU_SUMMER_TIME_SLOTS
+            timeSlots: HZU_SUMMER_TIME_SLOTS.filter(slot => slot.number >= 5 && slot.number <= 8)
         });
     }
     // App 在夏季规则之外回退到冬季基础作息，边界日期均为闭区间。
@@ -244,6 +244,12 @@ async function hzuRunImportFlow() {
     const bridge = window.shiguangBridge;
     const api = window.shiguangBridgePromise;
     if (!bridge || !api) throw new Error("未检测到拾光桥接接口，请在软件或测试插件中运行。");
+    const requiredMethods = ["showAlert", "showSingleSelection", "saveCourseConfig",
+        "savePresetTimeSlots", "saveComboSchedule", "saveImportedCourses"];
+    if (requiredMethods.some(method => typeof api[method] !== "function") ||
+        typeof bridge.showToast !== "function" || typeof bridge.notifyTaskCompletion !== "function") {
+        throw new Error("桥接接口不完整，请使用时光课程表 2.1.0 或新版测试插件后重试。");
+    }
     if (!await api.showAlert("菏泽学院课表导入", "请确认已登录教务系统。将读取所选学期的全部周课程。", "开始导入")) return;
 
     bridge.showToast("正在读取学期列表...");
@@ -257,8 +263,9 @@ async function hzuRunImportFlow() {
     if (!Number.isInteger(index) || !semesters[index]) throw new Error("学期选择无效。");
     const semesterId = semesters[index].value;
     const params = new URLSearchParams({ viweType: "0", zc: "", xnxq01id: semesterId });
-    const mode = firstDoc.querySelector("#kbjcmsid")?.value;
-    if (mode) params.set("kbjcmsid", mode);
+    const modeSelect = firstDoc.querySelector("#kbjcmsid");
+    const mode = modeSelect && "value" in modeSelect ? modeSelect.value : null;
+    if (typeof mode === "string" && mode) params.set("kbjcmsid", mode);
     const doc = await hzuFetchDocument("/xskb/xskb_list.do?" + params);
     hzuCheckSemester(doc, semesterId);
     const courses = hzuParseCourses(doc);
@@ -281,25 +288,22 @@ async function hzuRunImportFlow() {
     }
 
     const comboSchedule = hzuComboSchedule(semesterId, config);
-    if (typeof api.saveComboSchedule !== "function") {
-        throw new Error("软件不支持冬夏季自动作息，请更新软件后重试。");
-    }
 
     // 只在全部读取和确认完成后写入；保存失败不能发出完成信号。
     if (config) {
         config.firstDayOfWeek = 1;
         config.defaultClassDuration = 50;
         config.defaultBreakDuration = 10;
-        if (await api.saveCourseConfig(JSON.stringify(config)) === false) throw new Error("学期配置保存失败。");
+        if (await api.saveCourseConfig(JSON.stringify(config)) !== true) throw new Error("学期配置保存失败。");
     }
-    if (await api.savePresetTimeSlots(JSON.stringify(HZU_WINTER_TIME_SLOTS)) === false) {
+    if (await api.savePresetTimeSlots(JSON.stringify(HZU_WINTER_TIME_SLOTS)) !== true) {
         throw new Error("作息时间保存失败。");
     }
     // App 要求先保存基础节次，成功后再绑定组合作息，之后不能重存基础节次。
-    if (await api.saveComboSchedule(JSON.stringify(comboSchedule)) === false) {
+    if (await api.saveComboSchedule(JSON.stringify(comboSchedule)) !== true) {
         throw new Error("冬夏季作息保存失败。");
     }
-    if (await api.saveImportedCourses(JSON.stringify(courses)) === false) throw new Error("课程保存失败。");
+    if (await api.saveImportedCourses(JSON.stringify(courses)) !== true) throw new Error("课程保存失败。");
     bridge.showToast("成功导入 " + courses.length + " 条上课记录");
     bridge.notifyTaskCompletion();
 }
@@ -307,5 +311,7 @@ async function hzuRunImportFlow() {
 // Start import.
 hzuRunImportFlow().catch(error => {
     console.error("HZU import failed:", error);
-    if (window.shiguangBridge) window.shiguangBridge.showToast("导入失败：" + error.message);
+    if (typeof window.shiguangBridge?.showToast === "function") {
+        window.shiguangBridge.showToast("导入失败：" + (error?.message || String(error)));
+    }
 });
