@@ -1,9 +1,9 @@
 # resources/TSU/adapters.yaml
 adapters:
-  - adapter_id: "TSU_02"
+  - adapter_id: "TSU_01"
     adapter_name: "泰山学院青果教务"
     category: "BACHELOR_AND_ASSOCIATE"
-    asset_js_path: "tsu_02.js"
+    asset_js_path: "tsu_01.js"
     import_url: "http://jwxt.tsu.edu.cn"
     maintainer: "素绫理"
-    description: "泰山学院青果教务系统课表适配，登陆后点击左侧【教学安排】，再点击【执行导入】即可。导入时按提示输入本学期第一周的周一日期（自动校准周数）；脚本会自动提交夏/冬令时组合作息（夏令时5月1日–10月7日，冬令时10月8日–次年4月30日）"
+    description: "泰山学院青果教务系统课表适配，登陆后点击左侧【教学安排】，再点击【执行导入】即可。脚本会自动获取本学期开学日期，并提交夏/冬令时组合作息（夏令时5月1日–10月7日，冬令时10月8日–次年4月30日）"

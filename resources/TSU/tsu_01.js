@@ -44,27 +44,6 @@ function buildComboDateRanges() {
     };
 }
 
-// 计算本周周一（周日算作上一周），作为开学日期的默认值
-function getMondayOfCurrentWeek() {
-    const now = new Date();
-    const offset = now.getDay() === 0 ? -6 : 1 - now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + offset);
-    return formatDate(monday);
-}
-
-// showPrompt 的全局验证函数：返回 false 表示通过，返回字符串表示错误
-function validateDateInput(input) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-        return "请输入 YYYY-MM-DD 格式的日期！";
-    }
-    const date = new Date(input + "T00:00:00");
-    if (isNaN(date.getTime()) || formatDate(date) !== input) {
-        return "该日期不存在，请检查！";
-    }
-    return false;
-}
-
 // ===== 课表解析 =====
 function parseWeeks(weekStr, parity) {
     const weeks = [];
@@ -222,13 +201,33 @@ async function fetchAndParseCourses() {
 }
 
 // ===== 导入流程 =====
-async function promptSemesterStartDate() {
-    return await window.shiguangBridgePromise.showPrompt(
-        "本学期开学日期",
-        "请输入本学期第一周的周一日期（用于校准周数）",
-        getMondayOfCurrentWeek(),
-        "validateDateInput"
-    );
+// 读取课表页自带的学年学期下拉框（值如 "2026-0"），确定当前导入的学期
+async function getDisplayedXnxq() {
+    let found = null;
+    (function walk(win) {
+        if (found) return;
+        try {
+            const sel = win.document.getElementById("xnxq");
+            if (sel && sel.value) { found = sel.value; return; }
+        } catch (e) {}
+        for (let i = 0; i < win.frames.length; i++) { try { walk(win.frames[i]); } catch (e) {} }
+    })(window);
+    return found;
+}
+
+// 官方青果案例方案（同 WZZY）：教学安排表接口按教学周次出表，jxz=1 即第 1 周，
+// 第 1 周视图周一列头的日期即开学日期。注意：泰山该接口返回 UTF-8（课表接口才是 GBK）
+async function fetchSemesterStartDate(xn, xq) {
+    const resp = await fetch(`${window.location.origin}/frame/desk/showLessonScheduleInfosV14.action?xn=${xn}&xq=${xq}&jxz=1`, {
+        method: "POST",
+        headers: { "x-requested-with": "XMLHttpRequest" },
+        credentials: "include"
+    });
+    const html = await resp.text();
+    const match = html.match(/<br\s*\/?>\s*(\d{2})-(\d{2})/);
+    if (!match) return null;
+    const year = xq === "1" ? String(parseInt(xn) + 1) : String(xn);
+    return `${year}-${match[1]}-${match[2]}`;
 }
 
 async function saveSemesterStartDate(startDate) {
@@ -288,18 +287,7 @@ async function importComboSchedule() {
 // 编排整个导入流程：任何一步取消或失败立即终止，
 // notifyTaskCompletion() 只在成功后调用
 async function runImportFlow() {
-    // 1. 输入本学期开学日期，用户取消则终止
-    const startDate = await promptSemesterStartDate();
-    if (startDate === null) {
-        window.shiguangBridge.showToast("导入已取消。");
-        return;
-    }
-
-    // 2. 保存开学日期，失败则终止
-    const configSaved = await saveSemesterStartDate(startDate);
-    if (!configSaved) return;
-
-    // 3. 抓取并解析课表
+    // 1. 抓取并解析课表
     window.shiguangBridge.showToast("正在抓取课表数据...");
     let courses;
     try {
@@ -313,7 +301,25 @@ async function runImportFlow() {
         return;
     }
 
-    // 4. 保存课程，失败则终止
+    // 2. 自动获取开学日期（官方青果案例方案），获取/保存失败均不阻断导入
+    try {
+        const xnxq = await getDisplayedXnxq();
+        if (xnxq) {
+            const [xn, xq] = xnxq.split("-");
+            const apiStartDate = await fetchSemesterStartDate(xn, xq);
+            if (apiStartDate) {
+                await saveSemesterStartDate(apiStartDate);
+            } else {
+                window.shiguangBridge.showToast("开学日期获取失败，可在App内手动设置");
+            }
+        } else {
+            window.shiguangBridge.showToast("开学日期获取失败，可在App内手动设置");
+        }
+    } catch (error) {
+        window.shiguangBridge.showToast("开学日期获取失败，可在App内手动设置");
+    }
+
+    // 3. 保存课程，失败则终止
     try {
         const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         if (saveResult !== true) {
@@ -325,17 +331,17 @@ async function runImportFlow() {
         return;
     }
 
-    // 5. 导入基础时间段（夏令时），必须成功才能提交组合作息
+    // 4. 导入基础时间段（夏令时），必须成功才能提交组合作息
     const timeSlotSaved = await importTimeSlots();
 
-    // 6. 导入夏/冬组合作息；时间段失败时跳过，不阻断流程
+    // 5. 导入夏/冬组合作息；时间段失败时跳过，不阻断流程
     if (timeSlotSaved) {
         await importComboSchedule();
     } else {
         window.shiguangBridge.showToast("时间段导入失败，跳过组合作息。");
     }
 
-    // 7. 流程完全成功，发送结束信号
+    // 6. 流程完全成功，发送结束信号
     window.shiguangBridge.showToast(`导入成功，共 ${courses.length} 门课程，夏/冬令时将按日期自动切换`);
     window.shiguangBridge.notifyTaskCompletion();
 }
