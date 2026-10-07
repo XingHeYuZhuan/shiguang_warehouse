@@ -1207,3 +1207,8 @@ schools:
     name: "肇庆学院"
     initial: "Z"
     resource_folder: "ZQU"
+
+  - id: "HZU"
+    name: "菏泽学院"
+    initial: "H"
+    resource_folder: "HZU"
