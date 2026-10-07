@@ -1,4 +1,6 @@
-const SECTION_TIMES = [
+// ===== 作息时间 =====
+// 夏令时（每年 5月1日–10月7日）：作为基础时间段（骨架）提交
+const SUMMER_TIME_SLOTS = [
     { number: 1,  startTime: "08:00", endTime: "08:45" },
     { number: 2,  startTime: "08:55", endTime: "09:40" },
     { number: 3,  startTime: "10:00", endTime: "10:45" },
@@ -8,9 +10,62 @@ const SECTION_TIMES = [
     { number: 7,  startTime: "16:30", endTime: "17:15" },
     { number: 8,  startTime: "17:25", endTime: "18:10" },
     { number: 9,  startTime: "19:00", endTime: "19:45" },
-    { number: 10, startTime: "19:55", endTime: "20:40" },
+    { number: 10, startTime: "19:55", endTime: "20:40" }
 ];
 
+// 冬令时（每年 10月8日–次年4月30日）：上午 1–4 节与晚间 9–10 节和夏令时一致，
+// 仅下午 5–8 节整体提前 30 分钟。借助差量合并机制，只提交与骨架不同的节次。
+const WINTER_DIFF_SLOTS = [
+    { number: 5, startTime: "14:00", endTime: "14:45" },
+    { number: 6, startTime: "14:55", endTime: "15:40" },
+    { number: 7, startTime: "16:00", endTime: "16:45" },
+    { number: 8, startTime: "16:55", endTime: "17:40" }
+];
+
+// ===== 日期工具 =====
+function formatDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+// 推算夏/冬令时的生效区间：
+//   夏令时：本年 5月1日 – 10月7日
+//   冬令时：10月8日 – 次年 4月30日（1–4月导入时，冬令时自上一年 10月8日起算）
+function buildComboDateRanges() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const winterStartYear = month <= 4 ? year - 1 : year;
+    return {
+        summer: { startDate: `${year}-05-01`, endDate: `${year}-10-07` },
+        winter: { startDate: `${winterStartYear}-10-08`, endDate: `${winterStartYear + 1}-04-30` }
+    };
+}
+
+// 计算本周周一（周日算作上一周），作为开学日期的默认值
+function getMondayOfCurrentWeek() {
+    const now = new Date();
+    const offset = now.getDay() === 0 ? -6 : 1 - now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + offset);
+    return formatDate(monday);
+}
+
+// showPrompt 的全局验证函数：返回 false 表示通过，返回字符串表示错误
+function validateDateInput(input) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+        return "请输入 YYYY-MM-DD 格式的日期！";
+    }
+    const date = new Date(input + "T00:00:00");
+    if (isNaN(date.getTime()) || formatDate(date) !== input) {
+        return "该日期不存在，请检查！";
+    }
+    return false;
+}
+
+// ===== 课表解析 =====
 function parseWeeks(weekStr, parity) {
     const weeks = [];
     weekStr.split(',').forEach(part => {
@@ -166,27 +221,123 @@ async function fetchAndParseCourses() {
     return finalCourses;
 }
 
-async function runImportFlow() {
+// ===== 导入流程 =====
+async function promptSemesterStartDate() {
+    return await window.shiguangBridgePromise.showPrompt(
+        "本学期开学日期",
+        "请输入本学期第一周的周一日期（用于校准周数）",
+        getMondayOfCurrentWeek(),
+        "validateDateInput"
+    );
+}
+
+async function saveSemesterStartDate(startDate) {
     try {
-        window.shiguangBridge.showToast("泰山学院引擎启动，抓取数据中...");
-        const courses = await fetchAndParseCourses();
-        if (!courses || courses.length === 0) {
-            window.shiguangBridge.showToast("解析完成，但当前课表为空");
-            window.shiguangBridge.notifyTaskCompletion();
+        await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify({
+            semesterStartDate: startDate
+        }));
+        window.shiguangBridge.showToast("开学日期已保存");
+        return true;
+    } catch (error) {
+        window.shiguangBridge.showToast("保存开学日期失败: " + error.message);
+        return false;
+    }
+}
+
+async function importTimeSlots() {
+    try {
+        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(SUMMER_TIME_SLOTS));
+        return true;
+    } catch (error) {
+        window.shiguangBridge.showToast("导入时间段失败: " + error.message);
+        return false;
+    }
+}
+
+async function importComboSchedule() {
+    const ranges = buildComboDateRanges();
+    const comboSchedule = {
+        name: "泰山学院夏冬作息方案",
+        publicSchedules: [
+            {
+                name: "夏令时",
+                startDate: ranges.summer.startDate,
+                endDate: ranges.summer.endDate,
+                // 与基础时间段一致，空数组即全部由骨架补齐
+                timeSlots: []
+            },
+            {
+                name: "冬令时",
+                startDate: ranges.winter.startDate,
+                endDate: ranges.winter.endDate,
+                // 仅提交下午 5–8 节，上午与晚间由骨架补齐
+                timeSlots: WINTER_DIFF_SLOTS
+            }
+        ]
+    };
+
+    try {
+        await window.shiguangBridgePromise.saveComboSchedule(JSON.stringify(comboSchedule));
+        return true;
+    } catch (error) {
+        window.shiguangBridge.showToast("组合作息导入失败: " + error.message);
+        return false;
+    }
+}
+
+// 编排整个导入流程：任何一步取消或失败立即终止，
+// notifyTaskCompletion() 只在成功后调用
+async function runImportFlow() {
+    // 1. 输入本学期开学日期，用户取消则终止
+    const startDate = await promptSemesterStartDate();
+    if (startDate === null) {
+        window.shiguangBridge.showToast("导入已取消。");
+        return;
+    }
+
+    // 2. 保存开学日期，失败则终止
+    const configSaved = await saveSemesterStartDate(startDate);
+    if (!configSaved) return;
+
+    // 3. 抓取并解析课表
+    window.shiguangBridge.showToast("正在抓取课表数据...");
+    let courses;
+    try {
+        courses = await fetchAndParseCourses();
+    } catch (error) {
+        window.shiguangBridge.showToast("导入失败：" + error.message);
+        return;
+    }
+    if (!courses || courses.length === 0) {
+        window.shiguangBridge.showToast("未解析到课程数据，请确认当前页面显示的是课表");
+        return;
+    }
+
+    // 4. 保存课程，失败则终止
+    try {
+        const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
+        if (saveResult !== true) {
+            window.shiguangBridge.showToast("导入失败：课程数据未能保存");
             return;
         }
-
-        const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
-        if (saveResult !== true) return;
-
-        await window.shiguangBridgePromise.savePresetTimeSlots(JSON.stringify(SECTION_TIMES));
-
-        window.shiguangBridge.showToast(`导入大成功！合并生成 ${courses.length} 个课块`);
-        window.shiguangBridge.notifyTaskCompletion();
     } catch (error) {
-        window.shiguangBridge.showToast("⚠️ " + error.message);
-        window.shiguangBridge.notifyTaskCompletion();
+        window.shiguangBridge.showToast("导入失败：" + error.message);
+        return;
     }
+
+    // 5. 导入基础时间段（夏令时），必须成功才能提交组合作息
+    const timeSlotSaved = await importTimeSlots();
+
+    // 6. 导入夏/冬组合作息；时间段失败时跳过，不阻断流程
+    if (timeSlotSaved) {
+        await importComboSchedule();
+    } else {
+        window.shiguangBridge.showToast("时间段导入失败，跳过组合作息。");
+    }
+
+    // 7. 流程完全成功，发送结束信号
+    window.shiguangBridge.showToast(`导入成功，共 ${courses.length} 门课程，夏/冬令时将按日期自动切换`);
+    window.shiguangBridge.notifyTaskCompletion();
 }
 
 runImportFlow();
