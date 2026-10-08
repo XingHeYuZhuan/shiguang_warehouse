@@ -6,4 +6,4 @@ adapters:
     asset_js_path: "hebau.js"
     import_url: "http://urp.hebau.edu.cn:1009/jwapp/sys/homeapp/home/index.html#/"
     maintainer: "Haooz"
-    description: "河北农业大学课表导入，请先登录教务系统并进入课表页面，再点击导入！非本校开发者，如有误请提交issues。"
+    description: "河北农业大学课表导入，请先登录教务系统，再点击导入！非本校开发者，如有误请提交issues。"
