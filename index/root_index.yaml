@@ -1217,3 +1217,8 @@ schools:
     name: "燕山大学"
     initial: "Y"
     resource_folder: "YSU"
+
+  - id: "BNUZH"
+    name: "北京师范大学珠海校区"
+    initial: "B"
+    resource_folder: "BNUZH"
