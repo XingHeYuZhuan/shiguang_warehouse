@@ -1232,3 +1232,8 @@ schools:
     name: "北京师范大学珠海校区"
     initial: "B"
     resource_folder: "BNUZH"    
+
+  - id: "SCTBC"
+    name: "四川工商职业技术学院"
+    initial: "S"
+    resource_folder: "SCTBC"
