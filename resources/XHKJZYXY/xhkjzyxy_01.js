@@ -110,35 +110,30 @@ function mergeAndDistinctCourses(courses) {
 function parseWeeks(weekStr) {
     if (!weekStr) return [];
 
-    const weekSets = weekStr.split(',');
-    let weeks = [];
+    const cleaned = weekStr.replace(/周数[:：]/g, '').replace(/周/g, '');
+    const segments = cleaned.split(/[,，、;；]/);
 
-    for (const set of weekSets) {
-        const trimmedSet = set.trim();
+    const weeks = [];
+    const segRegex = /(\d+)(?:\s*[-~]\s*(\d+))?\s*([（(][单双][)）])?/g;
 
-        const rangeMatch = trimmedSet.match(/(\d+)-(\d+)周/);
-        const singleMatch = trimmedSet.match(/^(\d+)周/);
+    for (const seg of segments) {
+        const s = seg.trim();
+        if (!s) continue;
 
-        let start = 0;
-        let end = 0;
-        let processed = false;
+        segRegex.lastIndex = 0;
+        let m;
+        while ((m = segRegex.exec(s)) !== null) {
+            const start = parseInt(m[1], 10);
+            const end = m[2] ? parseInt(m[2], 10) : start;
+            const flagStr = m[3] || '';
 
-        if (rangeMatch) {
-            start = Number(rangeMatch[1]);
-            end = Number(rangeMatch[2]);
-            processed = true;
-        } else if (singleMatch) {
-            start = end = Number(singleMatch[1]);
-            processed = true;
-        }
-
-        if (processed) {
-            const isSingle = trimmedSet.includes('(单)');
-            const isDouble = trimmedSet.includes('(双)');
+            let flag = 0;
+            if (flagStr.includes('单')) flag = 1;
+            else if (flagStr.includes('双')) flag = 2;
 
             for (let w = start; w <= end; w++) {
-                if (isSingle && w % 2 === 0) continue;
-                if (isDouble && w % 2 !== 0) continue;
+                if (flag === 1 && w % 2 === 0) continue;
+                if (flag === 2 && w % 2 !== 0) continue;
                 weeks.push(w);
             }
         }
