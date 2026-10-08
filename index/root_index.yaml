@@ -263,6 +263,11 @@ schools:
     initial: "N"
     resource_folder: "NUAA"
 
+  - id: "USC"
+    name: "南华大学"
+    initial: "N"
+    resource_folder: "USC"
+
   - id: "XMCU"
     name: "厦门城市职业学院"
     initial: "X"
