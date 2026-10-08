@@ -67,8 +67,9 @@ function parseWeeks(weekStr) {
         const item = group.trim();
 
         // 先尝试匹配 "起-止周"，再尝试匹配单个周次
-        const rangeMatch = item.match(/(\d+)\s*-\s*(\d+)\s*周?/);
-        const singleMatch = item.match(/^(\d+)\s*周?/);
+        // 兼容"第1-8周"、"1-8周"、"第3周"、"3周"格式
+        const rangeMatch = item.match(/第?(\d+)\s*-\s*(\d+)\s*周?/);
+        const singleMatch = item.match(/第?(\d+)\s*周?/);
 
         let start = 0;
         let end = 0;
