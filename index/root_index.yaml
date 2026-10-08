@@ -1222,3 +1222,9 @@ schools:
     name: "宣化科技职业技术学院"
     initial: "X"
     resource_folder: "XHKJZYXY"
+
+  - id: "HEBAU"
+    name: "河北农业大学"
+    initial: "H"
+    resource_folder: "HEBAU"
+    
