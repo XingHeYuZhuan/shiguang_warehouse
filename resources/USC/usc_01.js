@@ -1,7 +1,7 @@
-// 南华大学(http://61.187.179.66:8924)拾光课程表适配脚本
+// 南华大学(http://jwzx.usc.edu.cn:8924)拾光课程表适配脚本
 
 
-const BASE_URL = "http://61.187.179.66:8924";
+const BASE_URL = "http://jwzx.usc.edu.cn:8924";
 const [URL_COURSE, URL_CALENDAR] = [`${BASE_URL}/jsxsd/xskb/xskb_list.do`, `${BASE_URL}/jsxsd/jxzl/jxzl_query`];
 
 // 工具函数
