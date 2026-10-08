@@ -1217,3 +1217,18 @@ schools:
     name: "燕山大学"
     initial: "Y"
     resource_folder: "YSU"
+
+  - id: "XHKJZYXY"
+    name: "宣化科技职业学院"
+    initial: "X"
+    resource_folder: "XHKJZYXY"
+
+  - id: "HEBAU"
+    name: "河北农业大学"
+    initial: "H"
+    resource_folder: "HEBAU"
+    
+  - id: "BNUZH"
+    name: "北京师范大学珠海校区"
+    initial: "B"
+    resource_folder: "BNUZH"    
