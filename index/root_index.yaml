@@ -1217,3 +1217,8 @@ schools:
     name: "燕山大学"
     initial: "Y"
     resource_folder: "YSU"
+
+  - id: "HEBAU"
+    name: "河北农业大学"
+    initial: "H"
+    resource_folder: "HEBAU"
