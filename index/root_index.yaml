@@ -1228,3 +1228,7 @@ schools:
     initial: "H"
     resource_folder: "HEBAU"
     
+  - id: "BNUZH"
+    name: "北京师范大学珠海校区"
+    initial: "B"
+    resource_folder: "BNUZH"    
