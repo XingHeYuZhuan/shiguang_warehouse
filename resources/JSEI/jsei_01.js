@@ -125,11 +125,16 @@ function mergeAndDistinctCourses(courses) {
 function parseWeeks(weekStr) {
     if (!weekStr) return [];
 
-    const cleaned = weekStr.replace(/周数[:：]/g, '').replace(/周/g, '');
+    const cleaned = weekStr
+        .replace(/周数[:：]/g, '')
+        .replace(/第/g, '')
+        .replace(/周/g, '')
+        .replace(/共\s*\d+\s*.*$/g, '');
+
     const segments = cleaned.split(/[,，、;；]/);
 
     const weeks = [];
-    const segRegex = /(\d+)(?:\s*[-~]\s*(\d+))?\s*([（(][单双][)）])?/g;
+    const segRegex = /(\d+)(?:\s*[-~]\s*(\d+))?\s*(?:[（(]?\s*([单双])\s*周?\s*[)）]?)?/g;
 
     for (const seg of segments) {
         const s = seg.trim();
@@ -138,6 +143,11 @@ function parseWeeks(weekStr) {
         segRegex.lastIndex = 0;
         let m;
         while ((m = segRegex.exec(s)) !== null) {
+            if (m[0] === '') {
+                segRegex.lastIndex++;
+                continue;
+            }
+
             const start = parseInt(m[1], 10);
             const end = m[2] ? parseInt(m[2], 10) : start;
             const flagStr = m[3] || '';
