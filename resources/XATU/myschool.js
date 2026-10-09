@@ -45,7 +45,7 @@ function mergeContinuousLessons(lessons) {
     // 1. 建立基于 (课程名|教师|地点|星期几) 的分组
     const groups = {};
     lessons.forEach(l => {
-        const key = `${l.name}|${l.teacher}|${l.position}|${l.day}`;
+        const key = `${l.courseSequence || ""}|${l.name}|${l.teacher}|${l.position}|${l.day}`;
         if (!groups[key]) {
             groups[key] = {
                 name: l.name,
@@ -53,6 +53,7 @@ function mergeContinuousLessons(lessons) {
                 position: l.position,
                 day: l.day,
                 isTeachingBuilding3: l.isTeachingBuilding3,
+                credit: l.credit,
                 // 假设大学最多 50 周，构建一个：第 N 周对应哪些节次的矩阵
                 weeksMatrix: Array.from({ length: 50 }, () => new Set())
             };
@@ -121,7 +122,8 @@ function mergeContinuousLessons(lessons) {
                 startSection: startSec,
                 endSection: endSec,
                 weeks: blockMap[blockKey],
-                isTeachingBuilding3: group.isTeachingBuilding3
+                isTeachingBuilding3: group.isTeachingBuilding3,
+                ...(group.credit !== undefined ? { credit: group.credit } : {})
             });
         }
     }
@@ -140,7 +142,35 @@ function isTeachingBuilding3(position) {
     return /教3/.test(position);
 }
 
+/** 从同一课表响应的课程列表中读取学分，按课程序号匹配，避免同名课程混淆。 */
+function parseCourseCredits(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const credits = new Map();
+    for (const table of doc.querySelectorAll("table")) {
+        const header = Array.from(table.rows).find(row =>
+            Array.from(row.cells).some(cell => cell.tagName === "TH" && cell.textContent.trim() === "学分"));
+        if (!header) continue;
+        const headers = Array.from(header.cells).map(cell => cell.textContent.trim());
+        const creditIndex = headers.indexOf("学分");
+        const sequenceIndex = headers.indexOf("课程序号");
+        if (sequenceIndex < 0) continue;
+        for (const row of table.rows) {
+            if (row === header || row.closest("table") !== table) continue;
+            const sequence = row.cells[sequenceIndex]?.textContent.trim();
+            const text = row.cells[creditIndex]?.textContent.trim();
+            if (!sequence || !text || !/^\d+(?:\.\d+)?$/.test(text)) continue;
+            const credit = Number(text);
+            if (!Number.isFinite(credit)) continue;
+            // 同一序号出现矛盾值时不猜测；合法的 0 学分需要保留。
+            if (credits.has(sequence) && credits.get(sequence) !== credit) credits.set(sequence, undefined);
+            else if (!credits.has(sequence)) credits.set(sequence, credit);
+        }
+    }
+    return credits;
+}
+
 function parseTaskActivities(html) {
+    const credits = parseCourseCredits(html);
     const rawResults = [];
     const blocks = html.split(/var\s+teachers\s*=/);
 
@@ -154,6 +184,8 @@ function parseTaskActivities(html) {
         if (!activityMatch) continue;
 
         const args = powerSplit(activityMatch[1]);
+        const courseSequence = (args[2] || "").match(/\(([^()]*)\)$/)?.[1] || "";
+        const credit = credits.get(courseSequence);
         const courseName = (args[3] || "未知课程").split('(')[0];
         const position = (args[5] || "未知地点").replace(/\(.*?\)/g, "");
         const weeksBitmap = args[6] || "";
@@ -174,6 +206,8 @@ function parseTaskActivities(html) {
 
             rawResults.push({
                 "name": courseName,
+                "courseSequence": courseSequence,
+                ...(credit !== undefined ? { credit } : {}),
                 "teacher": teacherName,
                 "position": position,
                 "day": day,
@@ -189,10 +223,65 @@ function parseTaskActivities(html) {
     return mergeContinuousLessons(rawResults);
 }
 
-async function request(url, options = {}) {
+async function requestResponse(url, options = {}) {
     const res = await fetch(url, { credentials: "include", ...options });
     if (!res.ok) throw new Error(`网络请求失败: ${res.status}`);
-    return await res.text();
+    return res;
+}
+
+async function request(url, options = {}) {
+    return await (await requestResponse(url, options)).text();
+}
+
+/** 根据教务首页的当前教学周，推算第一教学周的周一（北京时间）。 */
+function inferCurrentSemester(html, referenceTime) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const label = Array.from(doc.querySelectorAll("strong"))
+        .find(el => el.textContent.trim() === "当前教学周");
+    const weekText = label?.parentElement?.querySelector("span")?.textContent.trim();
+    const totalMatch = label?.parentElement?.querySelector("i")?.textContent.match(/\/\s*(\d+)/);
+    if (!weekText || !/^\d+$/.test(weekText) || !totalMatch) return null;
+
+    const week = Number(weekText);
+    const totalWeeks = Number(totalMatch[1]);
+    if (week < 1 || week > totalWeeks || totalWeeks > 53 || !Number.isFinite(referenceTime)) return null;
+
+    // 用 UTC 方法处理已平移到北京时间的日期，避免设备时区和夏令时影响。
+    const start = new Date(referenceTime + 8 * 60 * 60 * 1000);
+    start.setUTCHours(0, 0, 0, 0);
+    const daysSinceMonday = (start.getUTCDay() + 6) % 7;
+    start.setUTCDate(start.getUTCDate() - daysSinceMonday - (week - 1) * 7);
+
+    // 学期选择器没有起止日期；按推算出的起始月份识别本校的秋季/春季学期。
+    const isAutumn = start.getUTCMonth() >= 6;
+    const schoolYearStart = start.getUTCFullYear() - (isAutumn ? 0 : 1);
+    return {
+        schoolYear: `${schoolYearStart}-${schoolYearStart + 1}`,
+        term: isAutumn ? "1" : "2",
+        semesterStartDate: start.toISOString().slice(0, 10),
+        semesterTotalWeeks: totalWeeks
+    };
+}
+
+async function getCurrentSemesterConfig(semester) {
+    try {
+        const res = await requestResponse("http://jwgl2018.xatu.edu.cn/eams/homeExt!main.action?sf_request_type=ajax");
+        const serverTime = Date.parse(res.headers.get("Date") || "");
+        const current = inferCurrentSemester(await res.text(), Number.isFinite(serverTime) ? serverTime : Date.now());
+        if (!current) throw new Error("未能识别当前教学周");
+        if (semester.schoolYear !== current.schoolYear || semester.term !== current.term) {
+            window.shiguangBridge.showToast("历史或其他学期开学日期请手动设置");
+            return null;
+        }
+        return {
+            semesterStartDate: current.semesterStartDate,
+            semesterTotalWeeks: current.semesterTotalWeeks
+        };
+    } catch (e) {
+        console.warn(`[开学日期推算] ${e.message}`);
+        window.shiguangBridge.showToast("无法推算开学日期，请在导入后手动设置");
+        return null;
+    }
 }
 
 async function detectParameters() {
@@ -212,7 +301,12 @@ async function getSelectedSemester(tagId) {
     const data = Function(`return (${raw});`)();
     const list = [];
     for (let key in data.semesters) {
-        data.semesters[key].forEach(s => list.push({ id: s.id, name: `${s.schoolYear} ${s.name}学期` }));
+        data.semesters[key].forEach(s => list.push({
+            id: s.id,
+            schoolYear: s.schoolYear,
+            term: String(s.name),
+            name: `${s.schoolYear} ${s.name}学期`
+        }));
     }
     const idx = await window.shiguangBridgePromise.showSingleSelection("选择学期", JSON.stringify(list.map(s => s.name)), -1);
     return idx !== null ? list[idx] : null;
@@ -225,6 +319,73 @@ async function fetchAndParseCourses(semesterId, ids) {
         body: `ignoreHead=1&setting.kind=std&semester.id=${semesterId}&ids=${ids}`
     });
     return parseTaskActivities(html);
+}
+
+/** 将已排定考试转换成单次自定义时间课程；未排定、无效或超出学期的记录不导入。 */
+function parseExamCourses(html, config) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const startTime = Date.parse(`${config.semesterStartDate}T00:00:00Z`);
+    const exams = [];
+    const seen = new Set();
+    let foundTable = false;
+    for (const table of doc.querySelectorAll("table")) {
+        const header = Array.from(table.rows).find(row =>
+            Array.from(row.cells).some(cell => cell.tagName === "TH" && cell.textContent.trim() === "考试日期"));
+        if (!header) continue;
+        const headers = Array.from(header.cells).map(cell => cell.textContent.trim());
+        const get = (row, name) => row.cells[headers.indexOf(name)]?.textContent.trim() || "";
+        if (!["课程名称", "课程序号", "考试安排", "考试地点"].every(name => headers.includes(name))) continue;
+        foundTable = true;
+        for (const row of table.rows) {
+            if (row === header || row.closest("table") !== table) continue;
+            const dateText = get(row, "考试日期");
+            const timeMatch = get(row, "考试安排").match(/^(\d{1,2}:\d{2})\s*[~～－-]\s*(\d{1,2}:\d{2})$/);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText) || !timeMatch) continue;
+            const date = new Date(`${dateText}T00:00:00Z`);
+            if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== dateText) continue;
+            const times = timeMatch.slice(1).map(time => time.padStart(5, "0"));
+            if (!times.every(time => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) || times[0] >= times[1]) continue;
+            const week = Math.floor((date.getTime() - startTime) / (7 * 86400000)) + 1;
+            const name = get(row, "课程名称");
+            if (!name || !Number.isInteger(week) || week < 1 || week > config.semesterTotalWeeks) continue;
+            const seat = get(row, "考场座位号");
+            const room = get(row, "考试地点");
+            const position = `${room === "无" ? "" : room}${seat ? `（座位 ${seat}）` : ""}`;
+            const key = JSON.stringify([get(row, "课程序号"), dateText, times, position]);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            exams.push({
+                name: `【考试】${name}`,
+                teacher: "",
+                position,
+                day: date.getUTCDay() || 7,
+                weeks: [week],
+                isCustomTime: true,
+                customStartTime: times[0],
+                customEndTime: times[1]
+            });
+        }
+    }
+    if (!foundTable) throw new Error("未识别到考试安排表");
+    return exams;
+}
+
+async function getOptionalExamCourses(semester, config) {
+    // 历史学期没有可靠的开学日期，无法将考试日期换算成对应教学周。
+    if (!config) return [];
+    const choice = await window.shiguangBridgePromise.showSingleSelection(
+        "是否同时导入考试安排", JSON.stringify(["仅导入课程", "同时导入已排定考试（单次课程）"]), 0);
+    if (choice !== 1) return [];
+    try {
+        const html = await request(`http://jwgl2018.xatu.edu.cn/eams/stdExamTable!examTable.action?semester.id=${encodeURIComponent(semester.id)}&examBatch.id=0`);
+        const exams = parseExamCourses(html, config);
+        window.shiguangBridge.showToast(exams.length ? `已读取 ${exams.length} 场考试` : "当前学期暂无可导入的已排定考试");
+        return exams;
+    } catch (e) {
+        console.warn(`[考试导入] ${e.message}`);
+        window.shiguangBridge.showToast("考试安排读取失败，仅导入课程");
+        return [];
+    }
 }
 
 async function applyTimeSlots() {
@@ -278,7 +439,14 @@ async function runImportFlow() {
         // 调整教3楼课程时间
         courses = adjustTeachingBuilding3Courses(courses);
 
+        const config = await getCurrentSemesterConfig(semester);
+        const exams = await getOptionalExamCourses(semester, config);
+        courses = courses.concat(exams);
         await applyTimeSlots();
+        if (config) {
+            await window.shiguangBridgePromise.saveCourseConfig(JSON.stringify(config));
+            window.shiguangBridge.showToast(`已推算第一教学周周一为 ${config.semesterStartDate}`);
+        }
         const saveResult = await window.shiguangBridgePromise.saveImportedCourses(JSON.stringify(courses));
         
         if (saveResult) {
