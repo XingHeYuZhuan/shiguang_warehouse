@@ -12,16 +12,20 @@ const URL_COURSE   = `${BASE_URL}/jsxsd/xskb/xskb_list.do`; // 课表查询
 function parseWeeks(weekStr) {
     const weeks = [];
     if (!weekStr) return weeks;
-    const pureWeekData = weekStr.split('(')[0];
-    pureWeekData.split(',').forEach(seg => {
+    const pureWeekData = String(weekStr).split('(')[0];
+    pureWeekData.split(/[,，]/).forEach(seg => {
+        seg = seg.trim();
+        if (!seg) return;
         if (seg.includes('-')) {
             const [s, e] = seg.split('-').map(Number);
             if (!isNaN(s) && !isNaN(e)) {
-                for (let i = s; i <= e; i++) weeks.push(i);
+                for (let i = Math.min(s, e); i <= Math.max(s, e); i++) {
+                    if (i > 0) weeks.push(i);
+                }
             }
         } else {
-            const w = parseInt(seg);
-            if (!isNaN(w)) weeks.push(w);
+            const w = parseInt(seg, 10);
+            if (!isNaN(w) && w > 0) weeks.push(w);
         }
     });
     return [...new Set(weeks)].sort((a, b) => a - b);
@@ -118,121 +122,163 @@ function mergeAndDistinctCourses(courses) {
 
 // 核心解析逻辑
 
+function parseHeaderDays(table) {
+    const headerCells = Array.from(
+        table.querySelectorAll('thead tr th, thead tr td')
+    );
+    const headerDayMap = {
+        '星期日': 7, '星期天': 7,
+        '星期一': 1,
+        '星期二': 2,
+        '星期三': 3,
+        '星期四': 4,
+        '星期五': 5,
+        '星期六': 6
+    };
+    const columnDays = [];
+    headerCells.forEach(cell => {
+        const text = (cell.textContent || '').trim();
+        for (const key of Object.keys(headerDayMap)) {
+            if (text.includes(key)) {
+                columnDays.push(headerDayMap[key]);
+                return;
+            }
+        }
+    });
+    if (columnDays.length === 0) {
+        columnDays.push(7, 1, 2, 3, 4, 5, 6);
+    }
+    return columnDays;
+}
+
+/**
+ * 只读 tooltip 解析课程
+ * 每个 li.qz-toolitiplists 就是一条完整课程详情
+ */
+function parseCellAtomic(cell, daysForCell) {
+    const results = [];
+    const tooltipItems = Array.from(cell.querySelectorAll('.qz-tooltip li.qz-toolitiplists'));
+    if (tooltipItems.length === 0) return results;
+
+    tooltipItems.forEach((tip) => {
+        // 课程名
+        const name = tip.querySelector('.qz-tooltipContent-title')?.textContent.trim() || '';
+        if (!name) return;
+
+        const detailItems = Array.from(
+            tip.querySelectorAll('.qz-tooltipContent-detailitem')
+        );
+        const findDetail = (prefix) =>
+            detailItems.find(d => d.textContent.trim().startsWith(prefix));
+
+        // 老师
+        let teacher = '未知教师';
+        const teacherDiv = findDetail('老师：') || findDetail('老师:');
+        if (teacherDiv) {
+            teacher = teacherDiv.textContent.replace(/老师[:：]/, '').trim();
+        }
+
+        // 地点
+        let position = '未知地点';
+        const posDiv = findDetail('地点：') || findDetail('地点:');
+        if (posDiv) {
+            const p = posDiv.textContent.replace(/地点[:：]/, '').trim();
+            if (p && p !== '()') position = p;
+        }
+
+        // 时间：0-3 周 [1-2节]
+        let weeks = [];
+        let startSection = 0;
+        let endSection = 0;
+        const timeDiv = findDetail('时间：') || findDetail('时间:');
+        if (timeDiv) {
+            const t = timeDiv.textContent.replace(/\s+/g, ' ').trim();
+            const wm = t.match(/时间[:：]\s*([\d,\-]+)\s*周/);
+            if (wm) weeks = parseWeeks(wm[1]);
+            const sm = t.match(/\[([\d\-,\s]+?)节\]/);
+            if (sm && sm[1]) {
+                const nums = sm[1].split(/[^\d]+/).map(Number).filter(n => !isNaN(n) && n > 0);
+                if (nums.length > 0) {
+                    startSection = Math.min(...nums);
+                    endSection = Math.max(...nums);
+                }
+            }
+        }
+
+        if (!name || startSection <= 0) return;
+
+        daysForCell.forEach(day => {
+            results.push({
+                name,
+                teacher,
+                weeks,
+                position,
+                day,
+                startSection,
+                endSection
+            });
+        });
+    });
+
+    return results;
+}
+
 function parseTimetableToModel(doc) {
     const table = doc.querySelector('table.qz-weeklyTable');
     if (!table) return [];
 
     const results = [];
-
-    // 表头顺序：星期日、星期一、...、星期六
-    // 应用里 day 定义：1=周一, 7=周日
-    const dayMap = {
-        0: 7, // 星期日 -> 7
-        1: 1, // 星期一 -> 1
-        2: 2,
-        3: 3,
-        4: 4,
-        5: 5,
-        6: 6  // 星期六 -> 6
-    };
+    const columnDays = parseHeaderDays(table);
 
     const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+    const occupied = new Array(columnDays.length + 1).fill(0);
 
     bodyRows.forEach(row => {
-        const cells = Array.from(row.querySelectorAll('td[name="kbDataTd"]'));
-        if (cells.length === 0) return;
+        const allTds = Array.from(row.querySelectorAll('td'));
+        if (allTds.length === 0) return;
 
-        cells.forEach((cell, idx) => {
-            const day = dayMap[idx];
-            if (!day) return;
+        let colCursor = 0;
 
-            const items = Array.from(cell.querySelectorAll('li.courselists-item'));
-            if (items.length === 0) return;
+        allTds.forEach(td => {
+            while (colCursor < occupied.length && occupied[colCursor] > 0) {
+                occupied[colCursor]--;
+                colCursor++;
+            }
+            if (colCursor >= occupied.length) return;
 
-            // 该单元格的 tooltip 列表，顺序和 items 对应
-            const tooltipItems = Array.from(cell.querySelectorAll('.qz-tooltip .qz-toolitiplists'));
+            const isTimeLabel =
+                td.getAttribute('name') === 'timeTd' ||
+                td.classList.contains('qz-weeklyTable-label');
 
-            items.forEach((li, i) => {
-                const name = li.querySelector('.qz-hasCourse-title')?.textContent.trim() || '';
-                if (!name) return;
+            const colspan = parseInt(td.getAttribute('colspan') || '1', 10);
+            const rowspan = parseInt(td.getAttribute('rowspan') || '1', 10);
 
-                const abbr = li.querySelector('.qz-hasCourse-abbrinfo')?.textContent || '';
-
-                // 老师
-                let teacher = '未知教师';
-                const teacherMatch = abbr.match(/老师[:：]\s*([^;；]+)/);
-                if (teacherMatch) teacher = teacherMatch[1].trim();
-
-                // 地点（abbr 里可能是空的括号，优先用 tooltip 里的地点）
-                let position = '未知地点';
-                const posMatchAbbr = abbr.match(/地点[:：]\s*([^;；]*)/);
-                if (posMatchAbbr && posMatchAbbr[1].trim() && posMatchAbbr[1].trim() !== '()') {
-                    position = posMatchAbbr[1].trim();
-                }
-
-                // 节次（从 abbr 里拿）
-                let startSection = 0, endSection = 0;
-                const secMatch = abbr.match(/\[([\d\-,\s]+?)节\]/);
-                if (secMatch && secMatch[1]) {
-                    const nums = secMatch[1]
-                        .split(/[^\d]+/)
-                        .map(Number)
-                        .filter(n => !isNaN(n) && n > 0);
-                    if (nums.length > 0) {
-                        startSection = Math.min(...nums);
-                        endSection = Math.max(...nums);
+            if (isTimeLabel) {
+                if (rowspan > 1) {
+                    for (let c = colCursor; c < colCursor + colspan && c < occupied.length; c++) {
+                        occupied[c] = rowspan - 1;
                     }
                 }
+                colCursor += colspan;
+                return;
+            }
 
-                // 周次 + 地点：优先从 tooltip 里拿
-                let weeks = [];
-                const tip = tooltipItems[i];
-                if (tip) {
-                    // 地点
-                    const posDiv = Array.from(tip.querySelectorAll('.qz-tooltipContent-detailitem'))
-                        .find(d => d.textContent.trim().startsWith('地点：'));
-                    if (posDiv) {
-                        const p = posDiv.textContent.replace('地点：', '').trim();
-                        if (p && p !== '()') position = p;
-                    }
+            const dayStart = colCursor - 1;
+            const daysForCell = [];
+            for (let c = dayStart; c < dayStart + colspan && c < columnDays.length; c++) {
+                if (c >= 0) daysForCell.push(columnDays[c]);
+            }
 
-                    // 时间：3-4,7-16 周 [1-4节]
-                    const timeDiv = Array.from(tip.querySelectorAll('.qz-tooltipContent-detailitem'))
-                        .find(d => d.textContent.includes('时间：'));
-                    if (timeDiv) {
-                        const t = timeDiv.textContent.replace(/\s+/g, ' ').trim();
-                        // 取“时间：”和“周”之间的部分
-                        const wm = t.match(/时间[:：]\s*([\d,\-]+)\s*周/);
-                        if (wm) weeks = parseWeeks(wm[1]);
-                        // 如果 tooltip 里也有节次，可以覆盖
-                        const sm = t.match(/\[([\d\-,\s]+?)节\]/);
-                        if (sm && sm[1]) {
-                            const nums = sm[1].split(/[^\d]+/).map(Number).filter(n => !isNaN(n) && n > 0);
-                            if (nums.length > 0) {
-                                startSection = Math.min(...nums);
-                                endSection = Math.max(...nums);
-                            }
-                        }
-                    }
+            const cellResults = parseCellAtomic(td, daysForCell);
+            results.push(...cellResults);
+
+            if (rowspan > 1) {
+                for (let c = colCursor; c < colCursor + colspan && c < occupied.length; c++) {
+                    occupied[c] = rowspan - 1;
                 }
+            }
 
-                // 如果 tooltip 没拿到周次，退回 abbr
-                if (weeks.length === 0) {
-                    weeks = parseWeeks(abbr);
-                }
-
-                if (name && weeks.length > 0 && startSection > 0) {
-                    results.push({
-                        name,
-                        teacher,
-                        weeks,
-                        position,
-                        day,
-                        startSection,
-                        endSection
-                    });
-                }
-            });
+            colCursor += colspan;
         });
     });
 
